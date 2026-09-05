@@ -78,6 +78,20 @@
       "when": 1789008691444,
       "tag": "0010_curious_the_renegades",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1789084800000,
+      "tag": "0011_dictionary_uuid",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1789278084395,
+      "tag": "0012_dictionary_index_and_groups",
+      "breakpoints": true
     }
   ]
 }

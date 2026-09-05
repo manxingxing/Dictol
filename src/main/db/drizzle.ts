@@ -22,10 +22,7 @@ export type DictolDB = {
   orm: DictolDatabase
 }
 
-export function initDrizzleDB(
-  databasePath: string,
-  migrationsPath: string,
-): DictolDB {
+export function initDrizzleDB(databasePath: string, migrationsPath: string): DictolDB {
   const connection: SqliteDatabase = createDBConnection(databasePath)
 
   try {
