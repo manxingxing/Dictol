@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 dictol-mdict = { path = "../mdict" }
 napi = { version = "3", features = ["napi8"] }
 napi-derive = "3"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 [build-dependencies]
 napi-build = "2"

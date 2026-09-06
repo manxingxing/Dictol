@@ -709,3 +709,4 @@ module.exports.MddListKeyScanner = nativeBinding.MddListKeyScanner
 module.exports.Mdx = nativeBinding.Mdx
 module.exports.MdxEntryScanner = nativeBinding.MdxEntryScanner
 module.exports.MdxKeyScanner = nativeBinding.MdxKeyScanner
+module.exports.hashFile = nativeBinding.hashFile

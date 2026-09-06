@@ -11,7 +11,6 @@ import {
   parseDictionaryIdFromReferrer,
   parseNativeDictionaryResourcePath
 } from './dictionary-entry-url'
-import { readDictionaryEntryText } from './dictionary-entry-content'
 import { createEntryDocument } from './entry-document'
 import {
   DICTIONARY_SESSION_PARTITION,
@@ -239,24 +238,26 @@ export class DictionaryResourceProtocolHandlers {
     entryId: string
   ): Promise<Response> {
     const startedAt = performance.now()
-    const records = await requireDBService(this.runtime).getDictionaryEntryRecords(entryId)
-    const record = records[0]
-    if (!record) return textResponse('Entry not found', 404)
-    if (record.dictionaryId !== String(dictionaryId)) {
+    const dictionary = await requireDBService(this.runtime).getDictionary(String(dictionaryId))
+    if (!dictionary) return textResponse('Dictionary not found', 404)
+
+    const entry = await this.runtime.mdictResourceManager.getEntry(entryId)
+    if (!entry) return textResponse('Entry not found', 404)
+
+    if (entry.dictionaryId !== String(dictionaryId)) {
       return textResponse('Dictionary mismatch', 404)
     }
 
-    const html = await readDictionaryEntryText(this.runtime, records)
     const response = stringResponse(
       request,
-      createEntryDocument(html, record.dictionaryId, record.customCss),
+      createEntryDocument(entry.html, entry.dictionaryId, dictionary.customCss),
       'text/html; charset=utf-8'
     )
     console.debug('[DictionaryEntry] load document', {
       dictionaryId,
+      dictionaryName: dictionary.name,
       entryId,
-      recordCount: records.length,
-      htmlBytes: Buffer.byteLength(html, 'utf8'),
+      htmlBytes: Buffer.byteLength(entry.html, 'utf8'),
       takeMs: performance.now() - startedAt
     })
     return response

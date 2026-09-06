@@ -1,4 +1,4 @@
-import { dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import { dialog, ipcMain, Notification, shell, type IpcMainInvokeEvent } from 'electron'
 import { extname, isAbsolute } from 'node:path'
 
 import type {
@@ -9,10 +9,10 @@ import type { DictionaryInfo } from '../../shared/dictionary-info'
 import type { DictionarySummary, ImportedDictionary, ReadyDictionary } from '../db-service'
 import {
   createDictionaryImportPreview,
+  resolveExternalDictionaryFiles,
   resolveDictionaryImportSelection
 } from '../dictionary-import-files'
 import { parseDictionaryEntryUrl } from '../dictionary-entry-url'
-import { invalidateDictionaryResources, suspendDictionaryResources } from '../resource-protocol'
 import { BaseController } from './base-controller'
 
 export class DictionaryController extends BaseController {
@@ -48,8 +48,10 @@ export class DictionaryController extends BaseController {
   }
 
   getInfo = async (_event: IpcMainInvokeEvent, dictionaryId: string): Promise<DictionaryInfo> => {
-    const { mdxPath, dictionaryFileNames } = await this.db.getDictionaryInfoSource(dictionaryId)
-    const metadata = this.runtime.mdFileCache.fetchMdx(mdxPath).metadata
+    const numericId = Number(dictionaryId)
+    if (!Number.isSafeInteger(numericId) || numericId <= 0) throw new Error('无效的词典 ID')
+    const { metadata, dictionaryFileNames } =
+      await this.runtime.mdictResourceManager.getInfo(numericId)
 
     return {
       title: metadata.title,
@@ -74,26 +76,36 @@ export class DictionaryController extends BaseController {
     if (!isDictionaryImportRequest(request)) {
       throw new Error('请选择有效的 MDX 文件')
     }
-    const sourceFiles = await resolveDictionaryImportSelection(request)
-    return this.db.importDictionaryFromFile(request.mdxPath, sourceFiles)
+    const sourceFiles = request.copyFiles
+      ? await resolveDictionaryImportSelection(request)
+      : await resolveExternalDictionaryFiles(request.mdxPath)
+    return this.db.importDictionaryFromFile(
+      request.mdxPath,
+      sourceFiles,
+      request.copyFiles,
+      this.notifyImportReady
+    )
+  }
+
+  private notifyImportReady = (name: string): void => {
+    const message = `词典「${name}」导入完成`
+    const mainWindow = this.runtime.mainWindow
+    if (mainWindow?.isVisible()) {
+      mainWindow.webContents.send('notification:toast', { type: 'success', message })
+    } else {
+      new Notification({ title: '词典导入完成', body: message }).show()
+    }
   }
 
   deleteDictionary = async (_event: IpcMainInvokeEvent, dictionaryId: string): Promise<void> => {
     const numericId = Number(dictionaryId)
     const validNumericId = Number.isSafeInteger(numericId) && numericId > 0
     this.runtime.windowManager.dictionaryView?.hide()
-    const dictionaryPath = await this.db.getDictionaryPath(dictionaryId)
-    const resumeResources = validNumericId ? await suspendDictionaryResources(numericId) : undefined
+    if (!validNumericId) throw new Error('无效的词典 ID')
 
-    try {
-      if (dictionaryPath) await this.runtime.mdFileCache.closeMdictDirectory(dictionaryPath)
-      await this.db.deleteDictionary(dictionaryId)
-    } catch (error) {
-      if (dictionaryPath) this.runtime.mdFileCache.allowMdictDirectory(dictionaryPath)
-      resumeResources?.()
-      throw error
-    }
-    if (validNumericId) await this.runtime.resourceCache.removeDictionary(numericId)
+    await this.runtime.mdictResourceManager.close(numericId)
+    await this.db.deleteDictionary(dictionaryId)
+    await this.runtime.resourceCache.removeDictionary(numericId)
   }
 
   openDirectory = async (_event: IpcMainInvokeEvent, dictionaryId: string): Promise<void> => {
@@ -127,10 +139,6 @@ export class DictionaryController extends BaseController {
     await this.db.updateDictionaryCustomCss(dictionaryId, customCss)
 
     const numericId = Number(dictionaryId)
-    if (Number.isSafeInteger(numericId) && numericId > 0) {
-      invalidateDictionaryResources(numericId)
-    }
-
     const view = this.runtime.windowManager.dictionaryView
     const currentEntry = view ? parseDictionaryEntryUrl(view.getURL()) : null
     if (view && !view.isDestroyed && currentEntry?.dictionaryId === numericId) {
@@ -142,16 +150,19 @@ export class DictionaryController extends BaseController {
 function isDictionaryImportRequest(value: unknown): value is DictionaryImportRequest {
   if (!value || typeof value !== 'object') return false
   const request = value as DictionaryImportRequest
-  return (
-    typeof request.mdxPath === 'string' &&
-    isAbsolute(request.mdxPath) &&
-    extname(request.mdxPath).toLowerCase() === '.mdx' &&
-    Array.isArray(request.selectedRelativePaths) &&
-    request.selectedRelativePaths.length > 0 &&
-    request.selectedRelativePaths.length <= 20_000 &&
-    request.selectedRelativePaths.every(
-      (relativePath) =>
-        typeof relativePath === 'string' && relativePath.length > 0 && relativePath.length <= 1_000
-    )
-  )
+
+  if (typeof request.mdxPath !== 'string') return false
+  if (!isAbsolute(request.mdxPath)) return false
+  if (extname(request.mdxPath).toLowerCase() !== '.mdx') return false
+  if (typeof request.copyFiles !== 'boolean') return false
+
+  const paths = request.selectedRelativePaths
+  if (!Array.isArray(paths)) return false
+  if (request.copyFiles && paths.length === 0) return false
+  if (paths.length > 20_000) return false
+
+  return paths.every((relativePath) => {
+    if (typeof relativePath !== 'string') return false
+    return relativePath.length > 0 && relativePath.length <= 1_000
+  })
 }

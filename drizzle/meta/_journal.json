@@ -57,6 +57,20 @@
       "when": 1788485333986,
       "tag": "0007_public_shooting_star",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788630593310,
+      "tag": "0008_red_firebrand",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788747598581,
+      "tag": "0009_dizzy_madrox",
+      "breakpoints": true
     }
   ]
 }

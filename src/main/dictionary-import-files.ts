@@ -7,37 +7,39 @@ import type {
   DictionaryImportSourceFile
 } from '../shared/dictionary-import'
 
-const DICTIONARY_ICON_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif']
-const DICTIONARY_IMAGE_EXTENSIONS = new Set(DICTIONARY_ICON_EXTENSIONS)
-const COMPANION_EXTENSIONS = new Set([
-  '.css',
-  '.gif',
-  '.jpeg',
-  '.jpg',
-  '.js',
+const ICON_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif']
+const IMAGE_EXTENSIONS = new Set(ICON_EXTENSIONS)
+const RESOURCE_EXTENSIONS = new Set([
   '.mdd',
+  '.css',
+  '.js',
   '.png',
-  '.ttf',
+  '.jpg',
+  '.jpeg',
+  '.gif',
   '.webp',
+  '.otf',
+  '.ttf',
+  '.woff',
   '.woff2'
 ])
 
-export type DictionaryCompanionFile = {
+export type ResourceFile = {
   sourcePath: string
   relativePath: string
 }
 
-export async function collectDictionaryCompanionFiles(
-  sourceDirectory: string
-): Promise<DictionaryCompanionFile[]> {
-  return collectFilesWithExtensions(sourceDirectory, COMPANION_EXTENSIONS)
+export async function collectResourceFiles(
+  rootPath: string
+): Promise<ResourceFile[]> {
+  return collectFilesWithExtensions(rootPath, RESOURCE_EXTENSIONS)
 }
 
 async function collectFilesWithExtensions(
-  sourceDirectory: string,
+  rootPath: string,
   extensions: ReadonlySet<string>
-): Promise<DictionaryCompanionFile[]> {
-  const files: DictionaryCompanionFile[] = []
+): Promise<ResourceFile[]> {
+  const files: ResourceFile[] = []
 
   const visit = async (directory: string, relativeDirectory: string): Promise<void> => {
     const entries = await readdir(directory, { withFileTypes: true })
@@ -59,8 +61,37 @@ async function collectFilesWithExtensions(
     }
   }
 
-  await visit(sourceDirectory, '')
+  await visit(rootPath, '')
   return files
+}
+
+async function collectDictionaryImportFiles(
+  mdxPath: string
+): Promise<Array<DictionaryImportSourceFile & { required: boolean }>> {
+  const mdxName = basename(mdxPath)
+  const mdxBaseName = basename(mdxPath, extname(mdxPath)).toLowerCase()
+  const rootPath = dirname(mdxPath)
+  const resourceFiles = await collectResourceFiles(rootPath)
+  const iconRelativePath = resourceFiles
+    .filter(
+      (file) =>
+        IMAGE_EXTENSIONS.has(extname(file.sourcePath).toLowerCase()) &&
+        dirname(file.sourcePath) === rootPath &&
+        basename(file.sourcePath, extname(file.sourcePath)).toLowerCase() === mdxBaseName
+    )
+    .sort(
+      (left, right) =>
+        ICON_EXTENSIONS.indexOf(extname(left.sourcePath).toLowerCase()) -
+        ICON_EXTENSIONS.indexOf(extname(right.sourcePath).toLowerCase())
+    )[0]?.relativePath
+
+  return [
+    { sourcePath: mdxPath, relativePath: mdxName, required: true },
+    ...resourceFiles.map((file) => ({
+      ...file,
+      required: file.relativePath === iconRelativePath
+    }))
+  ]
 }
 
 export async function createDictionaryImportPreview(
@@ -79,6 +110,7 @@ export async function createDictionaryImportPreview(
   }
 }
 
+// 所有选择的合法文件，包括mdx, mdd，resource files
 export async function resolveDictionaryImportSelection(
   request: DictionaryImportRequest
 ): Promise<DictionaryImportSourceFile[]> {
@@ -107,30 +139,16 @@ export async function resolveDictionaryImportSelection(
   return selectedFiles
 }
 
-async function collectDictionaryImportFiles(
+// 仅保留 mdx, mdd 文件
+export async function resolveExternalDictionaryFiles(
   mdxPath: string
-): Promise<Array<DictionaryImportSourceFile & { required: boolean }>> {
-  const mdxName = basename(mdxPath)
-  const companionFiles = await collectDictionaryCompanionFiles(dirname(mdxPath))
-  const mdxBaseName = basename(mdxPath, extname(mdxPath)).toLowerCase()
-  const iconRelativePath = companionFiles
-    .filter(
-      (file) =>
-        dirname(file.sourcePath) === dirname(mdxPath) &&
-        basename(file.sourcePath, extname(file.sourcePath)).toLowerCase() === mdxBaseName &&
-        DICTIONARY_IMAGE_EXTENSIONS.has(extname(file.sourcePath).toLowerCase())
-    )
-    .sort(
-      (left, right) =>
-        DICTIONARY_ICON_EXTENSIONS.indexOf(extname(left.sourcePath).toLowerCase()) -
-        DICTIONARY_ICON_EXTENSIONS.indexOf(extname(right.sourcePath).toLowerCase())
-    )[0]?.relativePath
+): Promise<DictionaryImportSourceFile[]> {
+  const resourceFiles = await collectResourceFiles(dirname(mdxPath))
 
   return [
-    { sourcePath: mdxPath, relativePath: mdxName, required: true },
-    ...companionFiles.map((file) => ({
-      ...file,
-      required: file.relativePath === iconRelativePath
-    }))
+    { sourcePath: mdxPath, relativePath: basename(mdxPath) },
+    ...resourceFiles
+      .filter((file) => extname(file.relativePath).toLowerCase() === '.mdd')
+      .map(({ sourcePath, relativePath }) => ({ sourcePath, relativePath }))
   ]
 }

@@ -10,7 +10,8 @@ export const dictionary = sqliteTable(
     name: text('name').notNull(),
     description: text('description'),
     recordCount: integer('record_count'),
-    dictPath: text('dict_path'),
+    dictPath: text('dict_path').unique(),
+    external: integer('external', { mode: 'boolean' }).notNull().default(false),
     customCss: text('custom_css').notNull().default(''),
     sortOrder: integer('sort_order').notNull().default(0),
     status: text('status', { enum: ['pending', 'importing', 'ready', 'error'] })
@@ -37,9 +38,10 @@ export const dictionaryFile = sqliteTable(
       .notNull()
       .references(() => dictionary.id, { onDelete: 'cascade' }),
     fileName: text('file_name').notNull(),
-    filePath: text('file_path').notNull().unique(),
+    filePath: text('file_path').notNull(),
     fileType: text('file_type', { enum: ['mdx', 'mdd'] }).notNull(),
     fileSize: integer('file_size'),
+    lastModified: integer('last_modified', { mode: 'number' }),
     checksum: text('checksum'),
     formatVersion: text('format_version'),
     isEncrypted: integer('is_encrypted', { mode: 'boolean' }).notNull().default(false),

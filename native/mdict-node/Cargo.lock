@@ -229,6 +229,7 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "xxhash-rust",
 ]
 
 [[package]]

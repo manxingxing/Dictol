@@ -72,6 +72,7 @@ export function DictionariesPage(): React.JSX.Element {
   const [importDialogStep, setImportDialogStep] = useState<'select' | 'preview'>('select')
   const [importPreview, setImportPreview] = useState<DictionaryImportPreview | null>(null)
   const [selectedImportFiles, setSelectedImportFiles] = useState<Set<string>>(() => new Set())
+  const [copyDictionaryFiles, setCopyDictionaryFiles] = useState(true)
   const [previewSelectionSnapshot, setPreviewSelectionSnapshot] = useState<Set<string>>(
     () => new Set()
   )
@@ -154,6 +155,7 @@ export function DictionariesPage(): React.JSX.Element {
     setImportDialogStep('select')
     setImportPreview(null)
     setSelectedImportFiles(new Set())
+    setCopyDictionaryFiles(true)
     setPreviewSelectionSnapshot(new Set())
     setImportFileError(null)
   }
@@ -161,6 +163,21 @@ export function DictionariesPage(): React.JSX.Element {
   const closeImportPreview = (applySelection: boolean): void => {
     if (!applySelection) setSelectedImportFiles(new Set(previewSelectionSnapshot))
     setImportDialogStep('select')
+  }
+
+  const submitImport = async (copyFiles: boolean): Promise<void> => {
+    if (!importPreview) return
+
+    await importDictionary.mutateAsync({
+      mdxPath: importPreview.mdxPath,
+      copyFiles,
+      selectedRelativePaths: copyFiles
+        ? importPreview.files
+            .filter((file) => selectedImportFiles.has(file.relativePath))
+            .map((file) => file.relativePath)
+        : []
+    })
+    closeImportDialog()
   }
 
   const openOnlineEditor = (): void => {
@@ -201,6 +218,7 @@ export function DictionariesPage(): React.JSX.Element {
                 setImportDialogStep('select')
                 setImportPreview(null)
                 setSelectedImportFiles(new Set())
+                setCopyDictionaryFiles(true)
                 setImportFileError(null)
                 setImportDialogOpen(true)
               }}
@@ -291,6 +309,11 @@ export function DictionariesPage(): React.JSX.Element {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p className="truncate text-sm font-medium">{dictionary.name}</p>
+                          {dictionary.external && (
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                              外部文件
+                            </span>
+                          )}
                           <span
                             className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${status.className}`}
                           >
@@ -303,9 +326,7 @@ export function DictionariesPage(): React.JSX.Element {
                         <p className="mt-1 text-xs text-muted-foreground">
                           {dictionary.recordCount
                             ? `${formatRecordCount(dictionary.recordCount)} 个词条`
-                            : dictionary.status === 'importing'
-                              ? '正在复制文件并建立索引'
-                              : '尚无词条统计'}
+                            : (dictionary.status === 'importing' ? '正在建立索引' : '尚无词条统计')}
                         </p>
                       </div>
                       <Button
@@ -393,7 +414,7 @@ export function DictionariesPage(): React.JSX.Element {
                             onClick={() => {
                               if (
                                 window.confirm(
-                                  `确定删除“${dictionary.name}”吗？词典记录、索引和已复制文件都会被删除。`
+                                  `确定删除“${dictionary.name}”吗？词典记录和索引会被删除${dictionary.external ? '，原文件不会被删除。' : '，已复制文件也会被删除。'}`
                                 )
                               ) {
                                 deleteDictionary.mutate(dictionary.id)
@@ -689,16 +710,7 @@ export function DictionariesPage(): React.JSX.Element {
               className="grid min-w-0 gap-5"
               onSubmit={(event) => {
                 event.preventDefault()
-                if (!importPreview) return
-                void importDictionary
-                  .mutateAsync({
-                    mdxPath: importPreview.mdxPath,
-                    selectedRelativePaths: importPreview.files
-                      .filter((file) => selectedImportFiles.has(file.relativePath))
-                      .map((file) => file.relativePath)
-                  })
-                  .then(closeImportDialog)
-                  .catch(() => undefined)
+                void submitImport(copyDictionaryFiles).catch(() => undefined)
               }}
             >
               <DialogHeader>
@@ -731,6 +743,18 @@ export function DictionariesPage(): React.JSX.Element {
                 </div>
               </div>
               {importPreview && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    checked={copyDictionaryFiles}
+                    className="size-4 accent-primary"
+                    disabled={importDictionary.isPending || selectingImportFile}
+                    onChange={(event) => setCopyDictionaryFiles(event.target.checked)}
+                    type="checkbox"
+                  />
+                  将词典文件复制到软件中
+                </label>
+              )}
+              {importPreview && copyDictionaryFiles && (
                 <div className="flex min-w-0 items-center gap-3 overflow-hidden rounded-xl border border-primary/20 bg-primary/[0.035] p-3">
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <Files className="size-4" />

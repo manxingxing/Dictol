@@ -10,18 +10,22 @@ export class DictionaryRepository {
   }
 
   /** 创建一条正在导入的词典记录，并追加到当前排序末尾。 */
-  async createImporting(name: string, dictPath: string): Promise<number> {
+  async createImporting(name: string, dictPath: string, external = false): Promise<number> {
     const [row] = await this.db
       .insert(dictionary)
       .values({
         name,
         dictPath,
+        external,
         status: 'importing',
         sortOrder: sql<number>`coalesce((select max(${dictionary.sortOrder}) from ${dictionary}), -1) + 1`
       })
+      .onConflictDoNothing({ target: dictionary.dictPath })
       .returning({ id: dictionary.id })
 
-    if (!row) throw new Error('创建词典记录失败')
+    if (!row) {
+      throw new Error('此目录已被其他词典使用，无法重复导入。请先删除已有词典，或选择其他目录。')
+    }
     return row.id
   }
 

@@ -30,3 +30,4 @@ module.exports.MddListKeyScanner = native.MddListKeyScanner
 module.exports.Mdx = native.Mdx
 module.exports.MdxEntryScanner = native.MdxEntryScanner
 module.exports.MdxKeyScanner = native.MdxKeyScanner
+module.exports.hashFile = native.hashFile

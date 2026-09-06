@@ -6,7 +6,7 @@ import { BuiltInLexiconService } from './built-in-lexicon-service'
 import { initDrizzleDB, type DictolDatabase, type SqliteDatabase } from './db/drizzle'
 import { getDatabasePath, getMigrationsPath } from './db/paths'
 import { DBService } from './db-service'
-import { MDFileCache } from './mdict-file-cache'
+import { MdictResourceManager } from './mdict-resource-manager'
 import { ResourceCache } from './resource-cache'
 import { SelectionHookService } from './selection-hook-service'
 import { ShortcutRegister } from './shortcut-register'
@@ -26,9 +26,9 @@ export class AppRuntime {
   db: DictolDatabase | undefined
   dbService: DBService | undefined
   private dbConnection: SqliteDatabase | undefined
+  private _mdictResourceManager: MdictResourceManager | undefined
   private mainWindowInitializer: MainWindowInitializer | undefined
   windowManager: WindowManager = new WindowManager()
-  mdFileCache: MDFileCache = new MDFileCache()
   resourceCache: ResourceCache = new ResourceCache()
   builtInLexicon: BuiltInLexiconService | undefined
   appConfig: AppConfigStore = new AppConfigStore()
@@ -52,6 +52,11 @@ export class AppRuntime {
     return window && !window.isDestroyed() ? window : undefined
   }
 
+  get mdictResourceManager(): MdictResourceManager {
+    if (!this._mdictResourceManager) throw new Error('MDict 资源管理器尚未初始化')
+    return this._mdictResourceManager
+  }
+
   initDB(): void {
     const { orm, db: conn } = initDrizzleDB(getDatabasePath(), getMigrationsPath())
     this.db = orm
@@ -66,6 +71,7 @@ export class AppRuntime {
       )
     }
     this.dbService = new DBService(orm, this.builtInLexicon)
+    this._mdictResourceManager = new MdictResourceManager(this.dbService)
     this.dbConnection = conn
   }
 
@@ -202,7 +208,8 @@ export class AppRuntime {
     this.adBlockService.dispose()
     this.windowManager.dispose()
     this.aiLookupService.dispose()
-    this.mdFileCache.dispose()
+    this._mdictResourceManager?.dispose()
+    this._mdictResourceManager = undefined
     this.builtInLexicon?.dispose()
     this.builtInLexicon = undefined
     this.closeDB()

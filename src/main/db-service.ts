@@ -38,6 +38,7 @@ export type DictionarySummary = {
   iconUrl: string | null
   recordCount: string | null
   status: DictionaryStatus
+  external: boolean
   createdAt: string
   updatedAt: string
 }
@@ -64,6 +65,11 @@ export type ImportedDictionary = {
   }>
 }
 
+type DictionaryImportWorkerMessage =
+  | { type: 'created'; value: ImportedDictionary }
+  | { type: 'ready'; name: string }
+  | { type: 'error'; error: string }
+
 export type DictionaryMatch = {
   entryId: string
   dictionaryId: string
@@ -83,17 +89,11 @@ export type DictionarySearchResult = {
   dictionaryCount: number
 }
 
-export type DictionaryEntryContent = {
+export type DictionaryEntryRecord = {
   id: string
   dictionaryId: string
   dictionaryName: string
   word: string
-  html: string
-  customCss: string
-}
-
-export type DictionaryEntryRecord = Omit<DictionaryEntryContent, 'html'> & {
-  filePath: string
   recordStartOffset: number
   recordEndOffset: number
 }
@@ -396,6 +396,7 @@ export class DBService {
       iconUrl: iconUrls[index],
       recordCount: row.recordCount?.toString() ?? null,
       status: row.status,
+      external: row.external,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt
     }))
@@ -409,21 +410,6 @@ export class DBService {
       faviconUrl: row.faviconUrl,
       urlTemplate: row.urlTemplate
     }))
-  }
-
-  async getDictionaryInfoSource(
-    dictionaryId: string
-  ): Promise<{ mdxPath: string; dictionaryFileNames: string[] }> {
-    const numericDictionaryId = this.parseDictionaryId(dictionaryId)
-    const dictionaryFiles = await this.listDictionaryResourceFiles(numericDictionaryId)
-    const mdxFile = dictionaryFiles.find((file) => file.fileType == 'mdx')
-
-    if (!mdxFile) throw new Error('词典 MDX 文件不存在')
-
-    return {
-      mdxPath: mdxFile.filePath,
-      dictionaryFileNames: dictionaryFiles.map((file) => file.fileName)
-    }
   }
 
   async addOnlineDictionary(input: OnlineDictionaryInput): Promise<OnlineDictionaryConfig> {
@@ -515,7 +501,7 @@ export class DBService {
     if (row.status === 'importing') throw new Error('词典正在导入，暂时无法删除')
 
     const dictionariesRoot = resolve(app.getPath('userData'), 'dictionaries')
-    const dictionaryDirectory = row.dictPath ? resolve(row.dictPath) : null
+    const dictionaryDirectory = row.external || !row.dictPath ? null : resolve(row.dictPath)
     if (dictionaryDirectory && dirname(dictionaryDirectory) !== dictionariesRoot) {
       throw new Error('词典目录不在允许删除的位置')
     }
@@ -558,6 +544,10 @@ export class DBService {
   async getDictionaryPath(dictionaryId: string): Promise<string | null> {
     const row = await this.dictionaryRepo.findById(this.parseDictionaryId(dictionaryId))
     return row?.dictPath ?? null
+  }
+
+  async getDictionary(dictionaryId: string): Promise<Dictionary | undefined> {
+    return this.dictionaryRepo.findById(this.parseDictionaryId(dictionaryId))
   }
 
   async getDictionaryIconResource(
@@ -629,7 +619,9 @@ export class DBService {
 
   async importDictionaryFromFile(
     mdxPath: string,
-    sourceFiles: DictionaryImportSourceFile[]
+    sourceFiles: DictionaryImportSourceFile[],
+    copyFiles = true,
+    onReady?: (name: string) => void
   ): Promise<ImportedDictionary> {
     const workerPath =
       process.env.DICTOL_IMPORT_WORKER_PATH ?? join(__dirname, 'dictionary-import-worker.js')
@@ -638,6 +630,7 @@ export class DBService {
         databasePath: getDatabasePath(),
         mdxPath,
         sourceFiles,
+        copyFiles,
         userDataPath: app.getPath('userData'),
         targetDirectoryName: randomUUID()
       }
@@ -653,19 +646,20 @@ export class DBService {
         rejectPromise(error)
       }
 
-      worker.on(
-        'message',
-        (
-          message: { type: 'created'; value: ImportedDictionary } | { type: 'error'; error: string }
-        ) => {
-          if (message.type === 'created') {
+      worker.on('message', (message: DictionaryImportWorkerMessage) => {
+        switch (message.type) {
+          case 'created':
             created = true
             resolvePromise(message.value)
-            return
-          }
-          failBeforeCreation(new Error(message.error || '词典导入失败'))
+            break
+          case 'ready':
+            onReady?.(message.name)
+            break
+          case 'error':
+            failBeforeCreation(new Error(message.error || '词典导入失败'))
+            break
         }
-      )
+      })
       worker.once('error', (error) => failBeforeCreation(error))
       worker.once('exit', (code) => {
         if (!created && code !== 0) {
@@ -707,8 +701,6 @@ export class DBService {
       dictionaryId: String(row.dictionaryId),
       dictionaryName: row.dictionaryName,
       word: row.word,
-      customCss: row.customCss,
-      filePath: row.filePath,
       recordStartOffset: row.recordStartOffset,
       recordEndOffset: row.recordEndOffset
     }
@@ -730,8 +722,6 @@ export class DBService {
       dictionaryId: String(row.dictionaryId),
       dictionaryName: row.dictionaryName,
       word: row.word,
-      customCss: row.customCss,
-      filePath: row.filePath,
       recordStartOffset: row.recordStartOffset,
       recordEndOffset: row.recordEndOffset
     }))
@@ -739,14 +729,23 @@ export class DBService {
 
   async listDictionaryResourceFiles(dictionaryId: number): Promise<
     Array<{
+      id: number
       fileName: string
       filePath: string
       fileType: 'mdx' | 'mdd'
       dictPath: string | null
+      external: boolean
+      fileSize: number | null
+      lastModified: number | null
+      checksum: string | null
     }>
   > {
     if (!Number.isSafeInteger(dictionaryId) || dictionaryId <= 0) return []
     return this.fileRepo.listResourceFiles(dictionaryId)
+  }
+
+  async updateDictionaryFileLastModified(fileId: number, lastModified: number): Promise<void> {
+    await this.fileRepo.updateLastModified(fileId, lastModified)
   }
 
   private parseDictionaryId(dictionaryId: string): number {

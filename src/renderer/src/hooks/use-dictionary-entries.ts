@@ -15,7 +15,8 @@ export function useDictionarySearch(
     queryFn: () => window.dictol.entries.search(normalizedPrefix, limit),
     enabled: normalizedPrefix.length > 0,
     placeholderData: keepPreviousData,
-    staleTime: 30_000
+    staleTime: 0,
+    gcTime: 0
   })
 }
 
@@ -28,6 +29,7 @@ export function useDictionaryLookup(
     queryFn: () => window.dictol.entries.lookup(normalizedTerm),
     enabled: normalizedTerm.length > 0,
     placeholderData: keepPreviousData,
-    staleTime: 5 * 60_000
+    staleTime: 0,
+    gcTime: 0
   })
 }

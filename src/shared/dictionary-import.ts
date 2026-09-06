@@ -12,6 +12,7 @@ export type DictionaryImportPreview = {
 
 export type DictionaryImportRequest = {
   mdxPath: string
+  copyFiles: boolean
   selectedRelativePaths: string[]
 }
 

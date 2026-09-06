@@ -25,6 +25,7 @@ type ReadyDictionary = {
 type DictionarySummary = Omit<ReadyDictionary, 'status'> & {
   status: 'pending' | 'importing' | 'ready' | 'error'
   customCss: string
+  external: boolean
 }
 
 type ImportedDictionary = {
@@ -63,15 +64,6 @@ type DictionarySearchResult = {
   word: string
   normalizedWord: string
   dictionaryCount: number
-}
-
-type DictionaryEntryContent = {
-  id: string
-  dictionaryId: string
-  dictionaryName: string
-  word: string
-  html: string
-  customCss: string
 }
 
 type QueryHistoryItem = {
@@ -216,9 +208,7 @@ const api = Object.freeze({
     search: (prefix: string, limit?: number): Promise<DictionarySearchResult[]> =>
       ipcRenderer.invoke('dictionary-entries:search', prefix, limit),
     lookup: (term: string): Promise<DictionaryEntryGroup | null> =>
-      ipcRenderer.invoke('dictionary-entries:lookup', term),
-    get: (entryId: string): Promise<DictionaryEntryContent | null> =>
-      ipcRenderer.invoke('dictionary-entries:get', entryId)
+      ipcRenderer.invoke('dictionary-entries:lookup', term)
   }),
   history: Object.freeze({
     list: (): Promise<QueryHistoryItem[]> => ipcRenderer.invoke('query-history:list'),

@@ -1,6 +1,6 @@
 import { and, asc, count, eq, exists, gte, inArray, lt, sql } from 'drizzle-orm'
 import { DictolDatabase } from '../drizzle'
-import { dictionary, dictionaryEntry, dictionaryFile } from '../schema'
+import { dictionary, dictionaryEntry } from '../schema'
 import type { NewDictionaryEntry } from '../schema'
 
 export type { DictionaryEntry } from '../schema'
@@ -30,8 +30,6 @@ export type EntryContent = {
   normalizedWord: string
   dictionaryId: number
   dictionaryName: string
-  customCss: string
-  filePath: string
   recordStartOffset: number
   recordEndOffset: number
 }
@@ -116,7 +114,7 @@ export class DictionaryEntryRepository {
       .orderBy(asc(dictionaryEntry.normalizedWord), asc(dictionary.sortOrder), asc(dictionary.id))
   }
 
-  /** 根据 entryId 查询完整条目信息（含词典名、CSS、文件路径&偏移量） */
+  /** 根据 entryId 查询词条及正文偏移量。 */
   async findEntryContent(entryId: number): Promise<EntryContent | undefined> {
     const [row] = await this.db
       .select({
@@ -125,21 +123,12 @@ export class DictionaryEntryRepository {
         normalizedWord: dictionaryEntry.normalizedWord,
         dictionaryId: dictionaryEntry.dictionaryId,
         dictionaryName: dictionary.name,
-        customCss: dictionary.customCss,
-        filePath: dictionaryFile.filePath,
         recordStartOffset: dictionaryEntry.recordStartOffset,
         recordEndOffset: dictionaryEntry.recordEndOffset
       })
       .from(dictionaryEntry)
       .innerJoin(dictionary, eq(dictionary.id, dictionaryEntry.dictionaryId))
-      .innerJoin(dictionaryFile, eq(dictionaryFile.id, dictionaryEntry.dictionaryFileId))
-      .where(
-        and(
-          eq(dictionaryEntry.id, entryId),
-          eq(dictionary.status, 'ready'),
-          eq(dictionaryFile.fileType, 'mdx')
-        )
-      )
+      .where(and(eq(dictionaryEntry.id, entryId), eq(dictionary.status, 'ready')))
       .limit(1)
 
     return row
@@ -162,20 +151,16 @@ export class DictionaryEntryRepository {
         normalizedWord: dictionaryEntry.normalizedWord,
         dictionaryId: dictionaryEntry.dictionaryId,
         dictionaryName: dictionary.name,
-        customCss: dictionary.customCss,
-        filePath: dictionaryFile.filePath,
         recordStartOffset: dictionaryEntry.recordStartOffset,
         recordEndOffset: dictionaryEntry.recordEndOffset
       })
       .from(dictionaryEntry)
       .innerJoin(dictionary, eq(dictionary.id, dictionaryEntry.dictionaryId))
-      .innerJoin(dictionaryFile, eq(dictionaryFile.id, dictionaryEntry.dictionaryFileId))
       .where(
         and(
           eq(dictionaryEntry.dictionaryId, entry.dictionaryId),
           eq(dictionaryEntry.normalizedWord, entry.normalizedWord),
-          eq(dictionary.status, 'ready'),
-          eq(dictionaryFile.fileType, 'mdx')
+          eq(dictionary.status, 'ready')
         )
       )
       .orderBy(asc(dictionaryEntry.recordStartOffset), asc(dictionaryEntry.id))

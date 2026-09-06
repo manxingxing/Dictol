@@ -18,6 +18,8 @@ export class DictionaryFileRepository {
     filePath: string
     fileType: 'mdx' | 'mdd'
     fileSize: number
+    lastModified: number
+    checksum: string
   }): Promise<number> {
     const [row] = await this.db
       .insert(dictionaryFile)
@@ -39,6 +41,14 @@ export class DictionaryFileRepository {
       .where(eq(dictionaryFile.id, id))
   }
 
+  /** 更新文件的最后修改时间。文件内容校验通过后由上层调用。 */
+  async updateLastModified(id: number, lastModified: number): Promise<void> {
+    await this.db
+      .update(dictionaryFile)
+      .set({ lastModified, updatedAt: new Date().toISOString() })
+      .where(eq(dictionaryFile.id, id))
+  }
+
   /** 查询某个词典下的所有文件 */
   async listByDictionaryId(dictionaryId: number): Promise<DictionaryFile[]> {
     return this.db
@@ -51,7 +61,7 @@ export class DictionaryFileRepository {
   /** 查询资源加载所需的词典目录和文件信息。 */
   async listResourceFiles(
     dictionaryId: number
-  ): Promise<Array<DictionaryFile & { dictPath: string | null }>> {
+  ): Promise<Array<DictionaryFile & { dictPath: string | null; external: boolean }>> {
     return this.db
       .select({
         id: dictionaryFile.id,
@@ -60,12 +70,14 @@ export class DictionaryFileRepository {
         filePath: dictionaryFile.filePath,
         fileType: dictionaryFile.fileType,
         fileSize: dictionaryFile.fileSize,
+        lastModified: dictionaryFile.lastModified,
         checksum: dictionaryFile.checksum,
         formatVersion: dictionaryFile.formatVersion,
         isEncrypted: dictionaryFile.isEncrypted,
         createdAt: dictionaryFile.createdAt,
         updatedAt: dictionaryFile.updatedAt,
-        dictPath: dictionary.dictPath
+        dictPath: dictionary.dictPath,
+        external: dictionary.external
       })
       .from(dictionaryFile)
       .innerJoin(dictionary, eq(dictionary.id, dictionaryFile.dictionaryId))

@@ -1,17 +1,7 @@
-import { MddList } from '@dictol/mdict-native'
 import { readFile } from 'node:fs/promises'
-import { dirname, extname, resolve, sep } from 'node:path'
+import { extname, resolve, sep } from 'node:path'
 
-import { getAppRunTime, type AppRuntime } from './app-runtime'
-import type { DBService } from './db-service'
-
-const dictionaryFiles = new Map<number, Promise<DictionaryResourceFiles | null>>()
-const suspendedDictionaryResources = new Set<number>()
-
-type DictionaryResourceFiles = {
-  directory: string
-  mddList: MddList | null
-}
+import { getAppRunTime } from './app-runtime'
 
 export type LoadedDictionaryResource = {
   bytes: Buffer
@@ -19,32 +9,11 @@ export type LoadedDictionaryResource = {
   source: 'cache' | 'local' | 'mdd'
 }
 
-export function invalidateDictionaryResources(dictionaryId: number): void {
-  dictionaryFiles.delete(dictionaryId)
-}
-
-/** Stop new resource loads and wait for the current file-discovery promise to settle. */
-export async function suspendDictionaryResources(dictionaryId: number): Promise<() => void> {
-  suspendedDictionaryResources.add(dictionaryId)
-  const pending = dictionaryFiles.get(dictionaryId)
-  invalidateDictionaryResources(dictionaryId)
-  if (pending) await pending.catch(() => undefined)
-  return () => suspendedDictionaryResources.delete(dictionaryId)
-}
-
 export async function loadDictionaryResource(
   dictionaryId: number,
   resourcePath: string,
   runtime = getAppRunTime()
 ): Promise<LoadedDictionaryResource | null> {
-  if (suspendedDictionaryResources.has(dictionaryId)) {
-    console.debug('[DictionaryResource] lookup skipped: dictionary suspended', {
-      dictionaryId,
-      resourcePath
-    })
-    return null
-  }
-
   const mimeType = getMimeType(resourcePath)
   console.debug('[DictionaryResource] lookup started', {
     dictionaryId,
@@ -52,19 +21,12 @@ export async function loadDictionaryResource(
     mimeType
   })
 
-  const files = await getDictionaryResourceFiles(runtime, dictionaryId)
-  if (!files) {
-    console.debug('[DictionaryResource] lookup failed: dictionary files unavailable', {
-      dictionaryId,
-      resourcePath
-    })
-    return null
-  }
+  const directory = await runtime.mdictResourceManager.getResourceDirectory(dictionaryId)
 
   // Companion files are user-provided and must override extracted MDD data.
   // readFile is intentionally used as the existence check so a hit costs one
   // filesystem read instead of an access/stat call followed by another read.
-  const local = await readLocalCompanion(files.directory, resourcePath)
+  const local = await readLocalCompanion(directory, resourcePath)
   if (local) {
     console.debug('[DictionaryResource] local companion hit', {
       dictionaryId,
@@ -84,7 +46,7 @@ export async function loadDictionaryResource(
     return { bytes: cached, mimeType, source: 'cache' }
   }
 
-  const extracted = files.mddList ? await readMddResource(files.mddList, resourcePath) : null
+  const extracted = await runtime.mdictResourceManager.loadResource(dictionaryId, resourcePath)
   if (!extracted) {
     console.debug('[DictionaryResource] lookup miss', {
       dictionaryId,
@@ -107,42 +69,6 @@ export async function loadDictionaryResource(
   return { bytes: extracted, mimeType, source: 'mdd' }
 }
 
-async function getDictionaryResourceFiles(
-  runtime: AppRuntime,
-  dictionaryId: number
-): Promise<DictionaryResourceFiles | null> {
-  if (suspendedDictionaryResources.has(dictionaryId)) return null
-  let pending = dictionaryFiles.get(dictionaryId)
-  if (!pending) {
-    pending = loadDictionaryResourceFiles(runtime, dictionaryId)
-    dictionaryFiles.set(dictionaryId, pending)
-  }
-  return pending
-}
-
-async function loadDictionaryResourceFiles(
-  runtime: AppRuntime,
-  dictionaryId: number
-): Promise<DictionaryResourceFiles | null> {
-  const rows = await requireDBService(runtime).listDictionaryResourceFiles(dictionaryId)
-
-  const firstFile = rows[0]
-  if (!firstFile) return null
-  const mddPaths = rows
-    .filter((row) => row.fileType === 'mdd')
-    .sort((left, right) => mddOrder(left.fileName) - mddOrder(right.fileName))
-    .map((row) => row.filePath)
-  return {
-    directory: firstFile.dictPath ?? dirname(firstFile.filePath),
-    mddList: mddPaths.length > 0 ? runtime.mdFileCache.fetchMddList(mddPaths) : null
-  }
-}
-
-function mddOrder(fileName: string): number {
-  const part = /\.(\d+)\.mdd$/i.exec(fileName)?.[1]
-  return part === undefined ? 0 : Number(part) + 1
-}
-
 async function readLocalCompanion(directory: string, resourcePath: string): Promise<Buffer | null> {
   const root = resolve(directory)
   const target = resolve(root, ...resourcePath.split('/'))
@@ -154,30 +80,6 @@ async function readLocalCompanion(directory: string, resourcePath: string): Prom
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
     throw error
   }
-}
-
-async function readMddResource(mdd: MddList, resourcePath: string): Promise<Buffer | null> {
-  const pathWithBackslashes = resourcePath.replaceAll('/', '\\')
-  const candidates = Array.from(
-    new Set([
-      pathWithBackslashes.startsWith('\\') ? pathWithBackslashes : `\\${pathWithBackslashes}`,
-      pathWithBackslashes,
-      resourcePath.startsWith('/') ? resourcePath : `/${resourcePath}`
-    ])
-  )
-
-  for (const candidate of candidates) {
-    const entry = await mdd.findKey(candidate)
-    if (entry) {
-      return mdd.readRecord(entry.volume, entry.recordStart, entry.recordEnd)
-    }
-  }
-  return null
-}
-
-function requireDBService(runtime: AppRuntime): DBService {
-  if (!runtime.dbService) throw new Error('资源协议启动前必须初始化 DBService')
-  return runtime.dbService
 }
 
 function getMimeType(resourcePath: string): string {

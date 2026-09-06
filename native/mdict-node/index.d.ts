@@ -155,6 +155,9 @@ export interface EntryBatch {
   done: boolean
 }
 
+/** 使用 XXH3-128 计算文件 checksum。小文件读取全部内容，大文件读取头、中、尾各 64 KiB。 */
+export declare function hashFile(path: string): Promise<string>
+
 /** 一批 key 扫描结果。 */
 export interface KeyBatch {
   entries: Array<DictionaryEntry>

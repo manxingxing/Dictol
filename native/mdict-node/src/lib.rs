@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -14,6 +16,59 @@ use napi_derive::napi;
 
 const DEFAULT_BATCH_SIZE: u32 = 2_048;
 const MAXIMUM_BATCH_SIZE: u32 = 100_000;
+const FILE_HASH_CHUNK_SIZE: u64 = 64 * 1024;
+
+/// 使用 XXH3-128 计算文件 checksum。小文件读取全部内容，大文件读取头、中、尾各 64 KiB。
+#[napi(ts_return_type = "Promise<string>")]
+pub fn hash_file(path: String) -> AsyncTask<HashFileTask> {
+    AsyncTask::new(HashFileTask {
+        path: PathBuf::from(path),
+    })
+}
+
+pub struct HashFileTask {
+    path: PathBuf,
+}
+
+impl Task for HashFileTask {
+    type Output = String;
+    type JsValue = String;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        sampled_file_checksum(&self.path).map_err(|error| Error::from_reason(error.to_string()))
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output)
+    }
+}
+
+fn sampled_file_checksum(path: &std::path::Path) -> std::io::Result<String> {
+    let mut file = File::open(path)?;
+    let file_size = file.metadata()?.len();
+    let mut hasher = xxhash_rust::xxh3::Xxh3::new();
+    hasher.update(&file_size.to_le_bytes());
+
+    if file_size <= FILE_HASH_CHUNK_SIZE * 3 {
+        let mut bytes = Vec::with_capacity(file_size as usize);
+        file.read_to_end(&mut bytes)?;
+        hasher.update(&bytes);
+    } else {
+        let offsets = [
+            0,
+            (file_size - FILE_HASH_CHUNK_SIZE) / 2,
+            file_size - FILE_HASH_CHUNK_SIZE,
+        ];
+        let mut chunk = vec![0; FILE_HASH_CHUNK_SIZE as usize];
+        for offset in offsets {
+            file.seek(SeekFrom::Start(offset))?;
+            file.read_exact(&mut chunk)?;
+            hasher.update(&chunk);
+        }
+    }
+
+    Ok(format!("{:032x}", hasher.digest128()))
+}
 
 /// Owns the binding's strong reference separately from the JavaScript wrapper lifetime.
 ///

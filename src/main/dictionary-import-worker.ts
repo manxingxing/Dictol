@@ -6,6 +6,7 @@ import { parentPort, workerData } from 'node:worker_threads'
 
 import type { DictionaryImportSourceFile } from '../shared/dictionary-import'
 import { openDrizzleDB } from './db/drizzle'
+import { hashFile } from './file-hash'
 import { DictionaryEntryRepository } from './db/repository/dictionary-entry-repository'
 import { DictionaryFileRepository } from './db/repository/dictionary-file-repository'
 import { DictionaryRepository } from './db/repository/dictionary-repository'
@@ -16,6 +17,7 @@ type ImportWorkerData = {
   databasePath: string
   mdxPath: string
   sourceFiles: DictionaryImportSourceFile[]
+  copyFiles: boolean
   userDataPath: string
   targetDirectoryName: string
 }
@@ -45,50 +47,49 @@ async function importDictionary(data: ImportWorkerData): Promise<void> {
   const dictionaryFileRepo = new DictionaryFileRepository(orm)
   const dictionaryEntryRepo = new DictionaryEntryRepository(orm)
   const selectedName = basename(data.mdxPath)
-  const targetDirectory = join(data.userDataPath, 'dictionaries', data.targetDirectoryName)
+  const targetDirectory = data.copyFiles
+    ? join(data.userDataPath, 'dictionaries', data.targetDirectoryName)
+    : dirname(data.mdxPath)
   const sourceFiles = data.sourceFiles
   let dictionaryId: number | undefined
 
   try {
-    await mkdir(targetDirectory, { recursive: true })
+    if (data.copyFiles) await mkdir(targetDirectory, { recursive: true })
     dictionaryId = await dictionaryRepo.createImporting(
       basename(selectedName, extname(selectedName)),
-      targetDirectory
+      targetDirectory,
+      !data.copyFiles
     )
-    parentPort?.postMessage({
-      type: 'created',
-      value: {
-        id: String(dictionaryId),
-        name: basename(selectedName, extname(selectedName)),
-        status: 'importing',
-        directory: targetDirectory,
-        files: []
-      } satisfies ImportedDictionary
-    })
-
     let mdxFileId: number | undefined
     let mdxTargetPath: string | undefined
+    const importedFiles: ImportedDictionary['files'] = []
 
     for (const { sourcePath, relativePath } of sourceFiles) {
       const fileName = basename(relativePath)
       const targetPath = join(targetDirectory, relativePath)
-      await mkdir(dirname(targetPath), { recursive: true })
-      await copyFile(sourcePath, targetPath, constants.COPYFILE_FICLONE)
-      const fileStats = await stat(targetPath)
+      const filePath = data.copyFiles ? targetPath : sourcePath
+      if (data.copyFiles) {
+        await mkdir(dirname(targetPath), { recursive: true })
+        await copyFile(sourcePath, targetPath, constants.COPYFILE_FICLONE)
+      }
       const extension = extname(fileName).toLowerCase()
       const fileType = extension === '.mdx' ? 'mdx' : extension === '.mdd' ? 'mdd' : undefined
       if (!fileType) continue
+      const fileStats = await stat(filePath, { bigint: true })
 
       const fileId = await dictionaryFileRepo.create({
         dictionaryId,
         fileName,
-        filePath: targetPath,
+        filePath,
         fileType,
-        fileSize: fileStats.size
+        fileSize: toSafeNumber(fileStats.size, 'file size'),
+        lastModified: toSafeNumber(fileStats.mtimeMs, 'last modified'),
+        checksum: await hashFile(filePath)
       })
+      importedFiles.push({ id: String(fileId), name: fileName, type: fileType })
       if (fileType === 'mdx') {
         mdxFileId = fileId
-        mdxTargetPath = targetPath
+        mdxTargetPath = filePath
       }
     }
 
@@ -96,6 +97,16 @@ async function importDictionary(data: ImportWorkerData): Promise<void> {
       throw new Error('未找到 MDX 文件')
     }
     const importedDictionaryId = dictionaryId
+    parentPort?.postMessage({
+      type: 'created',
+      value: {
+        id: String(importedDictionaryId),
+        name: basename(selectedName, extname(selectedName)),
+        status: 'importing',
+        directory: targetDirectory,
+        files: importedFiles
+      } satisfies ImportedDictionary
+    })
 
     const mdx = Mdx.open(mdxTargetPath)
     const metadata = mdx.metadata
@@ -147,6 +158,7 @@ async function importDictionary(data: ImportWorkerData): Promise<void> {
       description: metadata.description || null,
       recordCount: toSafeNumber(metadata.entryCount, 'record count')
     })
+    parentPort?.postMessage({ type: 'ready', name: readyName })
   } catch (error) {
     if (dictionaryId !== undefined) {
       try {

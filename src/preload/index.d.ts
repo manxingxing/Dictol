@@ -16,6 +16,7 @@ declare global {
             customCss: string
             recordCount: string | null
             status: 'pending' | 'importing' | 'ready' | 'error'
+            external: boolean
             createdAt: string
             updatedAt: string
           }[]
@@ -54,7 +55,11 @@ declare global {
           keyCaseSensitive: boolean
           stripKey: boolean
         }>
-        import: (request: { mdxPath: string; selectedRelativePaths: string[] }) => Promise<{
+        import: (request: {
+          mdxPath: string
+          copyFiles: boolean
+          selectedRelativePaths: string[]
+        }) => Promise<{
           id: string
           name: string
           status: 'importing'
@@ -109,14 +114,6 @@ declare global {
             dictionaryName: string
             dictionaryIconUrl: string | null
           }[]
-        } | null>
-        get: (entryId: string) => Promise<{
-          id: string
-          dictionaryId: string
-          dictionaryName: string
-          word: string
-          html: string
-          customCss: string
         } | null>
       }
       history: {
