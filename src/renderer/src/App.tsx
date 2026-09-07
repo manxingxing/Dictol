@@ -8,7 +8,13 @@ import { router } from '@/routes/router'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { Toaster } from './components/ui/sonner'
 
-const queryClient = new QueryClient()
+// Queries and mutations call local IPC APIs and must remain available offline.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { networkMode: 'always' },
+    mutations: { networkMode: 'always' }
+  }
+})
 
 function AppContent(): React.JSX.Element {
   useQueryHistoryChangeListener()
