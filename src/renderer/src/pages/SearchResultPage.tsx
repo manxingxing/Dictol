@@ -233,7 +233,7 @@ export function SearchResultPage(): React.JSX.Element {
     >
       <div className="relative flex h-14 shrink-0 items-center overflow-visible border-b border-border bg-[var(--dictionary-toolbar-background)] px-3">
         <ScrollArea
-          className="h-full min-w-0 flex-1 after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:z-10 after:w-3 after:bg-linear-to-r after:from-transparent after:to-[var(--dictionary-toolbar-background)] after:content-['']"
+          className="h-full min-w-0 flex-1 after:pointer-events-none after:absolute after:top-0 after:bottom-2.5 after:right-0 after:z-10 after:w-3 after:bg-linear-to-r after:from-transparent after:to-[var(--dictionary-toolbar-background)] after:content-['']"
           viewportClassName="[&>div]:h-full"
         >
           <TabsList className="h-full shrink-0 gap-1.5 bg-transparent p-0 pr-3">

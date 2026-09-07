@@ -53,6 +53,7 @@ async function collectFilesWithExtensions(
         await visit(sourcePath, relativePath)
         continue
       }
+      if (entry.name.startsWith('.')) continue
       if (!entry.isFile() || !extensions.has(extname(entry.name).toLowerCase())) {
         continue
       }
