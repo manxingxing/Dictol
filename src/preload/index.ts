@@ -193,6 +193,8 @@ const api = Object.freeze({
       ipcRenderer.invoke('dictionaries:reorder', dictionaryIds),
     updateName: (dictionaryId: string, name: string): Promise<void> =>
       ipcRenderer.invoke('dictionaries:update-name', dictionaryId, name),
+    openCustomCssEditor: (dictionaryId: string): Promise<void> =>
+      ipcRenderer.invoke('dictionaries:open-custom-css-editor', dictionaryId),
     updateCustomCss: (dictionaryId: string, customCss: string): Promise<void> =>
       ipcRenderer.invoke('dictionaries:update-custom-css', dictionaryId, customCss)
   }),

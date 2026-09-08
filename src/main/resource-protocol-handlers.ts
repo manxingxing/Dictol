@@ -15,8 +15,9 @@ import { createEntryDocument } from './entry-document'
 import {
   DICTIONARY_SESSION_PARTITION,
   DICTOL_ASSET_SCHEME,
-  ENTRY_BRIDGE_URL,
+  ENTRY_CONTEXT_MENU_URL,
   ENTRY_GLOBAL_STYLE_URL,
+  ENTRY_PRONUNCIATION_URL,
   ENTRY_SCHEME
 } from './entry-assets'
 import { loadDictionaryResource } from './resource-protocol'
@@ -28,7 +29,14 @@ const DICTIONARY_ID_HEADER = 'x-dictol-dictionary-id'
 const STATIC_RESOURCE_CACHE_CONTROL = 'public, max-age=3600'
 
 const ENTRY_ASSETS = new Map([
-  [ENTRY_BRIDGE_URL, { fileName: 'entry-bridge.js', mimeType: 'text/javascript; charset=utf-8' }],
+  [
+    ENTRY_PRONUNCIATION_URL,
+    { fileName: 'entry-pronunciation.js', mimeType: 'text/javascript; charset=utf-8' }
+  ],
+  [
+    ENTRY_CONTEXT_MENU_URL,
+    { fileName: 'entry-context-menu.js', mimeType: 'text/javascript; charset=utf-8' }
+  ],
   [
     ENTRY_GLOBAL_STYLE_URL,
     { fileName: 'dictionary-entry.css', mimeType: 'text/css; charset=utf-8' }
@@ -248,9 +256,13 @@ export class DictionaryResourceProtocolHandlers {
       return textResponse('Dictionary mismatch', 404)
     }
 
+    const isPreview = new URL(request.url).searchParams.get('preview') === '1'
     const response = stringResponse(
       request,
-      createEntryDocument(entry.html, entry.dictionaryId, dictionary.customCss),
+      createEntryDocument(entry.html, entry.dictionaryId, dictionary.customCss, {
+        includeContextMenu: !isPreview,
+        includeCustomCss: !isPreview
+      }),
       'text/html; charset=utf-8'
     )
     console.debug('[DictionaryEntry] load document', {

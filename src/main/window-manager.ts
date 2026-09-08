@@ -24,6 +24,8 @@ export class WindowManager {
   selectionExplanationWindow: BrowserWindow | undefined
   selectionExplanationView: WebContentsViewManager | undefined
   findBarView: WebContentsViewManager | undefined
+  customCssEditorWindow: BrowserWindow | undefined
+  customCssEditorPreviewView: WebContentsViewManager | undefined
   private activeSpaceSubscriptionId: number | undefined
   private observingNativeAppearance = false
   private selectionExplanationSwitcherVisible = false
@@ -96,7 +98,7 @@ export class WindowManager {
 
     const mainWindow = this.requireMainWindow()
     const dictionaryView = new WebContentsViewManager(mainWindow, {
-      backgroundColor: nativeTheme.shouldUseDarkColors ? '#171a18' : '#ffffff',
+      backgroundColor: nativeTheme.shouldUseDarkColors ? '#212121' : '#ffffff',
       view: {
         webPreferences: {
           partition: DICTIONARY_SESSION_PARTITION,
@@ -251,7 +253,7 @@ export class WindowManager {
       minHeight: 300,
       show: false,
       frame: false,
-      backgroundColor: darkMode ? '#171a18' : '#faf9f7',
+      backgroundColor: darkMode ? '#212121' : '#faf9f7',
       resizable: true,
       minimizable: false,
       maximizable: false,
@@ -272,7 +274,7 @@ export class WindowManager {
     this.ensureActiveSpaceSubscription()
 
     const view = new WebContentsViewManager(window, {
-      backgroundColor: darkMode ? '#171a18' : '#ffffff',
+      backgroundColor: darkMode ? '#212121' : '#ffffff',
       view: {
         webPreferences: {
           partition: DICTIONARY_SESSION_PARTITION,
@@ -317,6 +319,52 @@ export class WindowManager {
     return window
   }
 
+  createCustomCssEditorWindow(): BrowserWindow {
+    if (this.customCssEditorWindow && !this.customCssEditorWindow.isDestroyed()) {
+      return this.customCssEditorWindow
+    }
+
+    const darkMode = nativeTheme.shouldUseDarkColors
+    const window = new BrowserWindow({
+      width: 1180,
+      height: 760,
+      minWidth: 900,
+      minHeight: 560,
+      show: false,
+      backgroundColor: darkMode ? '#212121' : '#faf9f7',
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: resolvePreloadPath('custom-css-editor.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    })
+    const previewView = new WebContentsViewManager(window, {
+      backgroundColor: darkMode ? '#212121' : '#ffffff',
+      view: {
+        webPreferences: {
+          partition: DICTIONARY_SESSION_PARTITION,
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+          webSecurity: false
+        }
+      }
+    })
+    window.on('closed', () => {
+      previewView.dispose()
+      if (this.customCssEditorPreviewView === previewView) {
+        this.customCssEditorPreviewView = undefined
+      }
+      if (this.customCssEditorWindow === window) this.customCssEditorWindow = undefined
+    })
+
+    this.customCssEditorWindow = window
+    this.customCssEditorPreviewView = previewView
+    return window
+  }
+
   setSelectionExplanationSwitcherVisible(visible: boolean): void {
     if (this.selectionExplanationSwitcherVisible === visible) return
     this.selectionExplanationSwitcherVisible = visible
@@ -345,11 +393,15 @@ export class WindowManager {
     this.searchPopoverView?.dispose()
     this.selectionExplanationView?.dispose()
     this.findBarView?.dispose()
+    this.customCssEditorPreviewView?.dispose()
     if (this.selectionToolbarWindow && !this.selectionToolbarWindow.isDestroyed()) {
       this.selectionToolbarWindow.destroy()
     }
     if (this.selectionExplanationWindow && !this.selectionExplanationWindow.isDestroyed()) {
       this.selectionExplanationWindow.destroy()
+    }
+    if (this.customCssEditorWindow && !this.customCssEditorWindow.isDestroyed()) {
+      this.customCssEditorWindow.destroy()
     }
 
     this.dictionaryView = undefined
@@ -361,6 +413,8 @@ export class WindowManager {
     this.selectionExplanationSwitcherVisible = false
     this.updateSelectionExplanationViewBounds = undefined
     this.findBarView = undefined
+    this.customCssEditorWindow = undefined
+    this.customCssEditorPreviewView = undefined
     this.mainWindow = undefined
   }
 
@@ -391,7 +445,7 @@ export class WindowManager {
     window.setBackgroundColor(getMainWindowBackgroundColor(useDarkColors))
 
     if (this.dictionaryView && !this.dictionaryView.isDestroyed) {
-      this.dictionaryView.setBackgroundColor(useDarkColors ? '#171a18' : '#ffffff')
+      this.dictionaryView.setBackgroundColor(useDarkColors ? '#212121' : '#ffffff')
     }
 
     const explanationWindow = this.selectionExplanationWindow
@@ -401,7 +455,10 @@ export class WindowManager {
     if (this.selectionExplanationView && !this.selectionExplanationView.isDestroyed) {
       this.selectionExplanationView.setBackgroundColor(useDarkColors ? '#171a18' : '#ffffff')
     }
-
+    const customCssEditorWindow = this.customCssEditorWindow
+    if (customCssEditorWindow && !customCssEditorWindow.isDestroyed()) {
+      customCssEditorWindow.setBackgroundColor(useDarkColors ? '#171a18' : '#faf9f7')
+    }
     if (process.platform === 'win32') {
       window.setTitleBarOverlay({
         color: '#00000000',

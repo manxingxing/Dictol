@@ -706,6 +706,23 @@ export class DBService {
     }
   }
 
+  async getRandomDictionaryEntry(dictionaryId: string): Promise<DictionaryEntryRecord | null> {
+    const numericDictionaryId = Number(dictionaryId)
+    if (!Number.isSafeInteger(numericDictionaryId) || numericDictionaryId <= 0) return null
+
+    const row = await this.entryRepo.findRandomEntryContent(numericDictionaryId)
+    if (!row) return null
+
+    return {
+      id: String(row.id),
+      dictionaryId: String(row.dictionaryId),
+      dictionaryName: row.dictionaryName,
+      word: row.word,
+      recordStartOffset: row.recordStartOffset,
+      recordEndOffset: row.recordEndOffset
+    }
+  }
+
   /**
    * 返回一个展示入口对应的全部同词典同规范化 key record。
    *

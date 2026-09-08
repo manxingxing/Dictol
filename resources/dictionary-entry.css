@@ -3,6 +3,14 @@
  * Keep dictionary-specific fixes in each dictionary's custom CSS instead.
  */
 
+@media (prefers-color-scheme: dark) {
+  @layer dictol {
+    :where(html) {
+      background-color: #212121;
+    }
+  }
+}
+
 .dictol-entry-separator {
   margin-top: 1.5em !important;
   margin-bottom: 1.5em;

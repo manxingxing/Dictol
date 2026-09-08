@@ -30,6 +30,7 @@ type CssCodeEditorProps = {
   placeholder?: string
   ariaLabel?: string
   autoFocus?: boolean
+  className?: string
 }
 
 const editorTheme = EditorView.theme({
@@ -116,7 +117,8 @@ export default function CssCodeEditor({
   maxLength = 200_000,
   placeholder: placeholderText,
   ariaLabel = 'CSS 内容',
-  autoFocus = false
+  autoFocus = false,
+  className
 }: CssCodeEditorProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -177,5 +179,5 @@ export default function CssCodeEditor({
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } })
   }, [value])
 
-  return <div ref={containerRef} />
+  return <div ref={containerRef} className={className} />
 }

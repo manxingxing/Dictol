@@ -31,6 +31,7 @@ export default defineConfig({
           'selection-toolbar': resolve('src/preload/selection-toolbar.ts'),
           'selection-explanation': resolve('src/preload/selection-explanation.ts'),
           'selection-entry': resolve('src/preload/selection-entry.ts'),
+          'custom-css-editor': resolve('src/preload/custom-css-editor.ts'),
           'find-bar': resolve('src/preload/find-bar.ts')
         }
       }
@@ -44,7 +45,8 @@ export default defineConfig({
           'search-popover': resolve('src/renderer/search-popover.html'),
           'selection-toolbar': resolve('src/renderer/selection-toolbar.html'),
           'selection-explanation': resolve('src/renderer/selection-explanation.html'),
-          'find-bar': resolve('src/renderer/find-bar.html')
+          'find-bar': resolve('src/renderer/find-bar.html'),
+          'custom-css-editor': resolve('src/renderer/custom-css-editor.html')
         }
       }
     },

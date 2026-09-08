@@ -2,6 +2,7 @@ import { AppRuntime } from '../app-runtime'
 import { DictionaryController } from './dictionary'
 import { DictionaryEntryController } from './dictionary-entry'
 import { DictionaryViewController } from './dictionary-view'
+import { CustomCssEditorController } from './custom-css-editor'
 import { EmbedBrowserController } from './embed-browser'
 import { NotificationController } from './notification'
 import { OnlineDictionaryController } from './online-dictionary'
@@ -22,6 +23,7 @@ export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
     new AppController(appRuntime),
     new DictionaryEntryController(appRuntime),
     new DictionaryController(appRuntime),
+    new CustomCssEditorController(appRuntime),
     new DictionaryViewController(appRuntime),
     new EmbedBrowserController(appRuntime),
     new NotificationController(appRuntime),

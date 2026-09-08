@@ -1,9 +1,26 @@
 import type { ToastPayload } from '../shared/notification'
 import type { TtsConfig, TtsSaveConfigRequest } from '../shared/tts'
 import type { DeepLinkIntent } from '../shared/deep-link'
+import type {
+  CustomCssEditorBounds,
+  CustomCssEditorSearchResult,
+  CustomCssEditorState,
+  CustomCssEditorTheme
+} from '../shared/custom-css-editor'
 
 declare global {
   interface Window {
+    dictolCustomCssEditor: {
+      getState: () => Promise<CustomCssEditorState | null>
+      randomEntry: () => Promise<CustomCssEditorState>
+      searchEntry: (term: string) => Promise<CustomCssEditorSearchResult>
+      setPreviewBounds: (bounds: CustomCssEditorBounds) => void
+      setPreviewTheme: (theme: CustomCssEditorTheme) => void
+      openDevTools: () => void
+      previewCss: (css: string) => void
+      save: (css: string) => Promise<void>
+      onState: (callback: (state: CustomCssEditorState) => void) => () => void
+    }
     dictol: {
       platform: NodeJS.Platform
       dictionaries: {
@@ -74,6 +91,7 @@ declare global {
         openDirectory: (dictionaryId: string) => Promise<void>
         reorder: (dictionaryIds: string[]) => Promise<void>
         updateName: (dictionaryId: string, name: string) => Promise<void>
+        openCustomCssEditor: (dictionaryId: string) => Promise<void>
         updateCustomCss: (dictionaryId: string, customCss: string) => Promise<void>
       }
       onlineDictionaries: {

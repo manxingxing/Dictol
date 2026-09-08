@@ -12,7 +12,11 @@ export type DictionaryResourceLocation = {
   resourcePath: string
 }
 
-export function createDictionaryEntryUrl(dictionaryId: string | number, entryId: string): string {
+export function createDictionaryEntryUrl(
+  dictionaryId: string | number,
+  entryId: string,
+  options: { preview?: boolean } = {}
+): string {
   const numericDictionaryId = parsePositiveSafeInteger(String(dictionaryId))
   const numericEntryId = parsePositiveSafeInteger(entryId)
   if (numericDictionaryId === null) throw new Error('Invalid dictionary ID')
@@ -22,6 +26,7 @@ export function createDictionaryEntryUrl(dictionaryId: string | number, entryId:
     `${ENTRY_SCHEME}://dictionary-${numericDictionaryId}.dictol${ENTRY_LOOKUP_PATH}`
   )
   url.searchParams.set('entryId', String(numericEntryId))
+  if (options.preview) url.searchParams.set('preview', '1')
   return url.href
 }
 
@@ -66,7 +71,9 @@ export function parseDictionaryEntryUrl(value: string): DictionaryEntryLocation 
   if (
     dictionaryId === null ||
     entryIds.length !== 1 ||
-    Array.from(url.searchParams.keys()).some((key) => key !== 'entryId')
+    Array.from(url.searchParams.keys()).some((key) => key !== 'entryId' && key !== 'preview') ||
+    (url.searchParams.has('preview') &&
+      (url.searchParams.getAll('preview').length !== 1 || url.searchParams.get('preview') !== '1'))
   ) {
     return null
   }

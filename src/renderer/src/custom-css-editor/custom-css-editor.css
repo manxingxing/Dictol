@@ -1,0 +1,131 @@
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+.custom-css-editor-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.custom-css-editor-info {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+  padding: 0.5rem 1rem;
+}
+
+.custom-css-editor-dictionary-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.custom-css-editor-error {
+  display: flex;
+  min-width: 0;
+  max-width: 50%;
+  margin: 0 0 0 auto;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--destructive);
+  font-size: 0.75rem;
+}
+
+.custom-css-editor-error span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-css-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+  padding: 0.65rem 1rem;
+}
+
+.custom-css-editor-workspace {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.custom-css-editor-preview-slot {
+  height: 100%;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--card);
+}
+
+.custom-css-editor-preview-label {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1;
+  pointer-events: none;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  padding: 0.25rem 0.6rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  backdrop-filter: blur(12px);
+}
+
+.custom-css-editor-panel {
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--background);
+}
+
+.custom-css-editor-content {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  padding: 1rem;
+}
+
+.custom-css-editor-code {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.custom-css-editor-code .cm-editor {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}

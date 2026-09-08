@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { useState } from 'react'
 import {
   CircleAlert,
   CircleCheck,
@@ -41,7 +41,6 @@ import {
   useDictionaries,
   useImportDictionary,
   useReorderDictionaries,
-  useUpdateDictionaryCustomCss,
   useUpdateDictionaryName
 } from '@/hooks/use-dictionaries'
 import {
@@ -50,7 +49,6 @@ import {
   useReorderOnlineDictionaries
 } from '@/hooks/use-online-dictionaries'
 
-const CssCodeEditor = lazy(() => import('@/components/CssCodeEditor'))
 type DictionaryImportPreview = NonNullable<
   Awaited<ReturnType<Window['dictol']['dictionaries']['selectFile']>>
 >
@@ -60,7 +58,6 @@ export function DictionariesPage(): React.JSX.Element {
   const deleteDictionary = useDeleteDictionary()
   const reorderDictionaries = useReorderDictionaries()
   const updateDictionaryName = useUpdateDictionaryName()
-  const updateDictionaryCustomCss = useUpdateDictionaryCustomCss()
   const {
     data: onlineDictionaries = [],
     isLoading: onlineLoading,
@@ -82,11 +79,6 @@ export function DictionariesPage(): React.JSX.Element {
   const [nameEditor, setNameEditor] = useState<{
     id: string
     originalName: string
-    value: string
-  } | null>(null)
-  const [cssEditor, setCssEditor] = useState<{
-    id: string
-    name: string
     value: string
   } | null>(null)
   const [draggedDictionaryId, setDraggedDictionaryId] = useState<string | null>(null)
@@ -326,7 +318,9 @@ export function DictionariesPage(): React.JSX.Element {
                         <p className="mt-1 text-xs text-muted-foreground">
                           {dictionary.recordCount
                             ? `${formatRecordCount(dictionary.recordCount)} 个词条`
-                            : (dictionary.status === 'importing' ? '正在建立索引' : '尚无词条统计')}
+                            : dictionary.status === 'importing'
+                              ? '正在建立索引'
+                              : '尚无词条统计'}
                         </p>
                       </div>
                       <Button
@@ -351,14 +345,15 @@ export function DictionariesPage(): React.JSX.Element {
                       <Button
                         aria-label={`编辑自定义 CSS ${dictionary.name}`}
                         className={`shrink-0 ${dictionary.customCss ? 'text-primary' : 'text-muted-foreground'}`}
-                        disabled={updateDictionaryCustomCss.isPending}
+                        disabled={dictionary.status !== 'ready'}
                         onClick={() => {
-                          updateDictionaryCustomCss.reset()
-                          setCssEditor({
-                            id: dictionary.id,
-                            name: dictionary.name,
-                            value: dictionary.customCss
-                          })
+                          void window.dictol.dictionaries
+                            .openCustomCssEditor(dictionary.id)
+                            .catch((error: unknown) => {
+                              toast.error('无法打开 CSS 编辑器', {
+                                description: error instanceof Error ? error.message : '请稍后重试。'
+                              })
+                            })
                         }}
                         size="icon"
                         title="自定义 CSS"
@@ -878,83 +873,6 @@ export function DictionariesPage(): React.JSX.Element {
           if (!open) setDictionaryInfoId(null)
         }}
       />
-
-      <Dialog
-        open={cssEditor !== null}
-        onOpenChange={(open) => {
-          if (!open && !updateDictionaryCustomCss.isPending) setCssEditor(null)
-        }}
-      >
-        <DialogContent className="max-w-2xl">
-          <form
-            className="grid gap-5"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!cssEditor) return
-              void updateDictionaryCustomCss
-                .mutateAsync({ dictionaryId: cssEditor.id, customCss: cssEditor.value })
-                .then(() => setCssEditor(null))
-                .catch(() => undefined)
-            }}
-          >
-            <DialogHeader>
-              <DialogTitle>自定义 CSS</DialogTitle>
-              <DialogDescription>
-                CSS 将注入“{cssEditor?.name}”的每个词条页面，并覆盖在词典原有样式之后。
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-2">
-              <div className="flex items-center justify-between gap-4">
-                <label className="text-sm font-medium" htmlFor="dictionary-custom-css">
-                  CSS 内容
-                </label>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {cssEditor?.value.length ?? 0} / 200,000
-                </span>
-              </div>
-              {cssEditor && (
-                <Suspense
-                  fallback={
-                    <div className="flex min-h-72 items-center justify-center rounded-lg border border-input bg-background text-sm text-muted-foreground">
-                      <LoaderCircle className="mr-2 size-4 animate-spin" />
-                      正在加载编辑器…
-                    </div>
-                  }
-                >
-                  <CssCodeEditor
-                    ariaLabel="CSS 内容"
-                    autoFocus
-                    id="dictionary-custom-css"
-                    maxLength={200_000}
-                    onChange={(value) =>
-                      setCssEditor((current) => (current ? { ...current, value } : current))
-                    }
-                    placeholder={'.entry {\n  color: #e5e7eb;\n}'}
-                    value={cssEditor.value}
-                  />
-                </Suspense>
-              )}
-              <p className="text-xs text-muted-foreground">清空内容并保存即可移除自定义样式。</p>
-            </div>
-            {updateDictionaryCustomCss.isError && (
-              <p className="text-sm text-destructive">{updateDictionaryCustomCss.error.message}</p>
-            )}
-            <DialogFooter>
-              <Button
-                disabled={updateDictionaryCustomCss.isPending}
-                onClick={() => setCssEditor(null)}
-                type="button"
-                variant="outline"
-              >
-                取消
-              </Button>
-              <Button disabled={updateDictionaryCustomCss.isPending} type="submit">
-                {updateDictionaryCustomCss.isPending ? '正在保存…' : '保存 CSS'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </section>
   )
 }

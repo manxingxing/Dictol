@@ -134,6 +134,27 @@ export class DictionaryEntryRepository {
     return row
   }
 
+  /** 随机取一个可展示的词条，供词典样式预览使用。 */
+  async findRandomEntryContent(dictionaryId: number): Promise<EntryContent | undefined> {
+    const [row] = await this.db
+      .select({
+        id: dictionaryEntry.id,
+        word: dictionaryEntry.word,
+        normalizedWord: dictionaryEntry.normalizedWord,
+        dictionaryId: dictionaryEntry.dictionaryId,
+        dictionaryName: dictionary.name,
+        recordStartOffset: dictionaryEntry.recordStartOffset,
+        recordEndOffset: dictionaryEntry.recordEndOffset
+      })
+      .from(dictionaryEntry)
+      .innerJoin(dictionary, eq(dictionary.id, dictionaryEntry.dictionaryId))
+      .where(and(eq(dictionaryEntry.dictionaryId, dictionaryId), eq(dictionary.status, 'ready')))
+      .orderBy(sql`random()`)
+      .limit(1)
+
+    return row
+  }
+
   /**
    * 根据一个展示入口找出同一词典中比较值相同的所有 record。
    *

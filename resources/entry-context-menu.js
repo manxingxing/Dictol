@@ -7,7 +7,7 @@
     if (value && value.length <= 200) window.dictolEntry?.lookupWord(value)
   }
 
-  const localAudio = new Audio()
+  const readAloudAudio = new Audio()
   let generatedAudioUrl = ''
   const contextMenuHost = document.createElement('div')
   contextMenuHost.id = 'dictol-context-menu'
@@ -127,19 +127,19 @@
     readAloudRequestId += 1
     readAloudPlaybackStopper?.()
     readAloudPlaybackStopper = null
-    localAudio.pause()
-    localAudio.removeAttribute('src')
-    localAudio.load()
+    readAloudAudio.pause()
+    readAloudAudio.removeAttribute('src')
+    readAloudAudio.load()
     releaseGeneratedAudioUrl()
     setReadAloudState('idle')
   }
 
   // 监听器只挂一次，避免连续播放时累积；releaseGeneratedAudioUrl 幂等，重复触发无副作用
-  localAudio.addEventListener('ended', () => {
+  readAloudAudio.addEventListener('ended', () => {
     releaseGeneratedAudioUrl()
     if (readAloudState === 'playing') setReadAloudState('idle')
   })
-  localAudio.addEventListener('error', () => {
+  readAloudAudio.addEventListener('error', () => {
     releaseGeneratedAudioUrl()
     if (readAloudState === 'playing') setReadAloudState('idle')
   })
@@ -151,15 +151,15 @@
     releaseGeneratedAudioUrl()
     generatedAudioUrl = URL.createObjectURL(audioBlob)
 
-    if (!localAudio.paused) localAudio.pause()
-    localAudio.src = generatedAudioUrl
+    if (!readAloudAudio.paused) readAloudAudio.pause()
+    readAloudAudio.src = generatedAudioUrl
     setReadAloudState('playing')
 
     let cancelPlayback = () => {}
     const playbackFinished = new Promise((resolve, reject) => {
       const cleanup = () => {
-        localAudio.removeEventListener('ended', handleEnded)
-        localAudio.removeEventListener('error', handleError)
+        readAloudAudio.removeEventListener('ended', handleEnded)
+        readAloudAudio.removeEventListener('error', handleError)
         if (readAloudPlaybackStopper === cancelPlayback) readAloudPlaybackStopper = null
       }
       const handleEnded = () => {
@@ -176,12 +176,12 @@
         resolve()
       }
       readAloudPlaybackStopper = cancelPlayback
-      localAudio.addEventListener('ended', handleEnded)
-      localAudio.addEventListener('error', handleError)
+      readAloudAudio.addEventListener('ended', handleEnded)
+      readAloudAudio.addEventListener('error', handleError)
     })
 
     try {
-      await localAudio.play()
+      await readAloudAudio.play()
       await playbackFinished
     } catch (error) {
       cancelPlayback()
@@ -377,73 +377,5 @@
     true
   )
 
-  const dictionaryAudioPattern = /\.(?:mp3|wav|ogg|oga|spx|m4a)(?:[?#]|$)/i
-
-  const resolveDictionaryAudioHref = (anchor) => {
-    const rawHref = anchor?.getAttribute('href')?.trim()
-    if (!rawHref) return ''
-    if (!/^(?:sound|audio|file):\/\//i.test(rawHref)) return ''
-    return dictionaryAudioPattern.test(rawHref) ? rawHref : ''
-  }
-
-  const playDictionaryAudio = (href) => {
-    stopReadAloud()
-    releaseGeneratedAudioUrl()
-    localAudio.src = href
-
-    void localAudio.play().catch((error) => {
-      if (error?.name === 'AbortError') return
-
-      window.dictolEntry?.showToast?.({
-        type: 'error',
-        message: `Failed to play dictionary audio: ${error.message}`
-      })
-    })
-  }
-
-  // 播放内置音频：捕获阶段只安装 fallback，不抢先播放词典自己的音频。
-  const installDictionaryAudioFallback = (event) => {
-    const target = event.target instanceof Element ? event.target : null
-    const anchor = target?.closest('a[href]')
-    if (!target || !anchor) return
-
-    const href = resolveDictionaryAudioHref(anchor)
-    if (!href) return
-
-    let fallbackInvoked = false
-    const fallback = (clickEvent) => {
-      fallbackInvoked = true
-
-      console.debug('called from fallback Listener for audio play')
-      // 词典自己的 handler 已经处理了这个点击，避免重复播放。
-      if (clickEvent.defaultPrevented) {
-        console.debug('played by listners from the dictionary javascript')
-        return
-      }
-      console.debug('playing audio from fallback listner')
-
-      clickEvent.preventDefault()
-      clickEvent.stopPropagation()
-      playDictionaryAudio(href)
-    }
-
-    console.debug('installing fallback listerning for element', target)
-    /*
-     * 让 fallback 运行在实际 target 阶段：
-     * - 可以绕过词典父级 listener 的 stopPropagation；
-     * - 词典若在 target 上先调用 preventDefault，fallback 不会重复播放。
-     */
-    target.addEventListener('click', fallback, { once: true })
-
-    // 如果事件没有到达 target 阶段，清理临时 listener，避免泄漏。
-    setTimeout(() => {
-      if (!fallbackInvoked) {
-        console.debug('clearning fallback Listener')
-        target.removeEventListener('click', fallback)
-      }
-    }, 0)
-  }
-
-  document.addEventListener('click', installDictionaryAudioFallback, true)
   // -------------------------------------------------------------------------
 })()
