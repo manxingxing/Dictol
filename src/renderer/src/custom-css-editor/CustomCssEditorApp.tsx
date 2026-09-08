@@ -1,4 +1,14 @@
-import { AlertCircle, Code2, Dices, LoaderCircle, Moon, Save, Search, Sun } from 'lucide-react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  Code2,
+  Dices,
+  LoaderCircle,
+  Moon,
+  Save,
+  Search,
+  Sun
+} from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import type { CustomCssEditorState } from '../../../shared/custom-css-editor'
@@ -13,6 +23,7 @@ export default function CustomCssEditorApp(): React.JSX.Element {
   const [state, setState] = useState<CustomCssEditorState | null>(null)
   const [css, setCss] = useState('')
   const [saving, setSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
   const [changingEntry, setChangingEntry] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [theme, setTheme] = useState<'light' | 'dark'>(() =>
@@ -36,6 +47,7 @@ export default function CustomCssEditorApp(): React.JSX.Element {
       setState(nextState)
       setCss(nextState.customCss)
       setError(null)
+      setSaveSuccess(false)
     })
   }, [])
 
@@ -73,8 +85,10 @@ export default function CustomCssEditorApp(): React.JSX.Element {
     if (!state) return
     setSaving(true)
     setError(null)
+    setSaveSuccess(false)
     try {
       await window.dictolCustomCssEditor.save(css)
+      setSaveSuccess(true)
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : '保存 CSS 失败')
     } finally {
@@ -120,6 +134,12 @@ export default function CustomCssEditorApp(): React.JSX.Element {
           <p className="custom-css-editor-error" role="alert">
             <AlertCircle aria-hidden="true" className="size-4 shrink-0" />
             <span>{error}</span>
+          </p>
+        )}
+        {!error && saveSuccess && (
+          <p aria-live="polite" className="custom-css-editor-success" role="status">
+            <CheckCircle2 aria-hidden="true" className="size-4 shrink-0" />
+            <span>保存成功</span>
           </p>
         )}
       </div>
@@ -235,6 +255,7 @@ export default function CustomCssEditorApp(): React.JSX.Element {
                 onChange={(value) => {
                   setCss(value)
                   setError(null)
+                  setSaveSuccess(false)
                 }}
                 placeholder={'.entry {\n  color: #e5e7eb;\n}'}
                 value={css}
