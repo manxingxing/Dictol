@@ -70,11 +70,11 @@ export class CustomCssEditorController extends BaseController {
 
     const rendererUrl = process.env['ELECTRON_RENDERER_URL']
     if (!window.webContents.getURL()) {
-      const editorUrl =
-        is.dev && rendererUrl
-          ? `${rendererUrl}/custom-css-editor.html`
-          : resolveRendererPath('custom-css-editor.html')
-      await window.loadURL(editorUrl)
+      if (is.dev && rendererUrl) {
+        await window.loadURL(`${rendererUrl}/custom-css-editor.html`)
+      } else {
+        await window.loadFile(resolveRendererPath('custom-css-editor.html'))
+      }
     } else {
       window.webContents.send('custom-css-editor:state', this.state)
     }
