@@ -84,33 +84,34 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    /* Neutral dark: black surfaces, with moss retained only as the accent. */
-    --background: #1c1c1c;
+    /* Neutral dark: macOS-like titlebar gray with charcoal content surfaces. */
+    --background: #232323;
     --foreground: #eeeeeb;
-    --card: #191919;
+    --card: #292929;
     --card-foreground: #eeeeeb;
     --primary: #8db89a;
     --primary-foreground: #152019;
     --destructive: #df8379;
-    --muted: #252525;
+    --muted: #2f2f2f;
     --muted-foreground: #a0a09b;
     --border: #363636;
     --border-strong: #4a4a4a;
     --input: #4a4a4a;
     --ring: #8db89a;
-    --sidebar-background: #151515;
+    --sidebar-background: #191919;
+    --window-chrome-background: #373838;
     --window-vibrancy-opacity: 48%;
-    --panel-background: #1a1a1a;
-    --surface-hover: #292929;
-    --surface-pressed: #333333;
+    --panel-background: #262626;
+    --surface-hover: #303030;
+    --surface-pressed: #3a3a3a;
     --accent-soft: #263229;
     --ai-panel-background: var(--panel-background);
     --ai-user-message-background: color-mix(in oklch, var(--primary) 12%, var(--card));
     --ai-user-message-border: color-mix(in oklch, var(--primary) 20%, transparent);
-    --ai-assistant-message-background: #232323;
+    --ai-assistant-message-background: #2b2b2b;
     --ai-assistant-message-border: #3d3d3d;
-    --search-action-dock-background: #252525;
-    --dictionary-toolbar-background: #1d1d1d;
+    --search-action-dock-background: #292929;
+    --dictionary-toolbar-background: #292929;
     --online-dictionary-icon-shadow:
       0 0 0 1px color-mix(in oklch, white 18%, transparent),
       0 2px 4px color-mix(in oklch, black 52%, transparent),
@@ -118,30 +119,30 @@
   }
 
   :root[data-chrome-tone='moss'] {
-    /* Moss dark follows the same deep-green editorial palette as the mockup. */
-    --background: #1d231c;
+    /* Moss dark keeps green for actions while using calmer charcoal-green surfaces. */
+    --background: #202220;
     --foreground: #edf0e8;
-    --card: #1b211a;
+    --card: #1c1e1c;
     --card-foreground: #edf0e8;
-    --muted: #222920;
+    --muted: #252725;
     --muted-foreground: #919b8d;
-    --border: #313a30;
-    --border-strong: #465044;
-    --input: #465044;
-    --sidebar-background: #151b15;
+    --border: #343834;
+    --border-strong: #454a45;
+    --input: #454a45;
+    --sidebar-background: #181a18;
     --window-chrome-background: color-mix(in srgb, var(--sidebar-background) 82%, transparent);
     --window-chrome-backdrop-filter: blur(18px) saturate(130%);
     --panel-background: color-mix(in oklab, var(--sidebar-background) 35%, transparent);
-    --surface-hover: #222b21;
-    --surface-pressed: #2a3529;
-    --accent-soft: #24382b;
+    --surface-hover: #282a28;
+    --surface-pressed: #30332f;
+    --accent-soft: #2a302b;
     --ai-panel-background: var(--panel-background);
-    --ai-user-message-background: #24382b;
-    --ai-user-message-border: #35513e;
-    --ai-assistant-message-background: #1b211a;
-    --ai-assistant-message-border: #3b4a39;
-    --search-action-dock-background: #171c16;
-    --dictionary-toolbar-background: #1b211a;
+    --ai-user-message-background: #2a302b;
+    --ai-user-message-border: #3d463e;
+    --ai-assistant-message-background: #1c1e1c;
+    --ai-assistant-message-border: #3b403b;
+    --search-action-dock-background: #1a1c1a;
+    --dictionary-toolbar-background: #1c1e1c;
   }
 }
 
