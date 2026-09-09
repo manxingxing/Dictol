@@ -1,6 +1,6 @@
 import { app, shell, type BrowserWindow } from 'electron'
-import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { join } from 'node:path'
+import { electronApp, optimizer } from '@electron-toolkit/utils'
+import { resolveRendererUrl } from './output-path'
 
 import { getAppRunTime } from './app-runtime'
 import {
@@ -153,10 +153,7 @@ function configureMainWindow(
     return { action: 'deny' }
   })
 
-  const loadPromise =
-    is.dev && process.env['ELECTRON_RENDERER_URL']
-      ? mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-      : mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  const loadPromise = mainWindow.loadURL(resolveRendererUrl('index.html'))
   showMainWindow()
   void loadPromise.then(showMainWindow).catch((error: unknown) => {
     console.error('Failed to load renderer', error)

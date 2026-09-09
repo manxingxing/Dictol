@@ -345,6 +345,7 @@ export class WindowManager {
       view: {
         webPreferences: {
           partition: DICTIONARY_SESSION_PARTITION,
+          preload: resolvePreloadPath('custom-css-preview.js'),
           contextIsolation: true,
           nodeIntegration: false,
           sandbox: true,

@@ -706,11 +706,15 @@ export class DBService {
     }
   }
 
-  async getRandomDictionaryEntry(dictionaryId: string): Promise<DictionaryEntryRecord | null> {
+  async getRandomDictionaryEntry(
+    dictionaryId: string,
+    recordCount?: number | null
+  ): Promise<DictionaryEntryRecord | null> {
     const numericDictionaryId = Number(dictionaryId)
     if (!Number.isSafeInteger(numericDictionaryId) || numericDictionaryId <= 0) return null
 
-    const row = await this.entryRepo.findRandomEntryContent(numericDictionaryId)
+    const total = recordCount ?? (await this.entryRepo.countByDictionaryId(numericDictionaryId))
+    const row = await this.entryRepo.findRandomEntryContent(numericDictionaryId, total)
     if (!row) return null
 
     return {

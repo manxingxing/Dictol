@@ -4,6 +4,7 @@ export type CustomCssEditorState = {
   dictionaryId: string
   dictionaryName: string
   customCss: string
+  recordCount: number | null
   entryId: string
   entryWord: string
 }

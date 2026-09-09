@@ -6,11 +6,10 @@ import {
   type IpcMainInvokeEvent,
   type Rectangle
 } from 'electron'
-import { is } from '@electron-toolkit/utils'
 
 import type { WebContentsViewManager } from '../web-contents-view-manager'
 import { createDictionaryEntryUrl } from '../dictionary-entry-url'
-import { resolveRendererPath } from '../output-path'
+import { resolveRendererUrl } from '../output-path'
 import { BaseController } from './base-controller'
 import { dismissSearchPopover } from './search-popover'
 
@@ -261,11 +260,7 @@ export class DictionaryViewController extends BaseController {
     })
     const hasLoadedFindBar = findBar.getURL() !== ''
     if (!hasLoadedFindBar && !findBar.webContents.isLoading()) {
-      const rendererUrl = process.env['ELECTRON_RENDERER_URL']
-      const loadPromise =
-        is.dev && rendererUrl
-          ? findBar.loadURL(`${rendererUrl}/find-bar.html`)
-          : findBar.loadFile(resolveRendererPath('find-bar.html'))
+      const loadPromise = findBar.loadURL(resolveRendererUrl('find-bar.html'))
       void loadPromise.catch((error: unknown) => {
         console.error('Failed to load find bar', error)
       })

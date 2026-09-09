@@ -57,10 +57,6 @@ export class TtsController extends BaseController {
     }
 
     console.debug('[TTS] request received', { ...context, text: rawText })
-    if (!this.acceptsEntrySender(event.sender.id)) {
-      console.warn('[TTS] request rejected: unknown sender', context)
-      return null
-    }
 
     const normalizedText = normalizeTtsText(text)
     if (!normalizedText) {
@@ -96,14 +92,6 @@ export class TtsController extends BaseController {
       )
       throw error
     }
-  }
-
-  private acceptsEntrySender(senderId: number): boolean {
-    const { dictionaryView, selectionExplanationView } = this.runtime.windowManager
-    return (
-      dictionaryView?.acceptsSender(senderId) === true ||
-      selectionExplanationView?.acceptsSender(senderId) === true
-    )
   }
 
   private acceptsMainSender(sender: WebContents): boolean {

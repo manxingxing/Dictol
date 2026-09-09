@@ -48,6 +48,7 @@ import {
   useRemoveOnlineDictionary,
   useReorderOnlineDictionaries
 } from '@/hooks/use-online-dictionaries'
+import { formatFileSize } from '@/lib/utils'
 
 type DictionaryImportPreview = NonNullable<
   Awaited<ReturnType<Window['dictol']['dictionaries']['selectFile']>>
@@ -92,6 +93,7 @@ export function DictionariesPage(): React.JSX.Element {
     position: 'before' | 'after'
   } | null>(null)
   const [openingDictionaryId, setOpeningDictionaryId] = useState<string | null>(null)
+  const [openingCustomCssId, setOpeningCustomCssId] = useState<string | null>(null)
   const [dictionaryInfoId, setDictionaryInfoId] = useState<string | null>(null)
 
   const finishDragging = (): void => {
@@ -123,6 +125,22 @@ export function DictionariesPage(): React.JSX.Element {
 
   const openDictionaryInfo = (dictionaryId: string): void => {
     setDictionaryInfoId(dictionaryId)
+  }
+
+  const openCustomCssEditor = async (
+    dictionaryId: string,
+    dictionaryName: string
+  ): Promise<void> => {
+    setOpeningCustomCssId(dictionaryId)
+    try {
+      await window.dictol.dictionaries.openCustomCssEditor(dictionaryId)
+    } catch (error) {
+      toast.error(`无法打开“${dictionaryName}”的 CSS 编辑器`, {
+        description: error instanceof Error ? error.message : '请稍后重试。'
+      })
+    } finally {
+      setOpeningCustomCssId(null)
+    }
   }
 
   const selectImportFile = async (): Promise<void> => {
@@ -345,22 +363,24 @@ export function DictionariesPage(): React.JSX.Element {
                       <Button
                         aria-label={`编辑自定义 CSS ${dictionary.name}`}
                         className={`shrink-0 ${dictionary.customCss ? 'text-primary' : 'text-muted-foreground'}`}
-                        disabled={dictionary.status !== 'ready'}
+                        disabled={dictionary.status !== 'ready' || openingCustomCssId !== null}
                         onClick={() => {
-                          void window.dictol.dictionaries
-                            .openCustomCssEditor(dictionary.id)
-                            .catch((error: unknown) => {
-                              toast.error('无法打开 CSS 编辑器', {
-                                description: error instanceof Error ? error.message : '请稍后重试。'
-                              })
-                            })
+                          void openCustomCssEditor(dictionary.id, dictionary.name)
                         }}
                         size="icon"
-                        title="自定义 CSS"
+                        title={
+                          openingCustomCssId === dictionary.id
+                            ? '正在打开 CSS 编辑器…'
+                            : '自定义 CSS'
+                        }
                         type="button"
                         variant="ghost"
                       >
-                        <Code2 />
+                        {openingCustomCssId === dictionary.id ? (
+                          <LoaderCircle className="animate-spin" />
+                        ) : (
+                          <Code2 />
+                        )}
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -916,12 +936,4 @@ function getFileExtension(filePath: string): string {
   const fileName = getFileName(filePath)
   const separatorIndex = fileName.lastIndexOf('.')
   return separatorIndex >= 0 ? fileName.slice(separatorIndex + 1) : 'file'
-}
-
-function formatFileSize(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return '—'
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${bytes} B`
 }

@@ -25,6 +25,7 @@ export default function CustomCssEditorApp(): React.JSX.Element {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [changingEntry, setChangingEntry] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [theme, setTheme] = useState<'light' | 'dark'>(() =>
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
@@ -32,10 +33,14 @@ export default function CustomCssEditorApp(): React.JSX.Element {
 
   useEffect(() => {
     let active = true
-    void window.dictolCustomCssEditor.getState().then((initialState) => {
+    void Promise.all([
+      window.dictolCustomCssEditor.getState(),
+      window.dictolCustomCssEditor.getPreviewReady()
+    ]).then(([initialState, previewReady]) => {
       if (!active || !initialState) return
       setState(initialState)
       setCss(initialState.customCss)
+      setPreviewLoading(!previewReady)
     })
     return () => {
       active = false
@@ -48,6 +53,13 @@ export default function CustomCssEditorApp(): React.JSX.Element {
       setCss(nextState.customCss)
       setError(null)
       setSaveSuccess(false)
+      setPreviewLoading(true)
+    })
+  }, [])
+
+  useEffect(() => {
+    return window.dictolCustomCssEditor.onPreviewReady((ready) => {
+      setPreviewLoading(!ready)
     })
   }, [])
 
@@ -231,7 +243,15 @@ export default function CustomCssEditorApp(): React.JSX.Element {
       <ResizablePanelGroup className="custom-css-editor-workspace" orientation="horizontal">
         <ResizablePanel id="dictionary-preview" defaultSize="60%" minSize="20%">
           <div ref={previewSlotRef} className="custom-css-editor-preview-slot">
-            <div className="custom-css-editor-preview-label">词条预览 · {state.entryWord}</div>
+            {previewLoading && (
+              <div aria-live="polite" className="custom-css-editor-preview-loading" role="status">
+                <LoaderCircle className="size-4 animate-spin" />
+                <span>正在加载词条预览…</span>
+              </div>
+            )}
+            <div className="custom-css-editor-preview-label">
+              {previewLoading ? '词条预览' : `词条预览 · ${state.entryWord}`}
+            </div>
           </div>
         </ResizablePanel>
         <ResizableHandle />

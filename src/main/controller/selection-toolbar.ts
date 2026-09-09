@@ -1,4 +1,3 @@
-import { is } from '@electron-toolkit/utils'
 import {
   clipboard,
   BrowserWindow,
@@ -30,7 +29,7 @@ import type {
 } from '../selection-hook-service'
 import type { WebContentsViewManager } from '../web-contents-view-manager'
 import { createDictionaryEntryUrl } from '../dictionary-entry-url'
-import { resolveRendererPath } from '../output-path'
+import { resolveRendererUrl } from '../output-path'
 import { hideSelectionWindow, showSelectionWindowInactive } from '../selection-window-behavior'
 import { BaseController } from './base-controller'
 
@@ -401,11 +400,7 @@ export class SelectionToolbarController extends BaseController {
     window.webContents.on('will-navigate', (event) => event.preventDefault())
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 
-    const rendererUrl = process.env['ELECTRON_RENDERER_URL']
-    const load =
-      is.dev && rendererUrl
-        ? window.loadURL(`${rendererUrl}/selection-toolbar.html`)
-        : window.loadFile(resolveRendererPath('selection-toolbar.html'))
+    const load = window.loadURL(resolveRendererUrl('selection-toolbar.html'))
     void load.catch((error: unknown) => console.error('Failed to load selection toolbar', error))
     return window
   }
@@ -543,11 +538,7 @@ export class SelectionToolbarController extends BaseController {
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     this.configureExplanationView()
 
-    const rendererUrl = process.env['ELECTRON_RENDERER_URL']
-    const load =
-      is.dev && rendererUrl
-        ? window.loadURL(`${rendererUrl}/selection-explanation.html`)
-        : window.loadFile(resolveRendererPath('selection-explanation.html'))
+    const load = window.loadURL(resolveRendererUrl('selection-explanation.html'))
     void load.catch((error: unknown) =>
       console.error('Failed to load selection explanation shell', error)
     )

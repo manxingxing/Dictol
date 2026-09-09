@@ -7,8 +7,6 @@
     if (value && value.length <= 200) window.dictolEntry?.lookupWord(value)
   }
 
-  const readAloudAudio = new Audio()
-  let generatedAudioUrl = ''
   const contextMenuHost = document.createElement('div')
   contextMenuHost.id = 'dictol-context-menu'
   contextMenuHost.style.cssText = 'position:fixed;display:none;z-index:2147483647;'
@@ -88,16 +86,9 @@
     contextMenuHost.style.display = 'none'
   }
 
-  const releaseGeneratedAudioUrl = () => {
-    if (!generatedAudioUrl) return
-    URL.revokeObjectURL(generatedAudioUrl)
-    generatedAudioUrl = ''
-  }
-
   let readAloudButton
   let readAloudState = 'idle'
-  let readAloudRequestId = 0
-  let readAloudPlaybackStopper = null
+  let readAloudController = null
   const readAloudStateLabels = {
     idle: '朗读',
     waiting: '等待',
@@ -112,114 +103,19 @@
   }
 
   const setReadAloudState = (state) => {
+    if (state !== 'waiting' && state !== 'playing') state = 'idle'
     readAloudState = state
     if (!readAloudButton) return
 
     const icon = readAloudButton.querySelector('svg')
-    if (icon) icon.outerHTML = readAloudStateIcons[state]
-    readAloudButton.querySelector('span').textContent = readAloudStateLabels[state]
-    readAloudButton.title = state === 'idle' ? '朗读' : '停止朗读'
-    readAloudButton.setAttribute('aria-label', state === 'idle' ? '朗读' : '停止朗读')
+    if (icon) icon.outerHTML = readAloudStateIcons[state] ?? readAloudStateIcons.idle
+    readAloudButton.querySelector('span').textContent =
+      readAloudStateLabels[state] ?? readAloudStateLabels.idle
+    const isActive = state === 'waiting' || state === 'playing'
+    readAloudButton.title = isActive ? '停止朗读' : '朗读'
+    readAloudButton.setAttribute('aria-label', isActive ? '停止朗读' : '朗读')
     readAloudButton.dataset.state = state
   }
-
-  const stopReadAloud = () => {
-    readAloudRequestId += 1
-    readAloudPlaybackStopper?.()
-    readAloudPlaybackStopper = null
-    readAloudAudio.pause()
-    readAloudAudio.removeAttribute('src')
-    readAloudAudio.load()
-    releaseGeneratedAudioUrl()
-    setReadAloudState('idle')
-  }
-
-  // 监听器只挂一次，避免连续播放时累积；releaseGeneratedAudioUrl 幂等，重复触发无副作用
-  readAloudAudio.addEventListener('ended', () => {
-    releaseGeneratedAudioUrl()
-    if (readAloudState === 'playing') setReadAloudState('idle')
-  })
-  readAloudAudio.addEventListener('error', () => {
-    releaseGeneratedAudioUrl()
-    if (readAloudState === 'playing') setReadAloudState('idle')
-  })
-
-  const playAudioData = async (audioData, requestId) => {
-    const audioBytes = audioData instanceof ArrayBuffer ? new Uint8Array(audioData) : audioData
-    if (!audioBytes || audioBytes.byteLength === 0 || requestId !== readAloudRequestId) return false
-    const audioBlob = new Blob([audioBytes], { type: 'audio/mpeg' })
-    releaseGeneratedAudioUrl()
-    generatedAudioUrl = URL.createObjectURL(audioBlob)
-
-    if (!readAloudAudio.paused) readAloudAudio.pause()
-    readAloudAudio.src = generatedAudioUrl
-    setReadAloudState('playing')
-
-    let cancelPlayback = () => {}
-    const playbackFinished = new Promise((resolve, reject) => {
-      const cleanup = () => {
-        readAloudAudio.removeEventListener('ended', handleEnded)
-        readAloudAudio.removeEventListener('error', handleError)
-        if (readAloudPlaybackStopper === cancelPlayback) readAloudPlaybackStopper = null
-      }
-      const handleEnded = () => {
-        cleanup()
-        resolve()
-      }
-      const handleError = () => {
-        cleanup()
-        reject(new Error('Audio playback failed.'))
-      }
-
-      cancelPlayback = () => {
-        cleanup()
-        resolve()
-      }
-      readAloudPlaybackStopper = cancelPlayback
-      readAloudAudio.addEventListener('ended', handleEnded)
-      readAloudAudio.addEventListener('error', handleError)
-    })
-
-    try {
-      await readAloudAudio.play()
-      await playbackFinished
-    } catch (error) {
-      cancelPlayback()
-      // 快速连续点击时，上一次播放会被 pause() 以 AbortError 中断，属正常现象，不视为失败
-      if (error?.name !== 'AbortError') throw error
-    }
-    return true
-  }
-
-  const readAloud = async (text, voice) => {
-    const normalizedText = text?.trim?.() ?? ''
-    if (!normalizedText || normalizedText.length > maxReadAloudTextLength) return
-    if (readAloudState !== 'idle') {
-      stopReadAloud()
-      return false
-    }
-
-    const requestId = ++readAloudRequestId
-    setReadAloudState('waiting')
-
-    try {
-      const audioData = await window.dictolEntry.readAloud(normalizedText, voice)
-      const started = await playAudioData(audioData, requestId)
-      if (requestId !== readAloudRequestId) return false
-      if (!started) setReadAloudState('idle')
-      return true
-    } catch {
-      if (requestId !== readAloudRequestId) return false
-      releaseGeneratedAudioUrl()
-      setReadAloudState('idle')
-      window.dictolEntry?.showToast?.({
-        type: 'error',
-        message: '朗读失败，请检查网络连接后重试。'
-      })
-      return true
-    }
-  }
-  window.playTTS = readAloud
 
   const createMenuButton = (label, icon, action, { hideAfterAction = true } = {}) => {
     const button = document.createElement('button')
@@ -227,8 +123,8 @@
     button.innerHTML = `${icon}<span>${label}</span>`
     button.addEventListener('pointerdown', (event) => event.preventDefault())
     button.addEventListener('click', async () => {
-      const shouldHide = await Promise.resolve(action())
-      if (hideAfterAction && shouldHide !== false) hideContextMenu()
+      await Promise.resolve(action())
+      if (hideAfterAction) hideContextMenu()
     })
     return button
   }
@@ -244,18 +140,28 @@
     '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>',
     () => lookup(contextMenuText)
   )
+
+  const readAloud = () => {
+    if (readAloudState === 'idle') {
+      const controller = new AbortController()
+      readAloudController = controller
+      window.playTTS(contextMenuText, undefined, {
+        onStateChange: (state) => {
+          setReadAloudState(state)
+          if (state !== 'waiting' && state !== 'playing') readAloudController = null
+          if (state === 'completed' || state === 'error') hideContextMenu()
+        },
+        signal: controller.signal
+      })
+    } else {
+      readAloudController?.abort()
+    }
+  }
   readAloudButton = createMenuButton(
     '朗读',
     '<svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5Z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M18.5 5.5a9 9 0 0 1 0 13"></path></svg>',
-    async () => {
-      if (readAloudState === 'idle') {
-        return readAloud(contextMenuText)
-      } else {
-        stopReadAloud()
-        return false
-      }
-    },
-    { hideAfterAction: true }
+    readAloud,
+    { hideAfterAction: false }
   )
   setReadAloudState('idle')
   const explainWithAiButton = createMenuButton(
@@ -357,25 +263,6 @@
   )
   addEventListener('blur', hideContextMenu)
   addEventListener('scroll', hideContextMenu, true)
-
-  // 词条跳转
-  document.addEventListener(
-    'click',
-    (event) => {
-      const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null
-      const href = anchor?.getAttribute('href')?.trim()
-      if (!href || !/^entry:\/\//i.test(href)) return
-      event.preventDefault()
-      event.stopPropagation()
-      const target = href.replace(/^entry:\/\/\/?/i, '').split('#', 1)[0]
-      try {
-        lookup(decodeURIComponent(target))
-      } catch {
-        lookup(target)
-      }
-    },
-    true
-  )
 
   // -------------------------------------------------------------------------
 })()

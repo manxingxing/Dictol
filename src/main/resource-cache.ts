@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, extname, join } from 'node:path'
 
 export class ResourceCache {
@@ -45,6 +45,19 @@ export class ResourceCache {
     await rm(join(this.rootDirectory, String(dictionaryId)), { recursive: true, force: true })
   }
 
+  async getSize(): Promise<number> {
+    return this.getDirectorySize(this.rootDirectory)
+  }
+
+  async ensureDirectory(): Promise<string> {
+    await mkdir(this.rootDirectory, { recursive: true })
+    return this.rootDirectory
+  }
+
+  async clear(): Promise<void> {
+    await rm(this.rootDirectory, { recursive: true, force: true })
+  }
+
   private getCachePath(
     dictionaryId: number,
     resourcePath: string,
@@ -56,7 +69,7 @@ export class ResourceCache {
         ? 'audio'
         : mimeType.startsWith('font/')
           ? 'fonts'
-        : null
+          : null
     if (!category) return null
 
     const digest = createHash('sha256').update(`${dictionaryId}\0${resourcePath}`).digest('hex')
@@ -66,5 +79,31 @@ export class ResourceCache {
       .replace(/[^.a-z0-9]/g, '')
 
     return join(this.rootDirectory, String(dictionaryId), category, shard, `${digest}${extension}`)
+  }
+
+  private async getDirectorySize(directory: string): Promise<number> {
+    let entries
+    try {
+      entries = await readdir(directory, { withFileTypes: true })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 0
+      throw error
+    }
+
+    let size = 0
+    for (const entry of entries) {
+      const entryPath = join(directory, entry.name)
+      if (entry.isDirectory()) {
+        size += await this.getDirectorySize(entryPath)
+        continue
+      }
+
+      try {
+        size += (await stat(entryPath)).size
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+    }
+    return size
   }
 }

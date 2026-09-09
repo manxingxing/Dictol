@@ -17,7 +17,7 @@ import {
   DICTOL_ASSET_SCHEME,
   ENTRY_CONTEXT_MENU_URL,
   ENTRY_GLOBAL_STYLE_URL,
-  ENTRY_PRONUNCIATION_URL,
+  ENTRY_BASE_URL,
   ENTRY_SCHEME
 } from './entry-assets'
 import { loadDictionaryResource } from './resource-protocol'
@@ -29,10 +29,7 @@ const DICTIONARY_ID_HEADER = 'x-dictol-dictionary-id'
 const STATIC_RESOURCE_CACHE_CONTROL = 'public, max-age=3600'
 
 const ENTRY_ASSETS = new Map([
-  [
-    ENTRY_PRONUNCIATION_URL,
-    { fileName: 'entry-pronunciation.js', mimeType: 'text/javascript; charset=utf-8' }
-  ],
+  [ENTRY_BASE_URL, { fileName: 'entry-base.js', mimeType: 'text/javascript; charset=utf-8' }],
   [
     ENTRY_CONTEXT_MENU_URL,
     { fileName: 'entry-context-menu.js', mimeType: 'text/javascript; charset=utf-8' }

@@ -12,6 +12,7 @@ declare global {
   interface Window {
     dictolCustomCssEditor: {
       getState: () => Promise<CustomCssEditorState | null>
+      getPreviewReady: () => Promise<boolean>
       randomEntry: () => Promise<CustomCssEditorState>
       searchEntry: (term: string) => Promise<CustomCssEditorSearchResult>
       setPreviewBounds: (bounds: CustomCssEditorBounds) => void
@@ -20,6 +21,7 @@ declare global {
       previewCss: (css: string) => void
       save: (css: string) => Promise<void>
       onState: (callback: (state: CustomCssEditorState) => void) => () => void
+      onPreviewReady: (callback: (ready: boolean) => void) => () => void
     }
     dictol: {
       platform: NodeJS.Platform
@@ -266,6 +268,9 @@ declare global {
       }
       app: {
         getVersion: () => Promise<string | null>
+        getResourceCacheSize: () => Promise<number>
+        clearResourceCache: () => Promise<void>
+        openResourceCacheDirectory: () => Promise<void>
         onDeepLink: (callback: (intent: DeepLinkIntent) => void) => () => void
         onFocusSearch: (callback: () => void) => () => void
         onShowFindBar: (callback: () => void) => () => void

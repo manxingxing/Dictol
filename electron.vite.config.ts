@@ -32,6 +32,7 @@ export default defineConfig({
           'selection-explanation': resolve('src/preload/selection-explanation.ts'),
           'selection-entry': resolve('src/preload/selection-entry.ts'),
           'custom-css-editor': resolve('src/preload/custom-css-editor.ts'),
+          'custom-css-preview': resolve('src/preload/custom-css-preview.ts'),
           'find-bar': resolve('src/preload/find-bar.ts')
         }
       }

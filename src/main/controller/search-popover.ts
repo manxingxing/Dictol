@@ -1,8 +1,7 @@
 import { ipcMain, type IpcMainEvent, type Rectangle } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import type { AppRuntime } from '../app-runtime'
 import type { WebContentsViewManager } from '../web-contents-view-manager'
-import { resolveRendererPath } from '../output-path'
+import { resolveRendererUrl } from '../output-path'
 import { BaseController } from './base-controller'
 
 export type SearchPopoverItem = {
@@ -123,11 +122,7 @@ export class SearchPopoverController extends BaseController {
     })
     popover.webContents.on('will-navigate', (event) => event.preventDefault())
 
-    const rendererUrl = process.env['ELECTRON_RENDERER_URL']
-    const loadPromise =
-      is.dev && rendererUrl
-        ? popover.loadURL(`${rendererUrl}/search-popover.html`)
-        : popover.loadFile(resolveRendererPath('search-popover.html'))
+    const loadPromise = popover.loadURL(resolveRendererUrl('search-popover.html'))
 
     void loadPromise.catch((error: unknown) => {
       console.error('Failed to load compact search popover', error)

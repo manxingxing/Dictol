@@ -108,11 +108,20 @@ function getMimeType(resourcePath: string): string {
       return 'audio/wav'
     case '.ogg':
     case '.oga':
+    case '.opus':
+      // .opus 实际是 Ogg 容器内的 Opus，Chromium 通过 Ogg demuxer 解码
       return 'audio/ogg'
-    case '.spx':
-      return 'audio/x-speex'
+    case '.webm':
+    case '.weba':
+      return 'audio/webm'
+    case '.flac':
+      return 'audio/flac'
     case '.m4a':
+    case '.mp4':
       return 'audio/mp4'
+    case '.spx':
+      // Chromium 无 Speex 解码器，保留仅为兼容旧词典链接
+      return 'audio/x-speex'
     case '.woff':
       return 'font/woff'
     case '.woff2':

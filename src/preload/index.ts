@@ -262,6 +262,10 @@ const api = Object.freeze({
   }),
   app: Object.freeze({
     getVersion: (): Promise<string | null> => ipcRenderer.invoke('app:get-version'),
+    getResourceCacheSize: (): Promise<number> => ipcRenderer.invoke('app:get-resource-cache-size'),
+    clearResourceCache: (): Promise<void> => ipcRenderer.invoke('app:clear-resource-cache'),
+    openResourceCacheDirectory: (): Promise<void> =>
+      ipcRenderer.invoke('app:open-resource-cache-directory'),
     onDeepLink: (callback: (intent: DeepLinkIntent) => void): (() => void) => {
       deepLinkSubscribers.add(callback)
       while (pendingDeepLinks.length > 0) {

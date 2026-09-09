@@ -134,8 +134,13 @@ export class DictionaryEntryRepository {
     return row
   }
 
-  /** 随机取一个可展示的词条，供词典样式预览使用。 */
-  async findRandomEntryContent(dictionaryId: number): Promise<EntryContent | undefined> {
+  /** 使用随机偏移取一个可展示的词条，供词典样式预览使用。 */
+  async findRandomEntryContent(
+    dictionaryId: number,
+    recordCount: number
+  ): Promise<EntryContent | undefined> {
+    if (recordCount <= 0) return undefined
+    const offset = Math.floor(Math.random() * recordCount)
     const [row] = await this.db
       .select({
         id: dictionaryEntry.id,
@@ -149,8 +154,8 @@ export class DictionaryEntryRepository {
       .from(dictionaryEntry)
       .innerJoin(dictionary, eq(dictionary.id, dictionaryEntry.dictionaryId))
       .where(and(eq(dictionaryEntry.dictionaryId, dictionaryId), eq(dictionary.status, 'ready')))
-      .orderBy(sql`random()`)
       .limit(1)
+      .offset(offset)
 
     return row
   }

@@ -92,6 +92,18 @@ body,
   background: var(--card);
 }
 
+.custom-css-editor-preview-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+
 .custom-css-editor-preview-label {
   position: absolute;
   top: 0.75rem;

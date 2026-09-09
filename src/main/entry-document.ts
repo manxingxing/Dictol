@@ -1,8 +1,4 @@
-import {
-  ENTRY_CONTEXT_MENU_URL,
-  ENTRY_GLOBAL_STYLE_URL,
-  ENTRY_PRONUNCIATION_URL
-} from './entry-assets'
+import { ENTRY_BASE_URL, ENTRY_CONTEXT_MENU_URL, ENTRY_GLOBAL_STYLE_URL } from './entry-assets'
 
 // 如果是完整的html，就注入 css, js
 // 如果不是完整的 html(没有 head，body)， 则把内容包裹在 html 之中，再嵌入 css, js
@@ -35,7 +31,7 @@ export function createEntryDocument(
   const globalStyle = `<link id="dictol-entry-style" rel="stylesheet" href="${ENTRY_GLOBAL_STYLE_URL}">`
   const withStyles = withHead.replace(/<\/head>/i, `${globalStyle}${customStyle}</head>`)
   const entryScripts = [
-    `<script src="${ENTRY_PRONUNCIATION_URL}"></script>`,
+    `<script src="${ENTRY_BASE_URL}"></script>`,
     options.includeContextMenu === false ? '' : `<script src="${ENTRY_CONTEXT_MENU_URL}"></script>`
   ].join('')
   return /<\/body>/i.test(withStyles)

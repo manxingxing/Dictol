@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld(
   Object.freeze({
     getState: (): Promise<CustomCssEditorState | null> =>
       ipcRenderer.invoke('custom-css-editor:get-state'),
+    getPreviewReady: (): Promise<boolean> =>
+      ipcRenderer.invoke('custom-css-editor:get-preview-ready'),
     randomEntry: (): Promise<CustomCssEditorState> =>
       ipcRenderer.invoke('custom-css-editor:random-entry'),
     searchEntry: (term: string): Promise<CustomCssEditorSearchResult> =>
@@ -28,6 +30,11 @@ contextBridge.exposeInMainWorld(
         callback(state)
       ipcRenderer.on('custom-css-editor:state', listener)
       return () => ipcRenderer.removeListener('custom-css-editor:state', listener)
+    },
+    onPreviewReady: (callback: (ready: boolean) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, ready: boolean): void => callback(ready)
+      ipcRenderer.on('custom-css-editor:preview-ready', listener)
+      return () => ipcRenderer.removeListener('custom-css-editor:preview-ready', listener)
     }
   })
 )
