@@ -13,7 +13,8 @@ import {
   Pencil,
   Trash2,
   Upload,
-  Plus
+  Plus,
+  Power
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -41,6 +42,7 @@ import {
   useDictionaries,
   useImportDictionary,
   useReorderDictionaries,
+  useUpdateDictionaryEnabled,
   useUpdateDictionaryName
 } from '@/hooks/use-dictionaries'
 import {
@@ -59,6 +61,7 @@ export function DictionariesPage(): React.JSX.Element {
   const deleteDictionary = useDeleteDictionary()
   const reorderDictionaries = useReorderDictionaries()
   const updateDictionaryName = useUpdateDictionaryName()
+  const updateDictionaryEnabled = useUpdateDictionaryEnabled()
   const {
     data: onlineDictionaries = [],
     isLoading: onlineLoading,
@@ -262,9 +265,9 @@ export function DictionariesPage(): React.JSX.Element {
                   return (
                     <li
                       key={dictionary.id}
-                      className={`flex min-h-16 items-center gap-3 bg-card px-4 py-3 transition-[background-color,opacity] hover:bg-muted/40 ${
-                        draggedDictionaryId === dictionary.id ? 'opacity-45' : ''
-                      } ${
+                      className={`flex min-h-16 items-center gap-3 bg-card px-4 py-3 transition-[background-color,opacity,filter] hover:bg-muted/40 ${
+                        !dictionary.enabled ? 'bg-muted/25 grayscale opacity-65' : ''
+                      } ${draggedDictionaryId === dictionary.id ? 'opacity-45' : ''} ${
                         dropTarget?.id === dictionary.id
                           ? dropTarget.position === 'before'
                             ? 'border-t-2 border-t-primary'
@@ -332,6 +335,11 @@ export function DictionariesPage(): React.JSX.Element {
                             />
                             {status.label}
                           </span>
+                          {!dictionary.enabled && (
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                              已禁用
+                            </span>
+                          )}
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {dictionary.recordCount
@@ -422,6 +430,23 @@ export function DictionariesPage(): React.JSX.Element {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
+                            className="text-sm"
+                            disabled={
+                              dictionary.status !== 'ready' ||
+                              (updateDictionaryEnabled.isPending &&
+                                updateDictionaryEnabled.variables?.dictionaryId === dictionary.id)
+                            }
+                            onClick={() => {
+                              updateDictionaryEnabled.mutate({
+                                dictionaryId: dictionary.id,
+                                enabled: !dictionary.enabled
+                              })
+                            }}
+                          >
+                            <Power className="size-3.5" />
+                            {dictionary.enabled ? '禁用词典' : '启用词典'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
                             className="text-sm hover:bg-destructive/10 hover:text-destructive focus:bg-destructive/10 focus:text-destructive"
                             disabled={
                               dictionary.status === 'importing' || deleteDictionary.isPending
@@ -454,6 +479,11 @@ export function DictionariesPage(): React.JSX.Element {
             {reorderDictionaries.isError && (
               <p className="border-t border-border bg-card px-4 py-3 text-xs text-destructive">
                 排序保存失败：{reorderDictionaries.error.message}
+              </p>
+            )}
+            {updateDictionaryEnabled.isError && (
+              <p className="border-t border-border bg-card px-4 py-3 text-xs text-destructive">
+                更新词典状态失败：{updateDictionaryEnabled.error.message}
               </p>
             )}
           </div>

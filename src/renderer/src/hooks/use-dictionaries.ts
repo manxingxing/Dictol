@@ -138,6 +138,25 @@ export function useUpdateDictionaryName(): UseMutationResult<
   })
 }
 
+export function useUpdateDictionaryEnabled(): UseMutationResult<
+  void,
+  Error,
+  { dictionaryId: string; enabled: boolean }
+> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ dictionaryId, enabled }) =>
+      window.dictol.dictionaries.updateEnabled(dictionaryId, enabled),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: dictionariesQueryKey }),
+        queryClient.invalidateQueries({ queryKey: ['dictionaries', 'ready'] }),
+        queryClient.invalidateQueries({ queryKey: ['dictionary-entries'] })
+      ])
+    }
+  })
+}
+
 export function useUpdateDictionaryCustomCss(): UseMutationResult<
   void,
   Error,

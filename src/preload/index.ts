@@ -26,6 +26,7 @@ type DictionarySummary = Omit<ReadyDictionary, 'status'> & {
   status: 'pending' | 'importing' | 'ready' | 'error'
   customCss: string
   external: boolean
+  enabled: boolean
 }
 
 type ImportedDictionary = {
@@ -193,6 +194,8 @@ const api = Object.freeze({
       ipcRenderer.invoke('dictionaries:reorder', dictionaryIds),
     updateName: (dictionaryId: string, name: string): Promise<void> =>
       ipcRenderer.invoke('dictionaries:update-name', dictionaryId, name),
+    updateEnabled: (dictionaryId: string, enabled: boolean): Promise<void> =>
+      ipcRenderer.invoke('dictionaries:update-enabled', dictionaryId, enabled),
     openCustomCssEditor: (dictionaryId: string): Promise<void> =>
       ipcRenderer.invoke('dictionaries:open-custom-css-editor', dictionaryId),
     updateCustomCss: (dictionaryId: string, customCss: string): Promise<void> =>

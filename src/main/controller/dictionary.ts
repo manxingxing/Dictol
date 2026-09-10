@@ -26,6 +26,7 @@ export class DictionaryController extends BaseController {
     ipcMain.handle('dictionaries:open-directory', this.openDirectory)
     ipcMain.handle('dictionaries:reorder', this.reorderDictionaries)
     ipcMain.handle('dictionaries:update-name', this.updateDictionaryName)
+    ipcMain.handle('dictionaries:update-enabled', this.updateDictionaryEnabled)
     ipcMain.handle('dictionaries:update-custom-css', this.updateDictionaryCustomCss)
   }
 
@@ -129,6 +130,14 @@ export class DictionaryController extends BaseController {
     name: string
   ): Promise<void> => {
     await this.db.updateDictionaryName(dictionaryId, name)
+  }
+
+  updateDictionaryEnabled = async (
+    _event: IpcMainInvokeEvent,
+    dictionaryId: string,
+    enabled: boolean
+  ): Promise<void> => {
+    await this.db.updateDictionaryEnabled(dictionaryId, enabled)
   }
 
   updateDictionaryCustomCss = async (

@@ -39,6 +39,7 @@ export type DictionarySummary = {
   recordCount: string | null
   status: DictionaryStatus
   external: boolean
+  enabled: boolean
   createdAt: string
   updatedAt: string
 }
@@ -397,6 +398,7 @@ export class DBService {
       recordCount: row.recordCount?.toString() ?? null,
       status: row.status,
       external: row.external,
+      enabled: row.enabled,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt
     }))
@@ -615,6 +617,13 @@ export class DBService {
     const requestedSet = new Set(requestedIds)
     const completeOrder = [...requestedIds, ...currentIds.filter((id) => !requestedSet.has(id))]
     await this.dictionaryRepo.reorder(completeOrder)
+  }
+
+  async updateDictionaryEnabled(dictionaryId: string, enabled: boolean): Promise<void> {
+    const numericId = this.parseDictionaryId(dictionaryId)
+    if (typeof enabled !== 'boolean') throw new Error('无效的词典启用状态')
+    const updated = await this.dictionaryRepo.updateEnabled(numericId, enabled)
+    if (!updated) throw new Error('词典不存在')
   }
 
   async importDictionaryFromFile(

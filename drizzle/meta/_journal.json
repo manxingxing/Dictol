@@ -71,6 +71,13 @@
       "when": 1788747598581,
       "tag": "0009_dizzy_madrox",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1789008691444,
+      "tag": "0010_curious_the_renegades",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { asc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, sql } from 'drizzle-orm'
 import { DictolDatabase } from '../drizzle'
 import { Dictionary, dictionary } from '../schema'
 
@@ -57,7 +57,7 @@ export class DictionaryRepository {
     return this.db
       .select()
       .from(dictionary)
-      .where(eq(dictionary.status, 'ready'))
+      .where(and(eq(dictionary.status, 'ready'), eq(dictionary.enabled, true)))
       .orderBy(asc(dictionary.sortOrder), asc(dictionary.id))
   }
 
@@ -103,6 +103,15 @@ export class DictionaryRepository {
     const rows = await this.db
       .update(dictionary)
       .set({ name, updatedAt: new Date().toISOString() })
+      .where(eq(dictionary.id, id))
+      .returning({ id: dictionary.id })
+    return rows.length > 0
+  }
+
+  async updateEnabled(id: number, enabled: boolean): Promise<boolean> {
+    const rows = await this.db
+      .update(dictionary)
+      .set({ enabled, updatedAt: new Date().toISOString() })
       .where(eq(dictionary.id, id))
       .returning({ id: dictionary.id })
     return rows.length > 0

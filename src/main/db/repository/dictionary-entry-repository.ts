@@ -54,7 +54,13 @@ export class DictionaryEntryRepository {
     const belongsToReadyDictionary = this.db
       .select({ id: dictionary.id })
       .from(dictionary)
-      .where(and(eq(dictionary.id, dictionaryEntry.dictionaryId), eq(dictionary.status, 'ready')))
+      .where(
+        and(
+          eq(dictionary.id, dictionaryEntry.dictionaryId),
+          eq(dictionary.status, 'ready'),
+          eq(dictionary.enabled, true)
+        )
+      )
 
     const rows = await this.db
       .select({
@@ -101,6 +107,7 @@ export class DictionaryEntryRepository {
       .where(
         and(
           eq(dictionary.status, 'ready'),
+          eq(dictionary.enabled, true),
           inArray(dictionaryEntry.normalizedWord, normalizedWords)
         )
       )

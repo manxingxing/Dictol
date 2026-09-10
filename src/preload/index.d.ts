@@ -36,6 +36,7 @@ declare global {
             recordCount: string | null
             status: 'pending' | 'importing' | 'ready' | 'error'
             external: boolean
+            enabled: boolean
             createdAt: string
             updatedAt: string
           }[]
@@ -93,6 +94,7 @@ declare global {
         openDirectory: (dictionaryId: string) => Promise<void>
         reorder: (dictionaryIds: string[]) => Promise<void>
         updateName: (dictionaryId: string, name: string) => Promise<void>
+        updateEnabled: (dictionaryId: string, enabled: boolean) => Promise<void>
         openCustomCssEditor: (dictionaryId: string) => Promise<void>
         updateCustomCss: (dictionaryId: string, customCss: string) => Promise<void>
       }

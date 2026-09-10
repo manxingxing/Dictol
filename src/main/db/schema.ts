@@ -12,6 +12,7 @@ export const dictionary = sqliteTable(
     recordCount: integer('record_count'),
     dictPath: text('dict_path').unique(),
     external: integer('external', { mode: 'boolean' }).notNull().default(false),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
     customCss: text('custom_css').notNull().default(''),
     sortOrder: integer('sort_order').notNull().default(0),
     status: text('status', { enum: ['pending', 'importing', 'ready', 'error'] })
