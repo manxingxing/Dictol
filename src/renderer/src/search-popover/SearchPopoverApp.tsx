@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useChromeTone } from '@/hooks/use-chrome-tone'
 import { cn } from '@/lib/utils'
+import { SEARCH_POPOVER_SUGGESTION_LIST_MAX_HEIGHT } from '../../../shared/search-popover'
 import { MAIN_WINDOW_TITLEBAR_CONTROL_HEIGHT } from '../../../shared/window-chrome'
 
 type SearchPopoverItem = {
@@ -48,6 +49,7 @@ export function SearchPopoverApp(): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const [focusRequest, setFocusRequest] = useState(0)
+  const optionRefs = useRef(new Map<number, HTMLButtonElement>())
 
   useEffect(
     () =>
@@ -75,6 +77,11 @@ export function SearchPopoverApp(): React.JSX.Element {
     inputRef.current?.focus({ preventScroll: true })
     inputRef.current?.select()
   }, [focusRequest])
+
+  useEffect(() => {
+    if (selectedIndex < 0) return
+    optionRefs.current.get(selectedIndex)?.scrollIntoView({ block: 'nearest' })
+  }, [payload.items, payload.query, selectedIndex])
 
   const updateQuery = (nextQuery: string): void => {
     setQuery(nextQuery)
@@ -163,44 +170,53 @@ export function SearchPopoverApp(): React.JSX.Element {
           id="search-popover-suggestions"
           role="listbox"
         >
-          {payload.items.length === 0 && payload.status ? (
-            <div
-              className="flex h-[42px] items-center px-2 text-sm text-muted-foreground"
-              role="status"
-            >
-              {payload.status === 'loading' ? '正在搜索…' : '没有找到匹配的词条'}
-            </div>
-          ) : (
-            payload.items.map((item, index) => {
-              const selected = index === selectedIndex
+          <div
+            className="max-h-[420px] overflow-y-auto overscroll-contain"
+            style={{ maxHeight: SEARCH_POPOVER_SUGGESTION_LIST_MAX_HEIGHT }}
+          >
+            {payload.items.length === 0 && payload.status ? (
+              <div
+                className="flex h-[42px] items-center px-2 text-sm text-muted-foreground"
+                role="status"
+              >
+                {payload.status === 'loading' ? '正在搜索…' : '没有找到匹配的词条'}
+              </div>
+            ) : (
+              payload.items.map((item, index) => {
+                const selected = index === selectedIndex
 
-              return (
-                <button
-                  aria-selected={selected}
-                  className={cn(
-                    'grid h-[42px] w-full cursor-default grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md px-3 text-left text-sm outline-none select-none hover:bg-muted focus-visible:bg-muted',
-                    selected &&
-                      'bg-primary/10 text-primary hover:bg-primary/10 focus-visible:bg-primary/10'
-                  )}
-                  key={`${item.word}:${index}`}
-                  onClick={() => window.dictolSearchPopover.select(item.word)}
-                  onPointerMove={() => setSelectedIndex(index)}
-                  role="option"
-                  type="button"
-                >
-                  <span className="truncate font-medium">{item.word}</span>
-                  <span
+                return (
+                  <button
+                    ref={(element) => {
+                      if (element) optionRefs.current.set(index, element)
+                      else optionRefs.current.delete(index)
+                    }}
+                    aria-selected={selected}
                     className={cn(
-                      'text-xs whitespace-nowrap text-muted-foreground',
-                      selected && 'text-primary/70'
+                      'grid h-[42px] w-full cursor-default grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md px-3 text-left text-sm outline-none select-none hover:bg-muted focus-visible:bg-muted',
+                      selected &&
+                        'bg-primary/10 text-primary hover:bg-primary/10 focus-visible:bg-primary/10'
                     )}
+                    key={`${item.word}:${index}`}
+                    onClick={() => window.dictolSearchPopover.select(item.word)}
+                    onPointerMove={() => setSelectedIndex(index)}
+                    role="option"
+                    type="button"
                   >
-                    {item.description}
-                  </span>
-                </button>
-              )
-            })
-          )}
+                    <span className="truncate font-medium">{item.word}</span>
+                    <span
+                      className={cn(
+                        'text-xs whitespace-nowrap text-muted-foreground',
+                        selected && 'text-primary/70'
+                      )}
+                    >
+                      {item.description}
+                    </span>
+                  </button>
+                )
+              })
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -8,6 +8,11 @@ import { useQueryHistory } from '@/hooks/use-query-history'
 import { useSearchShortCut } from '@/hooks/use-search-shortcut'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/app-store'
+import {
+  SEARCH_POPOVER_MAX_VISIBLE_ROWS,
+  SEARCH_POPOVER_ROW_HEIGHT,
+  SEARCH_POPOVER_SUGGESTION_LIMIT
+} from '../../../shared/search-popover'
 import { MAIN_WINDOW_TITLEBAR_CONTROL_HEIGHT } from '../../../shared/window-chrome'
 
 type Suggestion = {
@@ -19,7 +24,6 @@ type Suggestion = {
 const POPOVER_HORIZONTAL_GUTTER = 12
 const POPOVER_BOTTOM_GUTTER = 8
 const POPOVER_OFFSET = 3
-const POPOVER_ROW_HEIGHT = 42
 const POPOVER_SURFACE_HEIGHT = 10
 
 export const CompactTitleBarSearch = (): React.JSX.Element => {
@@ -38,7 +42,10 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
   useDebounce(() => setDebouncedQuery(query.trim()), 120, [query])
 
   const { data: history = [] } = useQueryHistory()
-  const { data: results = [], isFetching } = useDictionarySearch(debouncedQuery, 8)
+  const { data: results = [], isFetching } = useDictionarySearch(
+    debouncedQuery,
+    SEARCH_POPOVER_SUGGESTION_LIMIT
+  )
 
   const normalizedQuery = query.trim()
   const searchPending =
@@ -52,13 +59,13 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!query) {
-      return history.slice(0, 10).map((item) => ({
+      return history.slice(0, SEARCH_POPOVER_SUGGESTION_LIMIT).map((item) => ({
         word: item.term,
         description: '最近查询',
         recent: true
       }))
     }
-    return results.slice(0, 10).map((result) => ({
+    return results.slice(0, SEARCH_POPOVER_SUGGESTION_LIMIT).map((result) => ({
       word: result.word,
       description: `${result.dictionaryCount} 部词典`,
       recent: false
@@ -178,7 +185,8 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
     const hasSuggestions = suggestions.length > 0 || popoverStatus !== undefined
     const suggestionSurfaceHeight = hasSuggestions
       ? POPOVER_OFFSET +
-        Math.max(1, suggestions.length) * POPOVER_ROW_HEIGHT +
+        Math.min(Math.max(1, suggestions.length), SEARCH_POPOVER_MAX_VISIBLE_ROWS) *
+          SEARCH_POPOVER_ROW_HEIGHT +
         POPOVER_SURFACE_HEIGHT
       : 0
     const popoverY = Math.max(0, bounds.y)
