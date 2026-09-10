@@ -17,12 +17,19 @@
           transform: translateX(-50%);
           padding: 8px 12px;
           border-radius: 8px;
-          background: rgba(32, 32, 32, .9);
-          color: #fff;
+          background: rgba(255, 255, 255, .94);
+          color: #202020;
           font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-          box-shadow: 0 4px 14px rgba(0, 0, 0, .2);
+          box-shadow: 0 4px 14px rgba(0, 0, 0, .16);
           opacity: 0;
           transition: opacity .15s ease;
+        }
+        @media (prefers-color-scheme: dark) {
+          .notice {
+            background: rgba(32, 32, 32, .9);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, .2);
+          }
         }
       `
       toastEle = document.createElement('div')
