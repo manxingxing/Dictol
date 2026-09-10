@@ -1,6 +1,7 @@
 import type { ToastPayload } from '../shared/notification'
 import type { TtsConfig, TtsSaveConfigRequest } from '../shared/tts'
 import type { DeepLinkIntent } from '../shared/deep-link'
+import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type {
   CustomCssEditorBounds,
   CustomCssEditorSearchResult,
@@ -270,6 +271,13 @@ declare global {
       }
       app: {
         getVersion: () => Promise<string | null>
+        getAggregateLayout: () => Promise<'vertical' | 'horizontal' | null>
+        saveAggregateLayout: (
+          layout: 'vertical' | 'horizontal'
+        ) => Promise<'vertical' | 'horizontal' | null>
+        getDictionaryLayout: () => Promise<DictionaryLayout | null>
+        getRunningDictionaryLayout: () => Promise<DictionaryLayout | null>
+        saveDictionaryLayout: (layout: DictionaryLayout) => Promise<DictionaryLayout | null>
         getResourceCacheSize: () => Promise<number>
         clearResourceCache: () => Promise<void>
         openResourceCacheDirectory: () => Promise<void>
@@ -428,11 +436,14 @@ declare global {
         ) => () => void
       }
       dictionaryView: {
-        show: (entryId: string) => Promise<void>
+        show: (target: { dictionaryId: string; term: string }) => Promise<void>
+        showAggregate: (term: string) => Promise<void>
+        scrollToDictionary: (dictionaryId: string) => void
         hide: () => void
         showFindBar: () => void
         setBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
         onLoadingChanged: (callback: (isLoading: boolean) => void) => () => void
+        onActiveDictionaryChanged: (callback: (dictionaryId: string) => void) => () => void
         onLookupWord: (callback: (word: string) => void) => () => void
         onExplainWithAi: (callback: (text: string) => void) => () => void
       }

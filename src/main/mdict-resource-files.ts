@@ -48,11 +48,15 @@ export class MdictResourceFiles {
 
 function resourceCandidates(resourcePath: string): string[] {
   const pathWithBackslashes = resourcePath.replaceAll('/', '\\')
+  const pathWithoutLeadingSeparator = pathWithBackslashes.replace(/^\\+/, '')
   return Array.from(
     new Set([
       pathWithBackslashes.startsWith('\\') ? pathWithBackslashes : `\\${pathWithBackslashes}`,
       pathWithBackslashes,
-      resourcePath.startsWith('/') ? resourcePath : `/${resourcePath}`
+      pathWithoutLeadingSeparator,
+      `\\${pathWithoutLeadingSeparator}`,
+      resourcePath.startsWith('/') ? resourcePath : `/${resourcePath}`,
+      `/${pathWithoutLeadingSeparator}`
     ])
   )
 }

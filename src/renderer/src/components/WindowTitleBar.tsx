@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { AppWindow, ArrowLeft, ArrowRight, PanelsTopLeft } from 'lucide-react'
+import { AppWindow, ArrowLeft, ArrowRight, PanelsTopLeft, Columns2, Rows2 } from 'lucide-react'
 
 import { CompactTitleBarSearch } from '@/components/CompactTitleBarSearch'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,26 @@ export function WindowTitleBar(): React.JSX.Element {
   const currentIndex = typeof window.history.state?.idx === 'number' ? window.history.state.idx : 0
 
   const compactModeEnabled = useAppStore((state) => state.compactModeEnabled)
+  const dictionaryLayout = useAppStore((state) => state.dictionaryLayout)
+  const [aggregateLayout, setAggregateLayout] = useState<'vertical' | 'horizontal' | null>(null)
+  const [savingLayout, setSavingLayout] = useState(false)
+  useEffect(() => {
+    void window.dictol.app.getAggregateLayout().then(setAggregateLayout).catch(console.error)
+  }, [])
+  const layoutLabel = aggregateLayout === 'horizontal' ? '切换为竖向平铺' : '切换为横向卡片'
+  const toggleAggregateLayout = async (): Promise<void> => {
+    setSavingLayout(true)
+    try {
+      const saved = await window.dictol.app.saveAggregateLayout(
+        aggregateLayout === 'horizontal' ? 'vertical' : 'horizontal'
+      )
+      if (saved) setAggregateLayout(saved)
+    } catch (error) {
+      console.error('Failed to save aggregate layout', error)
+    } finally {
+      setSavingLayout(false)
+    }
+  }
   const toggleCompactMode = useAppStore((state) => state.toggleCompactMode)
   const displayInCompactMode = useAppStore(selectCompactMode)
   const windowBelowCompactThreshold = useAppStore((state) => state.windowBelowCompactThreshold)
@@ -65,6 +86,23 @@ export function WindowTitleBar(): React.JSX.Element {
         </div>
 
         <div className="no-drag flex shrink-0 items-center">
+          {dictionaryLayout === 'aggregate' && (
+            <Button
+              aria-label={layoutLabel}
+              aria-pressed={aggregateLayout === 'horizontal'}
+              disabled={aggregateLayout === null || savingLayout}
+              onClick={toggleAggregateLayout}
+              size="icon"
+              style={{
+                height: MAIN_WINDOW_TITLEBAR_CONTROL_HEIGHT,
+                width: MAIN_WINDOW_TITLEBAR_CONTROL_HEIGHT
+              }}
+              title={layoutLabel}
+              variant="ghost"
+            >
+              {aggregateLayout === 'horizontal' ? <Rows2 /> : <Columns2 />}
+            </Button>
+          )}
           {!windowBelowCompactThreshold && (
             <Button
               aria-label={compactModeButtonLabel}

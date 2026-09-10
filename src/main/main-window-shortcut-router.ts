@@ -3,7 +3,7 @@ import { type BrowserWindow, type Event, type Input, type WebContents } from 'el
 import type { WindowManager } from './window-manager'
 
 type MainWindowShortcutTarget =
-  'main' | 'dictionary' | 'search-popover' | 'find-bar' | 'embed-browser'
+  'main' | 'dictionary' | 'aggregate-dictionary' | 'search-popover' | 'find-bar' | 'embed-browser'
 type ShortcutAction = 'focus-search' | 'show-find-bar'
 
 type Registration = {

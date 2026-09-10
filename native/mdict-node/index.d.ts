@@ -91,7 +91,7 @@ export declare class Mdx {
   /** 异步查找全部精确匹配 key，按 MDX 原始顺序返回。 */
   findKeys(word: string): Promise<DictionaryEntry[]>
   /** 异步返回 comparison key 以指定前缀开头的全部 MDX key。 */
-  prefix(prefix: string): Promise<DictionaryEntry[]>
+  prefix(prefix: string, limit?: number | undefined | null): Promise<DictionaryEntry[]>
   /** 查找 key 并返回解析后的 UTF-8 文本。 */
   lookupText(word: string): Promise<string | null>
   /** 查找全部精确匹配 key 并返回解析后的 UTF-8 文本。 */

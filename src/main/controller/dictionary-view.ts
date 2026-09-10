@@ -8,7 +8,7 @@ import {
 } from 'electron'
 
 import type { WebContentsViewManager } from '../web-contents-view-manager'
-import { createDictionaryEntryUrl } from '../dictionary-entry-url'
+import { createDictionaryAggregateUrl, createDictionaryEntryUrl } from '../dictionary-entry-url'
 import { resolveRendererUrl } from '../output-path'
 import { BaseController } from './base-controller'
 import { dismissSearchPopover } from './search-popover'
@@ -17,16 +17,19 @@ export class DictionaryViewController extends BaseController {
   private static readonly maxAiExplanationTextLength = 10_000
   private loadVersion = 0
   private configuredViewId: number | undefined
-  private desiredEntryId: string | undefined
-  private loadedEntryId: string | undefined
-  private pendingEntryId: string | undefined
+  private desiredUrl: string | undefined
+  private loadedUrl: string | undefined
+  private pendingUrl: string | undefined
   private pendingLoad: Promise<boolean> | undefined
   private lastDictBounds: Rectangle = { x: 0, y: 0, width: 0, height: 0 }
 
   override mount(): void {
-    void this.view
+    void this.activeView
     ipcMain.handle('dictionary-view:show', this.show)
+    ipcMain.handle('dictionary-view:show-aggregate', this.showAggregate)
     ipcMain.on('dictionary-view:hide', this.hide)
+    ipcMain.on('dictionary-view:scroll-to-dictionary', this.scrollToDictionary)
+    ipcMain.on('dictionary-view:active-dictionary', this.activeDictionaryChanged)
     ipcMain.on('dictionary-view:set-bounds', this.setBounds)
     ipcMain.on('dictionary-view:lookup-word', this.lookupWord)
     ipcMain.handle('dictionary-view:can-explain-with-ai', this.canExplainWithAi)
@@ -40,9 +43,45 @@ export class DictionaryViewController extends BaseController {
     ipcMain.on('find-bar:stop-find', this.stopFind)
   }
 
-  show = async (event: IpcMainInvokeEvent, entryId: string): Promise<void> => {
-    if (!this.acceptsHostSender(event.sender.id) || typeof entryId !== 'string') return
-    await this.showEntry(entryId)
+  show = async (
+    event: IpcMainInvokeEvent,
+    target: { dictionaryId: string; term: string }
+  ): Promise<void> => {
+    if (!this.acceptsHostSender(event.sender.id)) return
+    if (!target || typeof target.dictionaryId !== 'string' || typeof target.term !== 'string')
+      return
+    await this.showEntry(createDictionaryEntryUrl(target.dictionaryId, target.term))
+  }
+
+  showAggregate = async (event: IpcMainInvokeEvent, term: string): Promise<void> => {
+    if (!this.acceptsHostSender(event.sender.id) || typeof term !== 'string') return
+
+    const normalizedTerm = term.trim()
+    if (!normalizedTerm || normalizedTerm.length > 200) return
+
+    const url = createDictionaryAggregateUrl(normalizedTerm)
+    this.desiredUrl = url
+    const version = ++this.loadVersion
+    this.loadedUrl = undefined
+    this.pendingUrl = undefined
+    this.pendingLoad = undefined
+    this.notifyLoadingState(true)
+    this.activeView.show()
+
+    try {
+      await this.activeView.loadURL(url)
+      if (this.runtime.isDisposed) return
+      if (version !== this.loadVersion || this.desiredUrl !== url) return
+      this.loadedUrl = url
+      this.notifyLoadingState(false)
+      this.activeView.show()
+    } catch (error) {
+      if (this.runtime.isDisposed) return
+      if (version !== this.loadVersion || this.desiredUrl !== url) return
+      this.notifyLoadingState(false)
+      this.activeView.hide()
+      if (!isNavigationAborted(error)) throw error
+    }
   }
 
   hide = (event: IpcMainEvent): void => {
@@ -50,10 +89,37 @@ export class DictionaryViewController extends BaseController {
     this.hideView()
   }
 
+  scrollToDictionary = (event: IpcMainEvent, dictionaryId: unknown): void => {
+    if (!this.acceptsHostSender(event.sender.id) || this.runtime.dictionaryLayout !== 'aggregate') {
+      return
+    }
+
+    const numericDictionaryId =
+      typeof dictionaryId === 'number' ? dictionaryId : Number(dictionaryId)
+    if (!Number.isSafeInteger(numericDictionaryId) || numericDictionaryId <= 0) return
+
+    this.activeView.send('dictionary-view:scroll-to-dictionary', numericDictionaryId)
+  }
+
+  activeDictionaryChanged = (event: IpcMainEvent, dictionaryId: unknown): void => {
+    if (!this.acceptsViewSender(event.sender.id) || this.runtime.dictionaryLayout !== 'aggregate') {
+      return
+    }
+
+    const numericDictionaryId =
+      typeof dictionaryId === 'number' ? dictionaryId : Number(dictionaryId)
+    if (!Number.isSafeInteger(numericDictionaryId) || numericDictionaryId <= 0) return
+
+    this.activeView.sendToMainWindow(
+      'dictionary-view:active-dictionary-changed',
+      numericDictionaryId
+    )
+  }
+
   setBounds = (event: IpcMainEvent, bounds: Rectangle): void => {
     if (!this.acceptsHostSender(event.sender.id) || !isRectangle(bounds)) return
     this.lastDictBounds = bounds
-    this.view.setBounds(bounds)
+    this.activeView.setBounds(bounds)
     this.syncFindBarBounds()
   }
 
@@ -76,7 +142,7 @@ export class DictionaryViewController extends BaseController {
     ) {
       return
     }
-    this.view.sendToMainWindow('dictionary-view:explain-with-ai', normalizedText)
+    this.activeView.sendToMainWindow('dictionary-view:explain-with-ai', normalizedText)
   }
 
   copyText = (event: IpcMainEvent, text: string): void => {
@@ -98,22 +164,22 @@ export class DictionaryViewController extends BaseController {
 
   findInPage = (event: IpcMainEvent, text: string): void => {
     if (!this.acceptsFindBarSender(event.sender.id) || typeof text !== 'string' || !text) return
-    this.view.webContents.findInPage(text, { forward: true })
+    this.activeView.webContents.findInPage(text, { forward: true })
   }
 
   findNext = (event: IpcMainEvent, text: string, forward: boolean): void => {
     if (!this.acceptsFindBarSender(event.sender.id) || typeof text !== 'string' || !text) return
-    this.view.webContents.findInPage(text, { forward: !!forward, findNext: true })
+    this.activeView.webContents.findInPage(text, { forward: !!forward, findNext: true })
   }
 
   clearFind = (event: IpcMainEvent): void => {
     if (!this.acceptsFindBarSender(event.sender.id)) return
-    this.view.webContents.stopFindInPage('clearSelection')
+    this.activeView.webContents.stopFindInPage('clearSelection')
   }
 
   stopFind = (event: IpcMainEvent): void => {
     if (!this.acceptsFindBarSender(event.sender.id)) return
-    this.view.webContents.stopFindInPage('clearSelection')
+    this.activeView.webContents.stopFindInPage('clearSelection')
     this.hideFindBarView(true)
   }
 
@@ -122,29 +188,29 @@ export class DictionaryViewController extends BaseController {
     this.showFindBarView()
   }
 
-  private async showEntry(entryId: string): Promise<boolean> {
-    this.desiredEntryId = entryId
-    if (this.loadedEntryId === entryId) {
-      this.view.show()
+  private async showEntry(url: string): Promise<boolean> {
+    this.desiredUrl = url
+    if (this.loadedUrl === url) {
+      this.activeView.show()
       this.notifyLoadingState(false)
       return true
     }
-    if (this.pendingEntryId === entryId && this.pendingLoad) {
-      this.view.show()
+    if (this.pendingUrl === url && this.pendingLoad) {
+      this.activeView.show()
       this.notifyLoadingState(true)
       return this.pendingLoad
     }
 
     const version = ++this.loadVersion
-    this.loadedEntryId = undefined
+    this.loadedUrl = undefined
     this.notifyLoadingState(true)
-    const load = this.loadEntry(entryId, version)
-    this.pendingEntryId = entryId
+    const load = this.loadEntry(url, version)
+    this.pendingUrl = url
     this.pendingLoad = load
 
     const clearPendingLoad = (): void => {
       if (this.pendingLoad !== load) return
-      this.pendingEntryId = undefined
+      this.pendingUrl = undefined
       this.pendingLoad = undefined
     }
     void load.then(clearPendingLoad, clearPendingLoad)
@@ -152,38 +218,32 @@ export class DictionaryViewController extends BaseController {
   }
 
   private hideView(): void {
-    this.desiredEntryId = undefined
+    this.desiredUrl = undefined
     this.notifyLoadingState(false)
-    this.view.hide()
+    this.activeView.hide()
     this.hideFindBarView()
   }
 
-  private async loadEntry(entryId: string, version: number): Promise<boolean> {
-    const dictionaryId = await this.db.getDictionaryEntryDictionaryId(entryId)
-    if (version !== this.loadVersion || this.desiredEntryId !== entryId) return false
-    if (!dictionaryId) {
-      this.notifyLoadingState(false)
-      this.view.hide()
-      throw new Error('词条不存在')
-    }
-
-    this.view.show()
+  private async loadEntry(url: string, version: number): Promise<boolean> {
+    this.activeView.show()
     try {
-      await this.view.loadURL(createDictionaryEntryUrl(dictionaryId, entryId))
+      await this.activeView.loadURL(url)
+      if (this.runtime.isDisposed) return false
       if (version !== this.loadVersion) return false
-      this.loadedEntryId = entryId
-      const shouldRemainVisible = this.desiredEntryId === entryId
+      this.loadedUrl = url
+      const shouldRemainVisible = this.desiredUrl === url
       this.notifyLoadingState(false)
-      if (shouldRemainVisible) this.view.show()
-      else this.view.hide()
+      if (shouldRemainVisible) this.activeView.show()
+      else this.activeView.hide()
       return shouldRemainVisible
     } catch (error) {
-      if (version !== this.loadVersion || this.desiredEntryId !== entryId) {
+      if (this.runtime.isDisposed) return false
+      if (version !== this.loadVersion || this.desiredUrl !== url) {
         return false
       }
       this.notifyLoadingState(false)
       if (isNavigationAborted(error)) return false
-      this.view.hide()
+      this.activeView.hide()
       throw error
     }
   }
@@ -205,6 +265,17 @@ export class DictionaryViewController extends BaseController {
     view.webContents.on('found-in-page', (_event, result) => {
       this.findBarView?.send('find-bar:find-result', result)
     })
+    view.webContents.on(
+      'did-fail-load',
+      (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+        console.warn('[DictionaryView] failed to load resource', {
+          errorCode,
+          errorDescription,
+          validatedURL,
+          isMainFrame
+        })
+      }
+    )
     // Clear any lingering find highlights when a new entry loads
     view.webContents.on('did-finish-load', () => {
       view.webContents.stopFindInPage('clearSelection')
@@ -215,19 +286,24 @@ export class DictionaryViewController extends BaseController {
   private sendLookup(word: string): void {
     const normalizedWord = word.trim()
     if (!normalizedWord || normalizedWord.length > 200) return
-    this.view.sendToMainWindow('dictionary-view:lookup-word', normalizedWord)
+    this.activeView.sendToMainWindow('dictionary-view:lookup-word', normalizedWord)
   }
 
   private notifyLoadingState(isLoading: boolean): void {
-    this.view.sendToMainWindow('dictionary-view:loading-changed', isLoading)
+    this.availableActiveView?.sendToMainWindow('dictionary-view:loading-changed', isLoading)
   }
 
   private acceptsViewSender(senderId: number): boolean {
-    return this.view.acceptsSender(senderId)
+    return this.availableActiveView?.acceptsSender(senderId) === true
   }
 
   private acceptsHostSender(senderId: number): boolean {
-    return this.view.acceptsHostSender(senderId)
+    return this.availableActiveView?.acceptsHostSender(senderId) === true
+  }
+
+  private get availableActiveView(): WebContentsViewManager | undefined {
+    const view = this.runtime.activeDictionaryView
+    return view && !view.isDestroyed ? view : undefined
   }
 
   private acceptsFindBarSender(senderId: number): boolean {
@@ -239,11 +315,11 @@ export class DictionaryViewController extends BaseController {
   }
 
   private showFindBarView(): void {
-    const dictionaryView = this.runtime.windowManager.dictionaryView
+    const dictionaryView = this.activeView
     if (
       !dictionaryView?.isVisible ||
-      this.loadedEntryId === undefined ||
-      this.pendingEntryId !== undefined ||
+      this.loadedUrl === undefined ||
+      this.pendingUrl !== undefined ||
       !hasUsableBounds(this.lastDictBounds)
     ) {
       return
@@ -287,16 +363,16 @@ export class DictionaryViewController extends BaseController {
     })
   }
 
-  private get view(): WebContentsViewManager {
-    const view = this.runtime.windowManager.dictionaryView
+  private get activeView(): WebContentsViewManager {
+    const view = this.runtime.activeDictionaryView
     if (!view || view.isDestroyed) {
       throw new Error('DictionaryView 尚未初始化')
     }
     if (this.configuredViewId !== view.webContents.id) {
       this.loadVersion += 1
-      this.desiredEntryId = undefined
-      this.loadedEntryId = undefined
-      this.pendingEntryId = undefined
+      this.desiredUrl = undefined
+      this.loadedUrl = undefined
+      this.pendingUrl = undefined
       this.pendingLoad = undefined
       this.configureView(view)
       this.configuredViewId = view.webContents.id

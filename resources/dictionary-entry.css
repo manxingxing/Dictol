@@ -15,3 +15,131 @@
   margin-top: 1.5em !important;
   margin-bottom: 1.5em;
 }
+
+/* 多词典模式 */
+body#dictol-aggregate {
+  padding: 0px 8px 2rem !important;
+  margin-top: 0px;
+  min-height: 100%;
+}
+
+.dictol-concatenated-entry {
+  min-height: 100%;
+}
+
+.dictol-dictionary-section {
+  padding-block-start: 12px !important;
+}
+
+.dictol-dictionary-entry {
+  position: relative;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.dictol-dictionary-title {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  line-height: 28px;
+  gap: 0.65rem;
+  padding: 3px 0px;
+  border: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 16%, transparent) !important;
+  background: transparent !important;
+  color: currentColor !important;
+  cursor: pointer;
+  text-align: left;
+  appearance: none;
+}
+
+.dictol-dictionary-title-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dictol-dictionary-collapse-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex: 0 0 1.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  order: -1;
+  border-radius: 0.2rem;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.dictol-dictionary-collapse-marker svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.dictol-dictionary-collapse-marker-collapsed {
+  display: none;
+}
+
+.dictol-dictionary-entry.is-collapsed {
+  display: none !important;
+}
+
+.dictol-dictionary-title.is-collapsed .dictol-dictionary-collapse-marker-expanded {
+  display: none;
+}
+
+.dictol-dictionary-title.is-collapsed .dictol-dictionary-collapse-marker-collapsed {
+  display: block;
+}
+
+html:has(body#dictol-aggregate[data-layout='horizontal']),
+body#dictol-aggregate[data-layout='horizontal'] {
+  height: 100%;
+  margin: 0;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+body[data-layout='horizontal'] #dictol-concatenated-entry {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: clamp(500px, 48vw, 800px);
+  gap: 16px;
+  height: 100dvh;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+body[data-layout='horizontal'] .dictol-dictionary-section {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  padding: 12px !important;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 10px;
+  background: light-dark(#fff, #272727);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 6%);
+  overflow: hidden;
+}
+
+body[data-layout='horizontal'] .dictol-dictionary-entry {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior-y: contain;
+}

@@ -3,8 +3,11 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import { DEFAULT_TTS_VOICE } from '../shared/tts'
+import type { DictionaryLayout } from '../shared/dictionary-layout'
 
 export type AppConfig = {
+  aggregateLayout: 'vertical' | 'horizontal'
+  dictionaryLayout: DictionaryLayout
   featureFlags: {
     lookupWordOnShortcut: boolean
     lookupWordOnSelection: boolean
@@ -28,6 +31,8 @@ export type AppConfig = {
 }
 
 const DEFAULT_CONFIG: AppConfig = {
+  aggregateLayout: 'vertical',
+  dictionaryLayout: 'single',
   featureFlags: {
     lookupWordOnShortcut: true,
     lookupWordOnSelection: false
@@ -118,6 +123,8 @@ export class AppConfigStore {
 function parseConfig(value: unknown): AppConfig {
   if (typeof value !== 'object' || value === null) return cloneConfig(DEFAULT_CONFIG)
   const candidate = value as {
+    aggregateLayout?: unknown
+    dictionaryLayout?: unknown
     featureFlags?: {
       lookupWordOnShortcut?: unknown
       lookupWordOnSelection?: unknown
@@ -134,6 +141,9 @@ function parseConfig(value: unknown): AppConfig {
   }
 
   return {
+    aggregateLayout: candidate.aggregateLayout === 'horizontal' ? 'horizontal' : 'vertical',
+    dictionaryLayout:
+      candidate.dictionaryLayout === 'aggregate' ? 'aggregate' : DEFAULT_CONFIG.dictionaryLayout,
     featureFlags: {
       lookupWordOnShortcut:
         typeof candidate.featureFlags?.lookupWordOnShortcut === 'boolean'
@@ -180,6 +190,8 @@ function parseConfig(value: unknown): AppConfig {
 
 function cloneConfig(config: AppConfig): AppConfig {
   return {
+    aggregateLayout: config.aggregateLayout,
+    dictionaryLayout: config.dictionaryLayout,
     featureFlags: { ...config.featureFlags },
     shortcuts: { ...config.shortcuts },
     selection: {

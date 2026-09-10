@@ -80,7 +80,7 @@ export class CustomCssEditorController extends BaseController {
     window.show()
     window.focus()
 
-    await preview.loadURL(createDictionaryEntryUrl(dictionaryId, entry.id, { preview: true }))
+    await preview.loadURL(createDictionaryEntryUrl(dictionaryId, entry.word, { preview: true }))
     await this.previewCssTask
     await this.applyPreviewTheme(preview, this.previewTheme).catch((error: unknown) => {
       console.error('Failed to initialize custom CSS preview theme', { error })
@@ -141,7 +141,9 @@ export class CustomCssEditorController extends BaseController {
     preview.hide()
     await this.previewCssTask
     this.previewCssKey = undefined
-    await preview.loadURL(createDictionaryEntryUrl(state.dictionaryId, entryId, { preview: true }))
+    await preview.loadURL(
+      createDictionaryEntryUrl(state.dictionaryId, entryWord, { preview: true })
+    )
     await this.previewCssTask
     await this.applyPreviewTheme(preview, this.previewTheme).catch((error: unknown) => {
       console.error('Failed to initialize custom CSS preview theme', { error })

@@ -29,6 +29,7 @@ export function useDictionaryLookup(
     queryFn: () => window.dictol.entries.lookup(normalizedTerm),
     enabled: normalizedTerm.length > 0,
     placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
     staleTime: 0,
     gcTime: 0
   })

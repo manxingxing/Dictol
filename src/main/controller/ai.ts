@@ -41,7 +41,7 @@ export class AiController extends BaseController {
     if (!this.acceptsMainSender(event.sender)) return null
     if (!isSaveConfigRequest(request)) throw new Error('AI 设置格式无效。')
     const config = this.service.saveConfig(request)
-    this.runtime.windowManager.dictionaryView?.send(
+    this.runtime.activeDictionaryView?.send(
       'dictionary-view:ai-explanation-availability-changed',
       config.enabled
     )

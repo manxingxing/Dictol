@@ -1,10 +1,11 @@
 import { DICTOL_ASSET_SCHEME, ENTRY_SCHEME } from './entry-assets'
 
 export const ENTRY_LOOKUP_PATH = '/_dictol-lookup'
+export const ENTRY_AGGREGATE_PATH = '/__dictol_aggregate'
 
 export type DictionaryEntryLocation = {
   dictionaryId: number
-  entryId: string
+  term: string
 }
 
 export type DictionaryResourceLocation = {
@@ -12,21 +13,32 @@ export type DictionaryResourceLocation = {
   resourcePath: string
 }
 
+export type NativeDictionaryResourceLocation = DictionaryResourceLocation
+
 export function createDictionaryEntryUrl(
   dictionaryId: string | number,
-  entryId: string,
+  term: string,
   options: { preview?: boolean } = {}
 ): string {
   const numericDictionaryId = parsePositiveSafeInteger(String(dictionaryId))
-  const numericEntryId = parsePositiveSafeInteger(entryId)
   if (numericDictionaryId === null) throw new Error('Invalid dictionary ID')
-  if (numericEntryId === null) throw new Error('Invalid entry ID')
+  const normalizedTerm = term.trim()
+  if (!normalizedTerm || normalizedTerm.length > 200) throw new Error('Invalid entry term')
 
   const url = new URL(
     `${ENTRY_SCHEME}://dictionary-${numericDictionaryId}.dictol${ENTRY_LOOKUP_PATH}`
   )
-  url.searchParams.set('entryId', String(numericEntryId))
+  url.searchParams.set('term', normalizedTerm)
   if (options.preview) url.searchParams.set('preview', '1')
+  return url.href
+}
+
+export function createDictionaryAggregateUrl(term: string): string {
+  const normalizedTerm = term.trim()
+  if (!normalizedTerm || normalizedTerm.length > 200) throw new Error('Invalid aggregate term')
+
+  const url = new URL(`${ENTRY_SCHEME}://app.dictol${ENTRY_AGGREGATE_PATH}`)
+  url.searchParams.set('term', normalizedTerm)
   return url.href
 }
 
@@ -67,19 +79,34 @@ export function parseDictionaryEntryUrl(value: string): DictionaryEntryLocation 
   }
 
   const dictionaryId = parseDictionaryHostname(url.hostname)
-  const entryIds = url.searchParams.getAll('entryId')
+  const terms = url.searchParams.getAll('term')
   if (
     dictionaryId === null ||
-    entryIds.length !== 1 ||
-    Array.from(url.searchParams.keys()).some((key) => key !== 'entryId' && key !== 'preview') ||
+    terms.length !== 1 ||
+    Array.from(url.searchParams.keys()).some((key) => key !== 'term' && key !== 'preview') ||
     (url.searchParams.has('preview') &&
       (url.searchParams.getAll('preview').length !== 1 || url.searchParams.get('preview') !== '1'))
   ) {
     return null
   }
 
-  const entryId = parsePositiveSafeInteger(entryIds[0])
-  return entryId === null ? null : { dictionaryId, entryId: String(entryId) }
+  const term = terms[0]?.trim() ?? ''
+  return term && term.length <= 200 ? { dictionaryId, term } : null
+}
+
+export function parseDictionaryAggregateUrl(value: string): string | null {
+  const url = parseUrl(value)
+  if (!url || url.protocol !== `${ENTRY_SCHEME}:` || url.pathname !== ENTRY_AGGREGATE_PATH) {
+    return null
+  }
+
+  const terms = url.searchParams.getAll('term')
+  if (terms.length !== 1 || Array.from(url.searchParams.keys()).some((key) => key !== 'term')) {
+    return null
+  }
+
+  const term = terms[0]?.trim() ?? ''
+  return term && term.length <= 200 ? term : null
 }
 
 export function parseDictionaryEntryResourceUrl(value: string): DictionaryResourceLocation | null {
@@ -112,6 +139,19 @@ export function parseNativeDictionaryResourcePath(
   return decodeResourcePath(`${authority}${url.pathname}`)
 }
 
+export function parseNativeDictionaryResourceLocation(
+  value: string,
+  expectedScheme: 'sound' | 'audio' | 'file'
+): NativeDictionaryResourceLocation | null {
+  const url = parseUrl(value)
+  if (!url || url.protocol !== `${expectedScheme}:` || url.username || url.password || url.port) {
+    return null
+  }
+  const dictionaryId = parseDictionaryHostname(url.hostname)
+  const resourcePath = decodeResourcePath(url.pathname)
+  return dictionaryId === null || resourcePath === null ? null : { dictionaryId, resourcePath }
+}
+
 function parseDictionaryHostname(hostname: string): number | null {
   const match = /^dictionary-(\d+)\.dictol$/.exec(hostname)
   return match ? parsePositiveSafeInteger(match[1]) : null
@@ -124,7 +164,11 @@ function parsePositiveSafeInteger(value: string): number | null {
 }
 
 function isReservedLookupPath(pathname: string): boolean {
-  return pathname === ENTRY_LOOKUP_PATH || pathname.startsWith(`${ENTRY_LOOKUP_PATH}/`)
+  return (
+    pathname === ENTRY_LOOKUP_PATH ||
+    pathname.startsWith(`${ENTRY_LOOKUP_PATH}/`) ||
+    pathname === ENTRY_AGGREGATE_PATH
+  )
 }
 
 function decodeResourcePath(pathname: string): string | null {

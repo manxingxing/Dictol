@@ -11,6 +11,7 @@ import type { DictionaryInfo } from '../shared/dictionary-info'
 import type { DeepLinkIntent } from '../shared/deep-link'
 import type { ToastPayload } from '../shared/notification'
 import type { TtsConfig, TtsSaveConfigRequest } from '../shared/tts'
+import type { DictionaryLayout } from '../shared/dictionary-layout'
 
 type ReadyDictionary = {
   id: string
@@ -265,6 +266,18 @@ const api = Object.freeze({
   }),
   app: Object.freeze({
     getVersion: (): Promise<string | null> => ipcRenderer.invoke('app:get-version'),
+    getAggregateLayout: (): Promise<'vertical' | 'horizontal' | null> =>
+      ipcRenderer.invoke('app:get-aggregate-layout'),
+    saveAggregateLayout: (
+      layout: 'vertical' | 'horizontal'
+    ): Promise<'vertical' | 'horizontal' | null> =>
+      ipcRenderer.invoke('app:save-aggregate-layout', layout),
+    getRunningDictionaryLayout: (): Promise<DictionaryLayout | null> =>
+      ipcRenderer.invoke('app:get-running-dictionary-layout'),
+    getDictionaryLayout: (): Promise<DictionaryLayout | null> =>
+      ipcRenderer.invoke('app:get-dictionary-layout'),
+    saveDictionaryLayout: (layout: DictionaryLayout): Promise<DictionaryLayout | null> =>
+      ipcRenderer.invoke('app:save-dictionary-layout', layout),
     getResourceCacheSize: (): Promise<number> => ipcRenderer.invoke('app:get-resource-cache-size'),
     clearResourceCache: (): Promise<void> => ipcRenderer.invoke('app:clear-resource-cache'),
     openResourceCacheDirectory: (): Promise<void> =>
@@ -392,7 +405,12 @@ const api = Object.freeze({
     }
   }),
   dictionaryView: Object.freeze({
-    show: (entryId: string): Promise<void> => ipcRenderer.invoke('dictionary-view:show', entryId),
+    show: (target: { dictionaryId: string; term: string }): Promise<void> =>
+      ipcRenderer.invoke('dictionary-view:show', target),
+    showAggregate: (term: string): Promise<void> =>
+      ipcRenderer.invoke('dictionary-view:show-aggregate', term),
+    scrollToDictionary: (dictionaryId: string): void =>
+      ipcRenderer.send('dictionary-view:scroll-to-dictionary', dictionaryId),
     hide: (): void => ipcRenderer.send('dictionary-view:hide'),
     showFindBar: (): void => ipcRenderer.send('dictionary-view:show-find-bar'),
     setBounds: (bounds: { x: number; y: number; width: number; height: number }): void =>
@@ -402,6 +420,12 @@ const api = Object.freeze({
         callback(isLoading)
       ipcRenderer.on('dictionary-view:loading-changed', listener)
       return () => ipcRenderer.removeListener('dictionary-view:loading-changed', listener)
+    },
+    onActiveDictionaryChanged: (callback: (dictionaryId: string) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, dictionaryId: number): void =>
+        callback(String(dictionaryId))
+      ipcRenderer.on('dictionary-view:active-dictionary-changed', listener)
+      return () => ipcRenderer.removeListener('dictionary-view:active-dictionary-changed', listener)
     },
     onLookupWord: (callback: (word: string) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, word: string): void => callback(word)

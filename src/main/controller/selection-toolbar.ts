@@ -826,7 +826,7 @@ export class SelectionToolbarController extends BaseController {
     recordQuery: boolean
   ): Promise<void> {
     const view = this.explanationView
-    const url = createDictionaryEntryUrl(entry.dictionaryId, entry.id)
+    const url = createDictionaryEntryUrl(entry.dictionaryId, entry.word)
     let shown = false
     const showLoadedEntry = (): void => {
       if (shown || version !== this.lookupVersion || view.webContents.getURL() !== url) return

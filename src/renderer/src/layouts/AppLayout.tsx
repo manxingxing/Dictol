@@ -11,9 +11,20 @@ import { useAppStore } from '@/stores/app-store'
 export function AppLayout(): React.JSX.Element {
   const navigate = useNavigate()
   const setSearchQuery = useAppStore((state) => state.setSearchQuery)
+  const setDictionaryLayout = useAppStore((state) => state.setDictionaryLayout)
 
   useWindowWidthThreshold()
   useChromeTone()
+
+  useEffect(() => {
+    let active = true
+    void window.dictol.app.getRunningDictionaryLayout().then((layout) => {
+      if (active && layout) setDictionaryLayout(layout)
+    })
+    return () => {
+      active = false
+    }
+  }, [setDictionaryLayout])
 
   useEffect(() => {
     return window.dictol.wordCapture.onEvent((event) => {

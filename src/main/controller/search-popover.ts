@@ -201,7 +201,6 @@ function isSearchPopoverPayload(value: unknown): value is SearchPopoverPayload {
     typeof payload.query !== 'string' ||
     payload.query.length > 200 ||
     !Array.isArray(payload.items) ||
-    payload.items.length > 10 ||
     typeof payload.selectedIndex !== 'number' ||
     !Number.isInteger(payload.selectedIndex) ||
     (payload.items.length === 0

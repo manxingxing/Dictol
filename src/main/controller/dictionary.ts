@@ -101,7 +101,7 @@ export class DictionaryController extends BaseController {
   deleteDictionary = async (_event: IpcMainInvokeEvent, dictionaryId: string): Promise<void> => {
     const numericId = Number(dictionaryId)
     const validNumericId = Number.isSafeInteger(numericId) && numericId > 0
-    this.runtime.windowManager.dictionaryView?.hide()
+    this.runtime.activeDictionaryView?.hide()
     if (!validNumericId) throw new Error('无效的词典 ID')
 
     await this.runtime.mdictResourceManager.close(numericId)
@@ -148,7 +148,7 @@ export class DictionaryController extends BaseController {
     await this.db.updateDictionaryCustomCss(dictionaryId, customCss)
 
     const numericId = Number(dictionaryId)
-    const view = this.runtime.windowManager.dictionaryView
+    const view = this.runtime.activeDictionaryView
     const currentEntry = view ? parseDictionaryEntryUrl(view.getURL()) : null
     if (view && !view.isDestroyed && currentEntry?.dictionaryId === numericId) {
       view.reload()

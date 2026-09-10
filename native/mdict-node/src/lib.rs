@@ -301,10 +301,11 @@ impl Mdx {
 
     /// 异步返回 comparison key 以指定前缀开头的全部 MDX key。
     #[napi(ts_return_type = "Promise<DictionaryEntry[]>")]
-    pub fn prefix(&self, prefix: String) -> Result<AsyncTask<PrefixMdxTask>> {
+    pub fn prefix(&self, prefix: String, limit: Option<u32>) -> Result<AsyncTask<PrefixMdxTask>> {
         Ok(AsyncTask::new(PrefixMdxTask {
             dictionary: self.dictionary.get()?,
             prefix,
+            limit: limit.map(|value| value as usize),
         }))
     }
 
@@ -1094,6 +1095,7 @@ impl Task for FindMdxKeysTask {
 pub struct PrefixMdxTask {
     dictionary: Arc<CoreMdx>,
     prefix: String,
+    limit: Option<usize>,
 }
 
 impl Task for PrefixMdxTask {
@@ -1104,6 +1106,7 @@ impl Task for PrefixMdxTask {
         self.dictionary
             .prefix(&self.prefix)
             .map_err(to_napi_error)?
+            .take(self.limit.unwrap_or(usize::MAX))
             .collect::<mdict::Result<Vec<_>>>()
             .map_err(to_napi_error)
     }

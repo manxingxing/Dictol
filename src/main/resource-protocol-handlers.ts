@@ -6,21 +6,25 @@ import { getAppRunTime, type AppRuntime } from './app-runtime'
 import type { DBService } from './db-service'
 import {
   parseDictionaryEntryResourceUrl,
+  parseDictionaryAggregateUrl,
   parseDictionaryEntryUrl,
   parseDictionaryAssetUrl,
   parseDictionaryIdFromReferrer,
+  parseNativeDictionaryResourceLocation,
   parseNativeDictionaryResourcePath
 } from './dictionary-entry-url'
 import { createEntryDocument } from './entry-document'
 import {
   DICTIONARY_SESSION_PARTITION,
   DICTOL_ASSET_SCHEME,
+  ENTRY_AGGREGATION_LAYOUT_URL,
   ENTRY_CONTEXT_MENU_URL,
   ENTRY_GLOBAL_STYLE_URL,
   ENTRY_BASE_URL,
   ENTRY_SCHEME
 } from './entry-assets'
 import { loadDictionaryResource } from './resource-protocol'
+import { createConcatenatedEntryDocument, rewriteDictionaryCss } from './concatenated-entry'
 
 const AUDIO_SCHEME = 'audio'
 const SOUND_SCHEME = 'sound'
@@ -33,6 +37,10 @@ const ENTRY_ASSETS = new Map([
   [
     ENTRY_CONTEXT_MENU_URL,
     { fileName: 'entry-context-menu.js', mimeType: 'text/javascript; charset=utf-8' }
+  ],
+  [
+    ENTRY_AGGREGATION_LAYOUT_URL,
+    { fileName: 'entry-aggregation-layout.js', mimeType: 'text/javascript; charset=utf-8' }
   ],
   [
     ENTRY_GLOBAL_STYLE_URL,
@@ -166,12 +174,20 @@ export class DictionaryResourceProtocolHandlers {
       }
 
       const entry = parseDictionaryEntryUrl(request.url)
-      if (entry) return this.loadEntryDocument(request, entry.dictionaryId, entry.entryId)
+      if (entry) return this.loadEntryDocument(request, entry.dictionaryId, entry.term)
+
+      const aggregateTerm = parseDictionaryAggregateUrl(request.url)
+      if (aggregateTerm) return this.loadAggregateEntryDocument(request, aggregateTerm)
 
       // mdd资源文件
       const resource = parseDictionaryEntryResourceUrl(request.url)
       if (resource) {
-        return this.loadResource(request, resource.dictionaryId, resource.resourcePath)
+        return this.loadResource(
+          request,
+          resource.dictionaryId,
+          resource.resourcePath,
+          isConcatenatedDocumentReferrer(request.referrer) || isConcatenatedResourceUrl(request.url)
+        )
       }
 
       return textResponse('Invalid dictol-entry URL', 400)
@@ -213,6 +229,14 @@ export class DictionaryResourceProtocolHandlers {
     try {
       const referrerDictionaryId = parseDictionaryIdFromReferrer(request.referrer)
       const contextDictionaryId = parseDictionaryIdHeader(request.headers.get(DICTIONARY_ID_HEADER))
+      const nativeResource = parseNativeDictionaryResourceLocation(request.url, scheme)
+      if (
+        nativeResource?.dictionaryId !== undefined &&
+        ((referrerDictionaryId !== null && referrerDictionaryId !== nativeResource.dictionaryId) ||
+          (contextDictionaryId !== null && contextDictionaryId !== nativeResource.dictionaryId))
+      ) {
+        return textResponse('Dictionary resource context mismatch', 400)
+      }
       if (
         referrerDictionaryId !== null &&
         contextDictionaryId !== null &&
@@ -220,8 +244,10 @@ export class DictionaryResourceProtocolHandlers {
       ) {
         return textResponse('Dictionary resource context mismatch', 400)
       }
-      const dictionaryId = referrerDictionaryId ?? contextDictionaryId
-      const resourcePath = parseNativeDictionaryResourcePath(request.url, scheme)
+      const dictionaryId =
+        nativeResource?.dictionaryId ?? referrerDictionaryId ?? contextDictionaryId
+      const resourcePath =
+        nativeResource?.resourcePath ?? parseNativeDictionaryResourcePath(request.url, scheme)
       if (dictionaryId === null || !resourcePath) {
         return textResponse('Invalid dictionary resource request', 400)
       }
@@ -240,12 +266,19 @@ export class DictionaryResourceProtocolHandlers {
   private async loadEntryDocument(
     request: Request,
     dictionaryId: number,
-    entryId: string
+    term: string
   ): Promise<Response> {
     const startedAt = performance.now()
     const dictionary = await requireDBService(this.runtime).getDictionary(String(dictionaryId))
     if (!dictionary) return textResponse('Dictionary not found', 404)
 
+    const group = await requireDBService(this.runtime).lookupDictionaryEntryGroup(term)
+    const match = group?.dictionaries.find(
+      (candidate) => candidate.dictionaryId === String(dictionaryId)
+    )
+    if (!match) return textResponse('Entry not found', 404)
+
+    const entryId = match.entryId
     const entry = await this.runtime.mdictResourceManager.getEntry(entryId)
     if (!entry) return textResponse('Entry not found', 404)
 
@@ -272,15 +305,85 @@ export class DictionaryResourceProtocolHandlers {
     return response
   }
 
+  private async loadAggregateEntryDocument(request: Request, term: string): Promise<Response> {
+    const group = await requireDBService(this.runtime).lookupDictionaryEntryGroup(term)
+    if (!group) return textResponse('Entries not found', 404)
+
+    const entries = await Promise.all(
+      group.dictionaries.map(async ({ dictionaryId, entryId }) => {
+        const [dictionary, entry] = await Promise.all([
+          requireDBService(this.runtime).getDictionary(String(dictionaryId)),
+          this.runtime.mdictResourceManager.getEntry(entryId)
+        ])
+        if (!dictionary || !entry || entry.dictionaryId !== String(dictionaryId)) return null
+        return {
+          dictionaryId: Number(dictionaryId),
+          dictionaryName: dictionary.name,
+          html: entry.html,
+          customCss: dictionary.customCss
+        }
+      })
+    )
+    const validEntries = entries.filter(
+      (entry): entry is NonNullable<typeof entry> => entry !== null
+    )
+    if (validEntries.length === 0) return textResponse('Entries not found', 404)
+
+    return stringResponse(
+      request,
+      createEntryDocument(
+        createConcatenatedEntryDocument(
+          validEntries,
+          this.runtime.appConfig.load().aggregateLayout
+        ),
+        'aggregate',
+        '',
+        {
+          includeContextMenu: true,
+          includeActiveDictionary: true,
+          includeCustomCss: false
+        }
+      ),
+      'text/html; charset=utf-8'
+    )
+  }
+
   private async loadResource(
     request: Request,
     dictionaryId: number,
-    resourcePath: string
+    resourcePath: string,
+    scopeCss = false
   ): Promise<Response> {
     const resource = await loadDictionaryResource(dictionaryId, resourcePath, this.runtime)
-    return resource
-      ? bytesResponse(request, resource.bytes, resource.mimeType, STATIC_RESOURCE_CACHE_CONTROL)
-      : textResponse('Resource not found', 404)
+    if (!resource) return textResponse('Resource not found', 404)
+
+    if (scopeCss && resource.mimeType.startsWith('text/css')) {
+      const css = rewriteDictionaryCss(resource.bytes.toString('utf8'), dictionaryId)
+      return stringResponse(request, css, resource.mimeType)
+    }
+
+    return bytesResponse(request, resource.bytes, resource.mimeType, STATIC_RESOURCE_CACHE_CONTROL)
+  }
+}
+
+function isConcatenatedDocumentReferrer(referrer: string): boolean {
+  try {
+    const url = new URL(referrer)
+    return (
+      url.protocol === `${ENTRY_SCHEME}:` &&
+      url.hostname === 'app.dictol' &&
+      url.pathname === '/__dictol_aggregate'
+    )
+  } catch {
+    return false
+  }
+}
+
+function isConcatenatedResourceUrl(value: string): boolean {
+  try {
+    return new URL(value).searchParams.get('dictol-aggregate') === '1'
+  } catch {
+    return false
   }
 }
 

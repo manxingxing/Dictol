@@ -18,6 +18,7 @@ const getMainWindowBackgroundColor = (useDarkColors: boolean): string =>
 export class WindowManager {
   mainWindow: BrowserWindow | undefined
   dictionaryView: WebContentsViewManager | undefined
+  aggregateDictionaryView: WebContentsViewManager | undefined
   embedBrowserView: WebContentsViewManager | undefined
   searchPopoverView: WebContentsViewManager | undefined
   selectionToolbarWindow: BrowserWindow | undefined
@@ -35,10 +36,12 @@ export class WindowManager {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) return this.mainWindow
 
     this.dictionaryView?.dispose()
+    this.aggregateDictionaryView?.dispose()
     this.embedBrowserView?.dispose()
     this.searchPopoverView?.dispose()
     this.findBarView?.dispose()
     this.dictionaryView = undefined
+    this.aggregateDictionaryView = undefined
     this.embedBrowserView = undefined
     this.searchPopoverView = undefined
     this.findBarView = undefined
@@ -96,27 +99,19 @@ export class WindowManager {
       return this.dictionaryView
     }
 
-    const mainWindow = this.requireMainWindow()
-    const dictionaryView = new WebContentsViewManager(mainWindow, {
-      backgroundColor: nativeTheme.shouldUseDarkColors ? '#212121' : '#ffffff',
-      view: {
-        webPreferences: {
-          partition: DICTIONARY_SESSION_PARTITION,
-          preload: resolvePreloadPath('dictionary.js'),
-          contextIsolation: true,
-          nodeIntegration: false,
-          sandbox: true,
-          // Chromium only dispatches file: subresources from dictol-entry: pages to
-          // the session protocol handler when web security is disabled. This view's
-          // dedicated session intercepts every file: request and never falls through
-          // to Chromium's built-in local-file loader.
-          webSecurity: false
-        }
-      }
-    })
-
+    const dictionaryView = this.createDictionaryEntryView()
     this.dictionaryView = dictionaryView
     return dictionaryView
+  }
+
+  createAggregateDictionaryView(): WebContentsViewManager {
+    if (this.aggregateDictionaryView && !this.aggregateDictionaryView.isDestroyed) {
+      return this.aggregateDictionaryView
+    }
+
+    const aggregateDictionaryView = this.createDictionaryEntryView()
+    this.aggregateDictionaryView = aggregateDictionaryView
+    return aggregateDictionaryView
   }
 
   createSearchPopoverView(): WebContentsViewManager {
@@ -390,6 +385,7 @@ export class WindowManager {
       this.activeSpaceSubscriptionId = undefined
     }
     this.dictionaryView?.dispose()
+    this.aggregateDictionaryView?.dispose()
     this.embedBrowserView?.dispose()
     this.searchPopoverView?.dispose()
     this.selectionExplanationView?.dispose()
@@ -406,6 +402,7 @@ export class WindowManager {
     }
 
     this.dictionaryView = undefined
+    this.aggregateDictionaryView = undefined
     this.embedBrowserView = undefined
     this.searchPopoverView = undefined
     this.selectionToolbarWindow = undefined
@@ -425,6 +422,27 @@ export class WindowManager {
     }
 
     return this.mainWindow
+  }
+
+  private createDictionaryEntryView(): WebContentsViewManager {
+    const mainWindow = this.requireMainWindow()
+    return new WebContentsViewManager(mainWindow, {
+      backgroundColor: nativeTheme.shouldUseDarkColors ? '#212121' : '#ffffff',
+      view: {
+        webPreferences: {
+          partition: DICTIONARY_SESSION_PARTITION,
+          preload: resolvePreloadPath('dictionary.js'),
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+          // Chromium only dispatches file: subresources from dictol-entry: pages to
+          // the session protocol handler when web security is disabled. This view's
+          // dedicated session intercepts every file: request and never falls through
+          // to Chromium's built-in local-file loader.
+          webSecurity: false
+        }
+      }
+    })
   }
 
   private ensureActiveSpaceSubscription(): void {
@@ -447,6 +465,9 @@ export class WindowManager {
 
     if (this.dictionaryView && !this.dictionaryView.isDestroyed) {
       this.dictionaryView.setBackgroundColor(useDarkColors ? '#212121' : '#ffffff')
+    }
+    if (this.aggregateDictionaryView && !this.aggregateDictionaryView.isDestroyed) {
+      this.aggregateDictionaryView.setBackgroundColor(useDarkColors ? '#212121' : '#ffffff')
     }
 
     const explanationWindow = this.selectionExplanationWindow

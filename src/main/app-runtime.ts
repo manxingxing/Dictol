@@ -14,6 +14,7 @@ import { TrayManager } from './tray-manager'
 import { WindowManager } from './window-manager'
 import { MainWindowShortcutRouter } from './main-window-shortcut-router'
 import { AdBlockService } from './ad-block-service'
+import type { DictionaryLayout } from '../shared/dictionary-layout'
 
 export const LOOKUP_WORD_ON_SHORTCUT = 'lookupWordOnShortcut'
 export const SHOW_MAIN_WINDOW_SHORTCUT = 'showMainWindow'
@@ -38,6 +39,7 @@ export class AppRuntime {
   trayManager: TrayManager = new TrayManager()
   mainWindowShortcutRouter: MainWindowShortcutRouter | undefined
   adBlockService: AdBlockService = new AdBlockService()
+  dictionaryLayout: DictionaryLayout = 'single'
 
   get isInitialized(): boolean {
     return this.initialized
@@ -55,6 +57,13 @@ export class AppRuntime {
   get mdictResourceManager(): MdictResourceManager {
     if (!this._mdictResourceManager) throw new Error('MDict 资源管理器尚未初始化')
     return this._mdictResourceManager
+  }
+
+  get activeDictionaryView():
+    import('./web-contents-view-manager').WebContentsViewManager | undefined {
+    return this.dictionaryLayout === 'aggregate'
+      ? this.windowManager.aggregateDictionaryView
+      : this.windowManager.dictionaryView
   }
 
   initDB(): void {
@@ -88,7 +97,11 @@ export class AppRuntime {
 
   ensureMainWindow(): BrowserWindow {
     this.windowManager.createMainWindow()
-    this.windowManager.createDictionaryView()
+    if (this.dictionaryLayout === 'aggregate') {
+      this.windowManager.createAggregateDictionaryView()
+    } else {
+      this.windowManager.createDictionaryView()
+    }
     const mainWindow = this.mainWindow
     if (!mainWindow) throw new Error('主窗口尚未初始化')
     return mainWindow
@@ -122,10 +135,11 @@ export class AppRuntime {
     if (this.initialized) return
     if (this.disposed) throw new Error('AppRuntime 已销毁，不能重新初始化')
 
+    const config = this.appConfig.load()
+    this.dictionaryLayout = config.dictionaryLayout
     this.initDB()
     this.adBlockService.initialize()
     this.initWindowManager()
-    const config = this.appConfig.load()
     this.initSelectionHook(config)
     this.registerGlobalShortCuts(config)
     this.initialized = true

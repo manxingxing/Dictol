@@ -132,8 +132,8 @@ function configureMainWindow(
   runtime: ReturnType<typeof getAppRunTime>,
   mainWindow: BrowserWindow
 ): void {
-  const dictionaryView = runtime.windowManager.dictionaryView
-  if (!dictionaryView) throw new Error('DictionaryView 尚未初始化')
+  const dictionaryView = runtime.activeDictionaryView
+  if (!dictionaryView) throw new Error('当前布局对应的 DictionaryView 尚未初始化')
 
   runtime.mainWindowShortcutRouter?.dispose()
   const shortcutRouter = new MainWindowShortcutRouter(runtime.windowManager, mainWindow)
