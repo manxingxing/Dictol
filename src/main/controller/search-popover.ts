@@ -199,7 +199,6 @@ function isSearchPopoverPayload(value: unknown): value is SearchPopoverPayload {
   }
   if (
     typeof payload.query !== 'string' ||
-    payload.query.length > 200 ||
     !Array.isArray(payload.items) ||
     typeof payload.selectedIndex !== 'number' ||
     !Number.isInteger(payload.selectedIndex) ||
@@ -217,9 +216,6 @@ function isSearchPopoverPayload(value: unknown): value is SearchPopoverPayload {
     return (
       typeof candidate.word === 'string' &&
       candidate.word.length > 0 &&
-      candidate.word.length <= 200 &&
-      typeof candidate.description === 'string' &&
-      candidate.description.length <= 100 &&
       typeof candidate.recent === 'boolean'
     )
   })

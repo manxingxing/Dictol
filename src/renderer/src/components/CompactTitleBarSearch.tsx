@@ -67,7 +67,6 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
     }
     return results.slice(0, SEARCH_POPOVER_SUGGESTION_LIMIT).map((result) => ({
       word: result.word,
-      description: `${result.dictionaryCount} 部词典`,
       recent: false
     }))
   }, [history, query, results])

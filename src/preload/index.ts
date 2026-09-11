@@ -65,7 +65,6 @@ type DictionaryEntryGroup = {
 type DictionarySearchResult = {
   word: string
   normalizedWord: string
-  dictionaryCount: number
 }
 
 type QueryHistoryItem = {

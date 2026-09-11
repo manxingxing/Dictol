@@ -125,7 +125,6 @@ declare global {
           {
             word: string
             normalizedWord: string
-            dictionaryCount: number
           }[]
         >
         lookup: (term: string) => Promise<{

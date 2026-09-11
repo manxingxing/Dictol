@@ -87,7 +87,6 @@ export type DictionaryEntryGroup = {
 export type DictionarySearchResult = {
   word: string
   normalizedWord: string
-  dictionaryCount: number
 }
 
 export type DictionaryEntryRecord = {

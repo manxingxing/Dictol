@@ -9,7 +9,6 @@ export type { DictionaryEntry } from '../schema'
 export type EntrySearchResult = {
   normalizedWord: string
   word: string
-  dictionaryCount: number
 }
 
 /** lookupByNormalizedWords 返回的单行 */
@@ -66,9 +65,6 @@ export class DictionaryEntryRepository {
       .select({
         normalizedWord: dictionaryEntry.normalizedWord,
         word: sql<string>`min(${dictionaryEntry.word})`.as('word'),
-        dictionaryCount: sql<number>`count(distinct ${dictionaryEntry.dictionaryId})`.as(
-          'dictionaryCount'
-        )
       })
       .from(dictionaryEntry)
       .where(

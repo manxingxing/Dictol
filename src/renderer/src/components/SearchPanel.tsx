@@ -278,9 +278,6 @@ export const SearchPanel = (): React.JSX.Element => {
                       >
                         <span className="flex min-w-0 flex-col items-start gap-0.5">
                           <span className="truncate">{result.word}</span>
-                          <span className="truncate text-xs font-normal text-muted-foreground">
-                            {result.dictionaryCount} 部词典
-                          </span>
                         </span>
                       </Button>
                     )}
