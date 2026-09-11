@@ -14,6 +14,10 @@
 .dictol-entry-separator {
   margin-top: 1.5em !important;
   margin-bottom: 1.5em;
+  border: none;
+  background-color: #dedede;
+  height: 1;
+  clear: both;
 }
 
 /* 多词典模式 */
