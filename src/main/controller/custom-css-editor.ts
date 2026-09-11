@@ -13,7 +13,10 @@ import type {
   CustomCssEditorState,
   CustomCssEditorTheme
 } from '../../shared/custom-css-editor'
-import { createDictionaryEntryUrl } from '../dictionary-entry-url'
+import {
+  createDictionaryEntryUrl,
+  parseDictionaryEntryUrl
+} from '../dictionary-entry-url'
 import { resolveRendererUrl } from '../output-path'
 import { BaseController } from './base-controller'
 
@@ -198,6 +201,31 @@ export class CustomCssEditorController extends BaseController {
     await this.db.updateDictionaryCustomCss(state.dictionaryId, css)
     this.currentPreviewCss = css
     this.state = { ...state, customCss: css }
+    if (css !== state.customCss) this.refreshDictionaryView(state.dictionaryId)
+  }
+
+  /**
+   * Reloads the dictionary view hosted by the main window when it may render the
+   * given dictionary, so dictionary-specific CSS changes take effect immediately.
+  */
+ private refreshDictionaryView(dictionaryId: string): void {
+   const numericId = Number(dictionaryId)
+   if (!Number.isSafeInteger(numericId) || numericId <= 0) return
+
+   const view = this.runtime.activeDictionaryView
+   if (!view || view.isDestroyed) return
+
+   const url = view.getURL()
+   if (!url) return
+
+   // The aggregate layout renders every enabled dictionary in one page, so it is
+   // reloaded regardless of which dictionary changed.
+   if (this.runtime.dictionaryLayout == 'single' &&
+      parseDictionaryEntryUrl(url)?.dictionaryId !== numericId) {
+      return
+    }
+
+    view.reload()
   }
 
   private configurePreview(
