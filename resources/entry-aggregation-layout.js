@@ -83,7 +83,7 @@
     true
   )
 
-  const navigateToDictionary = (dictionaryId) => {
+  const navigateToDictionary = (dictionaryId, behavior = 'instant') => {
     if (!Number.isSafeInteger(dictionaryId) || dictionaryId <= 0) return
     const section = document.getElementById(`dictol-dictionary-section-${dictionaryId}`)
     if (!(section instanceof HTMLElement)) return
@@ -94,15 +94,17 @@
     if (isHorizontal()) {
       const left =
         section.getBoundingClientRect().left - container.getBoundingClientRect().left - 12
-      container.scrollTo({ left: Math.ceil(container.scrollLeft + left), behavior: 'instant' })
-      syncActiveSection()
+      container.scrollTo({ left: Math.ceil(container.scrollLeft + left), behavior })
+      if (behavior === 'instant') syncActiveSection()
       return
     }
-    section.scrollIntoView({ behavior: 'instant', block: 'start' })
-    // Chromium 可能把滚动偏移向下取整，留下不足 1px 的上一个词典。
-    const top = section.getBoundingClientRect().top
-    if (top > 0 && top < 1) window.scrollBy({ top: 1, behavior: 'instant' })
-    syncActiveSection()
+    section.scrollIntoView({ behavior, block: 'start' })
+    if (behavior === 'instant') {
+      // Chromium 可能把滚动偏移向下取整，留下不足 1px 的上一个词典。
+      const top = section.getBoundingClientRect().top
+      if (top > 0 && top < 1) window.scrollBy({ top: 1, behavior: 'instant' })
+      syncActiveSection()
+    }
   }
   window.dictolEntry?.onScrollToDictionary?.(navigateToDictionary)
   window.dictolEntry?.onLayoutChanged?.((layout) => {
@@ -116,4 +118,18 @@
   window.addEventListener('scroll', syncActiveSection, { passive: true })
   window.addEventListener('resize', observeSections)
   observeSections()
+
+  const getFocusDictionaryId = () => {
+    const raw = new URL(location.href).searchParams.get('focusDictionaryId')
+    const dictionaryId = Number(raw)
+    return Number.isSafeInteger(dictionaryId) && dictionaryId > 0 ? dictionaryId : null
+  }
+  const focusDictionaryId = getFocusDictionaryId()
+  if (focusDictionaryId !== null) {
+    const focusInitialDictionary = () => {
+      requestAnimationFrame(() => navigateToDictionary(focusDictionaryId))
+    }
+    if (document.readyState === 'complete') focusInitialDictionary()
+    else window.addEventListener('load', focusInitialDictionary, { once: true })
+  }
 })()

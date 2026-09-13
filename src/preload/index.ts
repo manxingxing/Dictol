@@ -6,12 +6,26 @@ import type {
   AiSaveConfigRequest,
   AiStreamEvent
 } from '../shared/ai-ipc'
-import type { DictionaryImportPreview, DictionaryImportRequest } from '../shared/dictionary-import'
+import type {
+  DictionaryFolderImportPreview,
+  DictionaryFolderImportRequest,
+  DictionaryImportPreview,
+  DictionaryImportRequest
+} from '../shared/dictionary-import'
 import type { DictionaryInfo } from '../shared/dictionary-info'
 import type { DeepLinkIntent } from '../shared/deep-link'
 import type { ToastPayload } from '../shared/notification'
 import type { TtsConfig, TtsSaveConfigRequest } from '../shared/tts'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
+import type {
+  DictionarySearchScopeChange,
+  DictionarySearchScopeSource
+} from '../shared/dictionary-search-scope'
+import type {
+  DictionaryAggregateRequest,
+  DictionaryLookupRequest
+} from '../shared/dictionary-navigation'
+import type { DictionaryIndexMigrationResult } from '../shared/dictionary-index-migration'
 
 type ReadyDictionary = {
   id: string
@@ -19,15 +33,26 @@ type ReadyDictionary = {
   description: string | null
   recordCount: string | null
   status: 'ready'
+  indexStatus: 'building' | 'ready' | 'error' | 'needs_reindex' | 'missing'
   createdAt: string
   updatedAt: string
 }
 
-type DictionarySummary = Omit<ReadyDictionary, 'status'> & {
+type DictionarySummary = Omit<ReadyDictionary, 'status' | 'indexStatus'> & {
   status: 'pending' | 'importing' | 'ready' | 'error'
   customCss: string
   external: boolean
   enabled: boolean
+}
+
+type DictionaryIndexInfo = {
+  dictionaryId: string
+  indexPath: string
+  status: 'building' | 'ready' | 'error' | 'needs_reindex' | 'missing'
+  entryCount: number | null
+  termCount: number | null
+  fileSize: number | null
+  builtAt: string | null
 }
 
 type ImportedDictionary = {
@@ -50,7 +75,6 @@ type OnlineDictionaryConfig = {
 }
 
 type DictionaryMatch = {
-  entryId: string
   dictionaryId: string
   dictionaryName: string
   dictionaryIconUrl: string | null
@@ -65,6 +89,20 @@ type DictionaryEntryGroup = {
 type DictionarySearchResult = {
   word: string
   normalizedWord: string
+  dictionaryIds: string[]
+}
+
+type DictionarySearchGroup = {
+  id: string
+  name: string
+  dictionaryCount: number
+}
+
+type DictionaryGroupSummary = {
+  id: string
+  name: string
+  sortOrder: number
+  dictionaryIds: string[]
 }
 
 type QueryHistoryItem = {
@@ -124,6 +162,7 @@ type WordCaptureStatus = {
   registered: boolean
   shortcut: string
   lookupWordOnSelection: boolean
+  selectionDictionaryGroupId: string | null
   excludedPrograms: string[]
 }
 
@@ -182,10 +221,22 @@ const api = Object.freeze({
     listReady: (): Promise<ReadyDictionary[]> => ipcRenderer.invoke('dictionaries:list-ready'),
     selectFile: (): Promise<DictionaryImportPreview | null> =>
       ipcRenderer.invoke('dictionaries:select-file'),
+    selectFolder: (): Promise<DictionaryFolderImportPreview | null> =>
+      ipcRenderer.invoke('dictionaries:select-folder'),
     getInfo: (dictionaryId: string): Promise<DictionaryInfo> =>
       ipcRenderer.invoke('dictionaries:get-info', dictionaryId),
+    getIndexInfo: (dictionaryId: string): Promise<DictionaryIndexInfo> =>
+      ipcRenderer.invoke('dictionaries:get-index-info', dictionaryId),
+    openIndexDirectory: (dictionaryId: string): Promise<void> =>
+      ipcRenderer.invoke('dictionaries:open-index-directory', dictionaryId),
+    reindex: (dictionaryId: string): Promise<DictionaryIndexInfo> =>
+      ipcRenderer.invoke('dictionaries:reindex', dictionaryId),
+    migrateIndexes: (): Promise<DictionaryIndexMigrationResult> =>
+      ipcRenderer.invoke('dictionaries:migrate-indexes'),
     import: (request: DictionaryImportRequest): Promise<ImportedDictionary> =>
       ipcRenderer.invoke('dictionaries:import', request),
+    importFolder: (request: DictionaryFolderImportRequest): Promise<ImportedDictionary[]> =>
+      ipcRenderer.invoke('dictionaries:import-folder', request),
     delete: (dictionaryId: string): Promise<void> =>
       ipcRenderer.invoke('dictionaries:delete', dictionaryId),
     openDirectory: (dictionaryId: string): Promise<void> =>
@@ -199,7 +250,18 @@ const api = Object.freeze({
     openCustomCssEditor: (dictionaryId: string): Promise<void> =>
       ipcRenderer.invoke('dictionaries:open-custom-css-editor', dictionaryId),
     updateCustomCss: (dictionaryId: string, customCss: string): Promise<void> =>
-      ipcRenderer.invoke('dictionaries:update-custom-css', dictionaryId, customCss)
+      ipcRenderer.invoke('dictionaries:update-custom-css', dictionaryId, customCss),
+    groups: Object.freeze({
+      list: (): Promise<DictionaryGroupSummary[]> => ipcRenderer.invoke('dictionary-groups:list'),
+      create: (name: string): Promise<DictionaryGroupSummary> =>
+        ipcRenderer.invoke('dictionary-groups:create', name),
+      updateName: (groupId: string, name: string): Promise<void> =>
+        ipcRenderer.invoke('dictionary-groups:update-name', groupId, name),
+      delete: (groupId: string): Promise<void> =>
+        ipcRenderer.invoke('dictionary-groups:delete', groupId),
+      updateMembers: (groupId: string, dictionaryIds: string[]): Promise<void> =>
+        ipcRenderer.invoke('dictionary-groups:update-members', groupId, dictionaryIds)
+    })
   }),
   onlineDictionaries: Object.freeze({
     list: (): Promise<OnlineDictionaryConfig[]> => ipcRenderer.invoke('online-dictionaries:list'),
@@ -210,10 +272,29 @@ const api = Object.freeze({
       ipcRenderer.invoke('online-dictionaries:reorder', ids)
   }),
   entries: Object.freeze({
-    search: (prefix: string, limit?: number): Promise<DictionarySearchResult[]> =>
-      ipcRenderer.invoke('dictionary-entries:search', prefix, limit),
-    lookup: (term: string): Promise<DictionaryEntryGroup | null> =>
-      ipcRenderer.invoke('dictionary-entries:lookup', term)
+    search: (
+      prefix: string,
+      limit?: number,
+      groupId?: string | null
+    ): Promise<DictionarySearchResult[]> =>
+      ipcRenderer.invoke('dictionary-entries:search', prefix, limit, groupId),
+    lookup: (term: string, groupId?: string | null): Promise<DictionaryEntryGroup | null> =>
+      ipcRenderer.invoke('dictionary-entries:lookup', term, groupId),
+    listGroups: (): Promise<DictionarySearchGroup[]> =>
+      ipcRenderer.invoke('dictionary-entries:list-groups')
+  }),
+  dictionarySearchScope: Object.freeze({
+    get: (): Promise<string | null> => ipcRenderer.invoke('dictionary-search-scope:get'),
+    set: (groupId: string | null, source: DictionarySearchScopeSource): Promise<string | null> =>
+      ipcRenderer.invoke('dictionary-search-scope:set', groupId, source),
+    onChanged: (callback: (change: DictionarySearchScopeChange) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        change: DictionarySearchScopeChange
+      ): void => callback(change)
+      ipcRenderer.on('dictionary-search-scope:changed', listener)
+      return () => ipcRenderer.removeListener('dictionary-search-scope:changed', listener)
+    }
   }),
   history: Object.freeze({
     list: (): Promise<QueryHistoryItem[]> => ipcRenderer.invoke('query-history:list'),
@@ -281,6 +362,8 @@ const api = Object.freeze({
     clearResourceCache: (): Promise<void> => ipcRenderer.invoke('app:clear-resource-cache'),
     openResourceCacheDirectory: (): Promise<void> =>
       ipcRenderer.invoke('app:open-resource-cache-directory'),
+    getViewCacheSize: (): Promise<number> => ipcRenderer.invoke('app:get-view-cache-size'),
+    clearViewCache: (): Promise<void> => ipcRenderer.invoke('app:clear-view-cache'),
     onDeepLink: (callback: (intent: DeepLinkIntent) => void): (() => void) => {
       deepLinkSubscribers.add(callback)
       while (pendingDeepLinks.length > 0) {
@@ -348,8 +431,20 @@ const api = Object.freeze({
       query: string,
       items: SearchPopoverItem[],
       selectedIndex: number,
-      status?: 'loading' | 'empty'
-    ): void => ipcRenderer.send('search-popover:update', { query, items, selectedIndex, status }),
+      status?: 'loading' | 'empty' | 'error',
+      error?: string,
+      scopes?: Array<{ id: string | null; name: string; dictionaryCount: number | null }>,
+      scopeId?: string | null
+    ): void =>
+      ipcRenderer.send('search-popover:update', {
+        query,
+        items,
+        selectedIndex,
+        status,
+        error,
+        scopes: scopes ?? [{ id: null, name: '全部', dictionaryCount: null }],
+        scopeId: scopeId ?? null
+      }),
     onSelect: (callback: (word: string) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, word: string): void => callback(word)
       ipcRenderer.on('search-popover:selected', listener)
@@ -379,6 +474,11 @@ const api = Object.freeze({
       const listener = (): void => callback()
       ipcRenderer.on('search-popover:hidden', listener)
       return () => ipcRenderer.removeListener('search-popover:hidden', listener)
+    },
+    onScopeMenuOpen: (callback: (open: boolean) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, open: boolean): void => callback(open)
+      ipcRenderer.on('search-popover:scope-menu-opened', listener)
+      return () => ipcRenderer.removeListener('search-popover:scope-menu-opened', listener)
     }
   }),
   wordCapture: Object.freeze({
@@ -391,6 +491,10 @@ const api = Object.freeze({
       ipcRenderer.invoke('word-capture:set-shortcut', shortcut),
     setSelectionEnabled: (enabled: boolean): Promise<WordCaptureShortcutResult | null> =>
       ipcRenderer.invoke('word-capture:set-selection-enabled', enabled),
+    setSelectionDictionaryGroup: (
+      groupId: string | null
+    ): Promise<WordCaptureShortcutResult | null> =>
+      ipcRenderer.invoke('word-capture:set-selection-dictionary-group', groupId),
     removeExcludedProgram: (programName: string): Promise<WordCaptureShortcutResult | null> =>
       ipcRenderer.invoke('word-capture:remove-excluded-program', programName),
     onEvent: (callback: (event: WordCaptureEvent) => void): (() => void) => {
@@ -406,8 +510,8 @@ const api = Object.freeze({
   dictionaryView: Object.freeze({
     show: (target: { dictionaryId: string; term: string }): Promise<void> =>
       ipcRenderer.invoke('dictionary-view:show', target),
-    showAggregate: (term: string): Promise<void> =>
-      ipcRenderer.invoke('dictionary-view:show-aggregate', term),
+    showAggregate: (target: DictionaryAggregateRequest): Promise<void> =>
+      ipcRenderer.invoke('dictionary-view:show-aggregate', target),
     scrollToDictionary: (dictionaryId: string): void =>
       ipcRenderer.send('dictionary-view:scroll-to-dictionary', dictionaryId),
     hide: (): void => ipcRenderer.send('dictionary-view:hide'),
@@ -426,8 +530,11 @@ const api = Object.freeze({
       ipcRenderer.on('dictionary-view:active-dictionary-changed', listener)
       return () => ipcRenderer.removeListener('dictionary-view:active-dictionary-changed', listener)
     },
-    onLookupWord: (callback: (word: string) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, word: string): void => callback(word)
+    onLookupWord: (callback: (request: DictionaryLookupRequest) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        request: DictionaryLookupRequest
+      ): void => callback(request)
       ipcRenderer.on('dictionary-view:lookup-word', listener)
       return () => ipcRenderer.removeListener('dictionary-view:lookup-word', listener)
     },

@@ -1,4 +1,5 @@
 import { and, asc, eq, sql } from 'drizzle-orm'
+import { randomUUID } from 'node:crypto'
 import { DictolDatabase } from '../drizzle'
 import { Dictionary, dictionary } from '../schema'
 
@@ -10,10 +11,16 @@ export class DictionaryRepository {
   }
 
   /** 创建一条正在导入的词典记录，并追加到当前排序末尾。 */
-  async createImporting(name: string, dictPath: string, external = false): Promise<number> {
+  async createImporting(
+    name: string,
+    dictPath: string,
+    external = false,
+    uuid: string = randomUUID()
+  ): Promise<number> {
     const [row] = await this.db
       .insert(dictionary)
       .values({
+        uuid,
         name,
         dictPath,
         external,

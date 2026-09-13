@@ -7,7 +7,7 @@ import {
 } from '../shared/selection-explanation'
 import { getSelectionToolbarWindowSize } from '../shared/selection-toolbar'
 import { MAIN_WINDOW_TITLEBAR_HEIGHT } from '../shared/window-chrome'
-import { DICTIONARY_SESSION_PARTITION } from './entry-assets'
+import { DICTIONARY_SESSION_PARTITION, EMBED_BROWSER_SESSION_PARTITION } from './entry-assets'
 import { resolvePreloadPath } from './output-path'
 import { applySelectionWindowBehavior, hideSelectionWindow } from './selection-window-behavior'
 import { WebContentsViewManager } from './web-contents-view-manager'
@@ -146,7 +146,7 @@ export class WindowManager {
     const embedBrowserView = new WebContentsViewManager(mainWindow, {
       view: {
         webPreferences: {
-          partition: 'persist:dictol-embed-browser',
+          partition: EMBED_BROWSER_SESSION_PARTITION,
           contextIsolation: true,
           nodeIntegration: false,
           sandbox: true,

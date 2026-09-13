@@ -1,7 +1,26 @@
-import { app, ipcMain, shell, type IpcMainInvokeEvent, type WebContents } from 'electron'
+import {
+  app,
+  ipcMain,
+  session,
+  shell,
+  type IpcMainInvokeEvent,
+  type Session,
+  type WebContents
+} from 'electron'
 
 import type { DictionaryLayout } from '../../shared/dictionary-layout'
 import { BaseController } from './base-controller'
+import { DICTIONARY_SESSION_PARTITION, EMBED_BROWSER_SESSION_PARTITION } from '../entry-assets'
+
+/**
+ * 使用独立 Chromium 分区的 WebContentsView：查词释义视图（单栏与汇总两个布局
+ * 共用同一个分区）和内置浏览器。这些分区与主窗口渲染进程相互隔离，
+ * 缓存不会随主窗口刷新而释放。
+ */
+const VIEW_SESSION_PARTITIONS = [
+  DICTIONARY_SESSION_PARTITION,
+  EMBED_BROWSER_SESSION_PARTITION
+] as const
 
 export class AppController extends BaseController {
   override mount(): void {
@@ -29,6 +48,8 @@ export class AppController extends BaseController {
     ipcMain.handle('app:get-resource-cache-size', this.getResourceCacheSize)
     ipcMain.handle('app:clear-resource-cache', this.clearResourceCache)
     ipcMain.handle('app:open-resource-cache-directory', this.openResourceCacheDirectory)
+    ipcMain.handle('app:get-view-cache-size', this.getViewCacheSize)
+    ipcMain.handle('app:clear-view-cache', this.clearViewCache)
   }
 
   getVersion = (event: IpcMainInvokeEvent): string | null => {
@@ -67,6 +88,30 @@ export class AppController extends BaseController {
     const directory = await this.runtime.resourceCache.ensureDirectory()
     const error = await shell.openPath(directory)
     if (error) throw new Error(error)
+  }
+
+  /** 各分区 HTTP 缓存占用的总字节数。 */
+  getViewCacheSize = async (event: IpcMainInvokeEvent): Promise<number> => {
+    if (!this.acceptsSender(event.sender)) return 0
+    const sizes = await Promise.all(this.viewCacheSessions().map((it) => it.getCacheSize()))
+    return sizes.reduce((total, size) => total + size, 0)
+  }
+
+  /**
+   * 清空各分区的 HTTP 缓存与 V8 代码缓存。Cookie、localStorage 等站点数据
+   * 不在清理范围内，登录状态不受影响。
+   */
+  clearViewCache = async (event: IpcMainInvokeEvent): Promise<void> => {
+    if (!this.acceptsSender(event.sender)) return
+    await Promise.all(
+      this.viewCacheSessions().map(async (it) => {
+        await Promise.all([it.clearCache(), it.clearCodeCaches({})])
+      })
+    )
+  }
+
+  private viewCacheSessions(): Session[] {
+    return VIEW_SESSION_PARTITIONS.map((partition) => session.fromPartition(partition))
   }
 
   private acceptsSender(sender: WebContents): boolean {

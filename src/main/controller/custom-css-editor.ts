@@ -15,6 +15,7 @@ import type {
 } from '../../shared/custom-css-editor'
 import {
   createDictionaryEntryUrl,
+  parseDictionaryEntryNavigation,
   parseDictionaryEntryUrl
 } from '../dictionary-entry-url'
 import { resolveRendererUrl } from '../output-path'
@@ -36,7 +37,6 @@ export class CustomCssEditorController extends BaseController {
     ipcMain.handle('dictionaries:open-custom-css-editor', this.open)
     ipcMain.handle('custom-css-editor:get-state', this.getState)
     ipcMain.handle('custom-css-editor:get-preview-ready', this.getPreviewReady)
-    ipcMain.handle('custom-css-editor:random-entry', this.randomEntry)
     ipcMain.handle('custom-css-editor:search-entry', this.searchEntry)
     ipcMain.on('custom-css-editor:set-preview-bounds', this.setPreviewBounds)
     ipcMain.on('custom-css-editor:set-preview-theme', this.setPreviewTheme)
@@ -52,16 +52,13 @@ export class CustomCssEditorController extends BaseController {
     if (!dictionary || dictionary.status !== 'ready') throw new Error('词典尚未准备完成')
     const recordCount = dictionary.recordCount === null ? null : Number(dictionary.recordCount)
 
-    const entry = await this.db.getRandomDictionaryEntry(dictionaryId, recordCount)
-    if (!entry) throw new Error('词典中没有可预览的词条')
-
     this.state = {
       dictionaryId,
       dictionaryName: dictionary.name,
       customCss: dictionary.customCss,
       recordCount,
-      entryId: entry.id,
-      entryWord: entry.word
+      entryId: '',
+      entryWord: ''
     }
     await this.previewCssTask
     this.currentPreviewCss = dictionary.customCss
@@ -83,13 +80,7 @@ export class CustomCssEditorController extends BaseController {
     window.show()
     window.focus()
 
-    await preview.loadURL(createDictionaryEntryUrl(dictionaryId, entry.word, { preview: true }))
-    await this.previewCssTask
-    await this.applyPreviewTheme(preview, this.previewTheme).catch((error: unknown) => {
-      console.error('Failed to initialize custom CSS preview theme', { error })
-    })
-    this.setPreviewReady(true)
-    preview.show()
+    // The preview is loaded after the user searches for a concrete entry.
   }
 
   getState = (event: IpcMainInvokeEvent): CustomCssEditorState | null => {
@@ -102,17 +93,6 @@ export class CustomCssEditorController extends BaseController {
     return this.previewReady
   }
 
-  randomEntry = async (event: IpcMainInvokeEvent): Promise<CustomCssEditorState> => {
-    if (!this.acceptsEditorSender(event.sender)) throw new Error('无效的编辑器窗口')
-    const state = this.state
-    if (!state) throw new Error('CSS 编辑器尚未初始化')
-
-    const entry = await this.db.getRandomDictionaryEntry(state.dictionaryId, state.recordCount)
-    if (!entry) throw new Error('词典中没有可预览的词条')
-
-    return this.loadPreviewEntry(state, entry.id, entry.word)
-  }
-
   searchEntry = async (
     event: IpcMainInvokeEvent,
     term: unknown
@@ -123,12 +103,12 @@ export class CustomCssEditorController extends BaseController {
     if (typeof term !== 'string' || !term.trim()) {
       return { ok: false, message: '请输入词条' }
     }
-    const group = await this.db.lookupDictionaryEntryGroup(term)
-    const match = group?.dictionaries.find((item) => item.dictionaryId === state.dictionaryId)
+    const match = await this.db.lookupDictionaryEntry(state.dictionaryId, term)
     if (!match) return { ok: false, message: '当前词典中未找到该词条' }
-    const entry = await this.db.getDictionaryEntryRecord(match.entryId)
-    if (!entry) return { ok: false, message: '词条不存在' }
-    return { ok: true, state: await this.loadPreviewEntry(state, entry.id, entry.word) }
+    return {
+      ok: true,
+      state: await this.loadPreviewEntry(state, `${state.dictionaryId}:${match.word}`, match.word)
+    }
   }
 
   private async loadPreviewEntry(
@@ -186,9 +166,9 @@ export class CustomCssEditorController extends BaseController {
     if (!this.acceptsEditorSender(event.sender) || typeof css !== 'string') return
     if (css.length > MAX_CUSTOM_CSS_LENGTH) return
 
-    const preview = this.runtime.windowManager.customCssEditorPreviewView
-    if (!preview || preview.isDestroyed) return
     this.currentPreviewCss = css
+    const preview = this.runtime.windowManager.customCssEditorPreviewView
+    if (!preview || preview.isDestroyed || !this.previewReady) return
     void this.replacePreviewCss(preview, css)
   }
 
@@ -207,21 +187,23 @@ export class CustomCssEditorController extends BaseController {
   /**
    * Reloads the dictionary view hosted by the main window when it may render the
    * given dictionary, so dictionary-specific CSS changes take effect immediately.
-  */
- private refreshDictionaryView(dictionaryId: string): void {
-   const numericId = Number(dictionaryId)
-   if (!Number.isSafeInteger(numericId) || numericId <= 0) return
+   */
+  private refreshDictionaryView(dictionaryId: string): void {
+    const numericId = Number(dictionaryId)
+    if (!Number.isSafeInteger(numericId) || numericId <= 0) return
 
-   const view = this.runtime.activeDictionaryView
-   if (!view || view.isDestroyed) return
+    const view = this.runtime.activeDictionaryView
+    if (!view || view.isDestroyed) return
 
-   const url = view.getURL()
-   if (!url) return
+    const url = view.getURL()
+    if (!url) return
 
-   // The aggregate layout renders every enabled dictionary in one page, so it is
-   // reloaded regardless of which dictionary changed.
-   if (this.runtime.dictionaryLayout == 'single' &&
-      parseDictionaryEntryUrl(url)?.dictionaryId !== numericId) {
+    // The aggregate layout renders every enabled dictionary in one page, so it is
+    // reloaded regardless of which dictionary changed.
+    if (
+      this.runtime.dictionaryLayout == 'single' &&
+      parseDictionaryEntryUrl(url)?.dictionaryId !== numericId
+    ) {
       return
     }
 
@@ -244,9 +226,8 @@ export class CustomCssEditorController extends BaseController {
     view.webContents.on('will-navigate', (event) => {
       if (event.url.startsWith('dictol-entry://')) return
       event.preventDefault()
-      if (event.url.startsWith('entry://')) {
-        void this.navigatePreviewEntry(decodeEntryTarget(event.url))
-      }
+      const navigation = parseDictionaryEntryNavigation(view.getURL(), event.url)
+      if (navigation) void this.navigatePreviewEntry(navigation.word)
     })
     view.webContents.on('did-finish-load', () => {
       if (view.isDestroyed || !view.getURL()) return
@@ -290,12 +271,9 @@ export class CustomCssEditorController extends BaseController {
     if (!state || !normalizedWord || normalizedWord.length > 200) return
 
     try {
-      const group = await this.db.lookupDictionaryEntryGroup(normalizedWord)
-      const match = group?.dictionaries.find((item) => item.dictionaryId === state.dictionaryId)
+      const match = await this.db.lookupDictionaryEntry(state.dictionaryId, normalizedWord)
       if (!match) return
-      const entry = await this.db.getDictionaryEntryRecord(match.entryId)
-      if (!entry) return
-      await this.loadPreviewEntry(state, entry.id, entry.word, true)
+      await this.loadPreviewEntry(state, `${state.dictionaryId}:${match.word}`, match.word, true)
     } catch (error) {
       console.error('Failed to navigate custom CSS preview entry', {
         word: normalizedWord,
@@ -332,11 +310,15 @@ export class CustomCssEditorController extends BaseController {
   ): Promise<void> {
     this.currentPreviewCss = css
     const task = this.previewCssTask.then(async () => {
+      if (preview.isDestroyed || !preview.getURL()) {
+        this.previewCssKey = undefined
+        return
+      }
       if (this.previewCssKey) {
         await preview.webContents.removeInsertedCSS(this.previewCssKey).catch(() => undefined)
         this.previewCssKey = undefined
       }
-      if (!this.currentPreviewCss.trim() || preview.isDestroyed) return
+      if (!this.currentPreviewCss.trim()) return
       this.previewCssKey = await preview.webContents.insertCSS(this.currentPreviewCss)
     })
     this.previewCssTask = task.catch((error: unknown) => {
@@ -374,15 +356,6 @@ export class CustomCssEditorController extends BaseController {
 
   private acceptsEditorSender(sender: Electron.WebContents): boolean {
     return sender === this.runtime.windowManager.customCssEditorWindow?.webContents
-  }
-}
-
-function decodeEntryTarget(url: string): string {
-  const target = url.replace(/^entry:\/\/\/?/i, '').split('#', 1)[0]
-  try {
-    return decodeURIComponent(target)
-  } catch {
-    return target
   }
 }
 

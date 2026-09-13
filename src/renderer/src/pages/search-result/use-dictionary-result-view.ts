@@ -7,6 +7,8 @@ export type DictionaryResultProps = {
   term: string
   dictionaries: NonNullable<DictionaryEntryGroup>['dictionaries']
   isFetching: boolean
+  isPlaceholderData: boolean
+  groupId: string | null
   actions: ReactNode
 }
 
@@ -50,11 +52,16 @@ export function useDictionaryWordNavigation(dictionaryId?: string): void {
   const setSearchQuery = useAppStore((state) => state.setSearchQuery)
   useEffect(
     () =>
-      window.dictol.dictionaryView.onLookupWord((value) => {
+      window.dictol.dictionaryView.onLookupWord(({ word: value, sourceDictionaryId }) => {
         const word = value.trim()
         if (!word) return
         setSearchQuery(word)
-        const query = dictionaryId ? `?${new URLSearchParams({ dictionary: dictionaryId })}` : ''
+        console.log({value, sourceDictionaryId})
+        const params = new URLSearchParams()
+        if (dictionaryId) params.set('dictionary', dictionaryId)
+        else if (sourceDictionaryId) params.set('focusDictionaryId', sourceDictionaryId)
+        const query = params.toString() ? `?${params}` : ''
+        console.log(query)
         void navigate(`/search/${encodeURIComponent(word)}${query}`)
       }),
     [dictionaryId, navigate, setSearchQuery]

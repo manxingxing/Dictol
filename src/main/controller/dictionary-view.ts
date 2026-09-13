@@ -8,8 +8,16 @@ import {
 } from 'electron'
 
 import type { WebContentsViewManager } from '../web-contents-view-manager'
-import { createDictionaryAggregateUrl, createDictionaryEntryUrl } from '../dictionary-entry-url'
+import {
+  createDictionaryAggregateUrl,
+  createDictionaryEntryUrl,
+  parseDictionaryEntryNavigation
+} from '../dictionary-entry-url'
 import { resolveRendererUrl } from '../output-path'
+import type {
+  DictionaryAggregateRequest,
+  DictionaryLookupRequest
+} from '../../shared/dictionary-navigation'
 import { BaseController } from './base-controller'
 import { dismissSearchPopover } from './search-popover'
 
@@ -53,13 +61,25 @@ export class DictionaryViewController extends BaseController {
     await this.showEntry(createDictionaryEntryUrl(target.dictionaryId, target.term))
   }
 
-  showAggregate = async (event: IpcMainInvokeEvent, term: string): Promise<void> => {
-    if (!this.acceptsHostSender(event.sender.id) || typeof term !== 'string') return
+  showAggregate = async (
+    event: IpcMainInvokeEvent,
+    target: DictionaryAggregateRequest
+  ): Promise<void> => {
+    if (
+      !this.acceptsHostSender(event.sender.id) ||
+      !target ||
+      typeof target.term !== 'string' ||
+      (target.focusDictionaryId !== undefined && typeof target.focusDictionaryId !== 'string')
+    ) {
+      return
+    }
 
-    const normalizedTerm = term.trim()
+    const normalizedTerm = target.term.trim()
     if (!normalizedTerm || normalizedTerm.length > 200) return
 
-    const url = createDictionaryAggregateUrl(normalizedTerm)
+    const url = createDictionaryAggregateUrl(normalizedTerm, {
+      focusDictionaryId: target.focusDictionaryId
+    })
     this.desiredUrl = url
     const version = ++this.loadVersion
     this.loadedUrl = undefined
@@ -125,7 +145,7 @@ export class DictionaryViewController extends BaseController {
 
   lookupWord = (event: IpcMainEvent, word: string): void => {
     if (!this.acceptsViewSender(event.sender.id) || typeof word !== 'string') return
-    this.sendLookup(word)
+    this.sendLookup({ word })
   }
 
   canExplainWithAi = (event: IpcMainInvokeEvent): boolean => {
@@ -260,7 +280,8 @@ export class DictionaryViewController extends BaseController {
     view.webContents.on('will-navigate', (event) => {
       if (event.url.startsWith('dictol-entry://')) return
       event.preventDefault()
-      if (event.url.startsWith('entry://')) this.sendLookup(decodeEntryTarget(event.url))
+      const navigation = parseDictionaryEntryNavigation(view.getURL(), event.url)
+      if (navigation) this.sendLookup(navigation)
     })
     view.webContents.on('found-in-page', (_event, result) => {
       this.findBarView?.send('find-bar:find-result', result)
@@ -283,10 +304,13 @@ export class DictionaryViewController extends BaseController {
     })
   }
 
-  private sendLookup(word: string): void {
-    const normalizedWord = word.trim()
+  private sendLookup(request: DictionaryLookupRequest): void {
+    const normalizedWord = request.word.trim()
     if (!normalizedWord || normalizedWord.length > 200) return
-    this.activeView.sendToMainWindow('dictionary-view:lookup-word', normalizedWord)
+    this.activeView.sendToMainWindow('dictionary-view:lookup-word', {
+      word: normalizedWord,
+      ...(request.sourceDictionaryId ? { sourceDictionaryId: request.sourceDictionaryId } : {})
+    })
   }
 
   private notifyLoadingState(isLoading: boolean): void {
@@ -391,15 +415,6 @@ function isRectangle(value: unknown): value is Rectangle {
   return [rectangle.x, rectangle.y, rectangle.width, rectangle.height].every(
     (part) => typeof part === 'number' && Number.isFinite(part) && part >= 0
   )
-}
-
-function decodeEntryTarget(url: string): string {
-  const target = url.replace(/^entry:\/\/\/?/i, '').split('#', 1)[0]
-  try {
-    return decodeURIComponent(target)
-  } catch {
-    return target
-  }
 }
 
 function isNavigationAborted(error: unknown): boolean {

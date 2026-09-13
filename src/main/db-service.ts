@@ -1,18 +1,33 @@
 import { app } from 'electron'
+import type { DidxIndex } from '@dictol/mdict-native'
 import { randomUUID } from 'node:crypto'
-import { copyFile, readFile, readdir, rename, rm, unlink } from 'node:fs/promises'
-import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
+import { copyFile, readFile, readdir, rename, rm, stat, unlink } from 'node:fs/promises'
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { Worker } from 'node:worker_threads'
+import { asc, eq } from 'drizzle-orm'
 
-import type { DictionaryImportSourceFile } from '../shared/dictionary-import'
+import type {
+  DictionaryImportSourceFile,
+  DictionaryImportWorkerFile,
+  DictionaryImportWorkerRequest
+} from '../shared/dictionary-import'
 import type { BuiltInLexiconEntry } from './built-in-lexicon-service'
+import { DidxQueryService } from './didx-query-service'
 import type { DictolDatabase } from './db/drizzle'
-import { getDatabasePath } from './db/paths'
-import { DictionaryEntryRepository } from './db/repository/dictionary-entry-repository'
+import { getDatabasePath, getDictionaryIndexRoot } from './db/paths'
 import { DictionaryFileRepository } from './db/repository/dictionary-file-repository'
 import { DictionaryRepository } from './db/repository/dictionary-repository'
-import type { Dictionary } from './db/schema'
+import {
+  DictionaryGroupRepository,
+  type DictionaryGroupWithMembers,
+  type SearchDictionaryGroup
+} from './db/repository/dictionary-group-repository'
+import { dictionary, dictionaryEntry, dictionaryIndex, type Dictionary } from './db/schema'
+import {
+  resolveDictionaryImportFolder,
+  selectDictionaryImportPlans
+} from './dictionary-import-files'
 import { QueryHistoryRepository } from './db/repository/query-history-repository'
 import {
   OnlineDictionaryRepository,
@@ -44,12 +59,23 @@ export type DictionarySummary = {
   updatedAt: string
 }
 
+export type DictionaryIndexInfo = {
+  dictionaryId: string
+  indexPath: string
+  status: 'building' | 'ready' | 'error' | 'needs_reindex' | 'missing'
+  entryCount: number | null
+  termCount: number | null
+  fileSize: number | null
+  builtAt: string | null
+}
+
 export type ReadyDictionary = {
   id: string
   name: string
   description: string | null
   recordCount: string | null
   status: 'ready'
+  indexStatus: 'building' | 'ready' | 'error' | 'needs_reindex' | 'missing'
   createdAt: string
   updatedAt: string
 }
@@ -67,12 +93,16 @@ export type ImportedDictionary = {
 }
 
 type DictionaryImportWorkerMessage =
-  | { type: 'created'; value: ImportedDictionary }
-  | { type: 'ready'; name: string }
-  | { type: 'error'; error: string }
+  { type: 'ready'; name: string; indexElapsedMs: number } | { type: 'error'; error: string }
+
+type QueuedDictionaryImport = {
+  request: DictionaryImportWorkerRequest
+  onReady?: (name: string, indexElapsedMs: number) => void
+}
+
+const IMPORT_WORKER_CONCURRENCY = 2
 
 export type DictionaryMatch = {
-  entryId: string
   dictionaryId: string
   dictionaryName: string
   dictionaryIconUrl: string | null
@@ -84,18 +114,34 @@ export type DictionaryEntryGroup = {
   dictionaries: DictionaryMatch[]
 }
 
-export type DictionarySearchResult = {
+export type DictionaryEntryMatch = {
   word: string
   normalizedWord: string
 }
 
-export type DictionaryEntryRecord = {
-  id: string
-  dictionaryId: string
-  dictionaryName: string
+export type DictionarySearchResult = {
   word: string
-  recordStartOffset: number
-  recordEndOffset: number
+  normalizedWord: string
+  dictionaryIds: string[]
+}
+
+export type DictionarySearchGroup = {
+  id: string
+  name: string
+  dictionaryCount: number
+}
+
+export type DictionaryGroupSummary = {
+  id: string
+  name: string
+  sortOrder: number
+  dictionaryIds: string[]
+}
+
+export type DictionaryIndexProvider = {
+  acquireMany(
+    dictionaryIds: readonly number[]
+  ): Promise<Array<{ dictionaryId: number; index: DidxIndex }>>
 }
 
 export type QueryHistoryItem = {
@@ -163,8 +209,10 @@ export type WordbookImportResult = {
 const MAX_WORDBOOK_IMPORT_WORDS = 5_000
 
 export class DBService {
+  private readonly pendingDictionaryImports: QueuedDictionaryImport[] = []
+  private activeDictionaryImports = 0
   private readonly dictionaryRepo: DictionaryRepository
-  private readonly entryRepo: DictionaryEntryRepository
+  private readonly dictionaryGroupRepo: DictionaryGroupRepository
   private readonly fileRepo: DictionaryFileRepository
   private readonly queryHistoryRepo: QueryHistoryRepository
   private readonly wordbookRepo: WordbookRepository
@@ -177,11 +225,12 @@ export class DBService {
   private readonly wordbookExportListeners = new Set<(status: WordbookExportStatus) => void>()
 
   constructor(
-    db: DictolDatabase,
-    private readonly lexicon: { lookup(word: string): BuiltInLexiconEntry | null } | undefined
+    private readonly db: DictolDatabase,
+    private readonly lexicon: { lookup(word: string): BuiltInLexiconEntry | null } | undefined,
+    private readonly dictionaryIndexProvider: DictionaryIndexProvider
   ) {
     this.dictionaryRepo = new DictionaryRepository(db)
-    this.entryRepo = new DictionaryEntryRepository(db)
+    this.dictionaryGroupRepo = new DictionaryGroupRepository(db)
     this.fileRepo = new DictionaryFileRepository(db)
     this.queryHistoryRepo = new QueryHistoryRepository(db)
     this.wordbookRepo = new WordbookRepository(db)
@@ -403,6 +452,50 @@ export class DBService {
     }))
   }
 
+  async getDictionaryIndexInfo(dictionaryId: string): Promise<DictionaryIndexInfo> {
+    const numericId = this.parseDictionaryId(dictionaryId)
+    const [row] = await this.db
+      .select({
+        id: dictionary.id,
+        uuid: dictionary.uuid,
+        status: dictionaryIndex.status,
+        entryCount: dictionaryIndex.entryCount,
+        termCount: dictionaryIndex.termCount,
+        fileSize: dictionaryIndex.fileSize,
+        builtAt: dictionaryIndex.builtAt
+      })
+      .from(dictionary)
+      .leftJoin(dictionaryIndex, eq(dictionaryIndex.dictionaryId, dictionary.id))
+      .where(eq(dictionary.id, numericId))
+
+    if (!row) throw new Error('词典不存在')
+    const indexPath = join(getDictionaryIndexRoot(), row.uuid, 'index.didx')
+    let status: DictionaryIndexInfo['status'] = row.status ?? 'missing'
+    if (status === 'ready') {
+      try {
+        await stat(indexPath)
+      } catch {
+        status = 'missing'
+      }
+    }
+
+    return {
+      dictionaryId: String(row.id),
+      indexPath,
+      status,
+      entryCount: row.entryCount,
+      termCount: row.termCount,
+      fileSize: row.fileSize,
+      builtAt: row.builtAt
+    }
+  }
+
+  async listDictionaryPaths(): Promise<string[]> {
+    return (await this.dictionaryRepo.listAll()).flatMap((row) =>
+      row.dictPath ? [row.dictPath] : []
+    )
+  }
+
   async listOnlineDictionaries(): Promise<OnlineDictionaryConfig[]> {
     const rows = await this.onlineDictionaryRepo.listAll()
     return rows.map((row) => ({
@@ -449,17 +542,22 @@ export class DBService {
   }
 
   async listReadyDictionaries(): Promise<ReadyDictionary[]> {
-    const rows = await this.dictionaryRepo.listReady()
+    const rows = await this.listReadyDictionaryRowsWithIndexStatus()
 
     return rows.map((row) => ({
-      id: String(row.id),
-      name: row.name,
-      description: row.description,
-      recordCount: row.recordCount?.toString() ?? null,
+      id: String(row.dictionary.id),
+      name: row.dictionary.name,
+      description: row.dictionary.description,
+      recordCount: row.dictionary.recordCount?.toString() ?? null,
       status: 'ready',
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt
+      indexStatus: row.indexStatus ?? 'missing',
+      createdAt: row.dictionary.createdAt,
+      updatedAt: row.dictionary.updatedAt
     }))
+  }
+
+  async deleteLegacyDictionaryEntries(dictionaryId: number): Promise<void> {
+    await this.db.delete(dictionaryEntry).where(eq(dictionaryEntry.dictionaryId, dictionaryId))
   }
 
   async recordQueryHistory(term: string): Promise<void> {
@@ -483,14 +581,6 @@ export class DBService {
 
   async clearQueryHistory(): Promise<void> {
     await this.queryHistoryRepo.clear()
-  }
-
-  async getDictionaryEntryDictionaryId(entryId: string): Promise<string | null> {
-    const numericEntryId = Number(entryId)
-    if (!Number.isSafeInteger(numericEntryId) || numericEntryId <= 0) return null
-
-    const dictionaryId = await this.entryRepo.findDictionaryIdByEntryId(numericEntryId)
-    return dictionaryId === undefined ? null : String(dictionaryId)
   }
 
   async deleteDictionary(dictionaryId: string): Promise<void> {
@@ -540,6 +630,7 @@ export class DBService {
     if (directoryWasStaged && stagedDirectory) {
       await rm(stagedDirectory, { recursive: true, force: true })
     }
+    await rm(join(getDictionaryIndexRoot(), row.uuid), { recursive: true, force: true })
   }
 
   async getDictionaryPath(dictionaryId: string): Promise<string | null> {
@@ -625,135 +716,362 @@ export class DBService {
     if (!updated) throw new Error('词典不存在')
   }
 
+  private async listReadyDictionaryIndexes(
+    groupId?: number
+  ): Promise<Array<{ dictionaryId: number; index: DidxIndex }>> {
+    const dictionaries = await this.listSearchableDictionaries()
+    if (groupId === undefined) {
+      return this.dictionaryIndexProvider.acquireMany(dictionaries.map(({ id }) => id))
+    }
+    const memberIds = await this.dictionaryGroupRepo.listSearchableMemberIds(groupId)
+    const dictionariesById = new Map(dictionaries.map((dictionary) => [dictionary.id, dictionary]))
+    return this.dictionaryIndexProvider.acquireMany(
+      memberIds
+        .map((id) => dictionariesById.get(id))
+        .filter((dictionary) => dictionary !== undefined)
+        .map(({ id }) => id)
+    )
+  }
+
   async importDictionaryFromFile(
     mdxPath: string,
     sourceFiles: DictionaryImportSourceFile[],
     copyFiles = true,
-    onReady?: (name: string) => void
+    onReady?: (name: string, indexElapsedMs: number) => void
   ): Promise<ImportedDictionary> {
+    const prepared = await this.prepareDictionaryImport(mdxPath, sourceFiles, copyFiles)
+    this.enqueueDictionaryImport({ request: prepared.workerRequest, onReady })
+    return prepared.imported
+  }
+
+  async importDictionariesFromFolder(
+    rootPath: string,
+    copyFiles: boolean,
+    onReady?: (name: string, indexElapsedMs: number) => void,
+    selectedMdxPaths: readonly string[] = []
+  ): Promise<ImportedDictionary[]> {
+    const existingDictionaryPaths = await this.listDictionaryPaths()
+    const plans = await resolveDictionaryImportFolder(rootPath, existingDictionaryPaths)
+    if (plans.length === 0) throw new Error('所选目录及其子目录中没有找到 MDX 文件')
+    const selectedPlans = selectDictionaryImportPlans(plans, selectedMdxPaths)
+    if (selectedPlans.length === 0) throw new Error('请至少选择一部词典')
+
+    const prepared: Array<{
+      imported: ImportedDictionary
+      workerRequest: DictionaryImportWorkerRequest
+    }> = []
+    try {
+      for (const plan of selectedPlans) {
+        prepared.push(await this.prepareDictionaryImport(plan.mdxPath, plan.sourceFiles, copyFiles))
+      }
+    } catch (error) {
+      await Promise.all(
+        prepared.map(({ imported }) => this.dictionaryRepo.deleteById(Number(imported.id)))
+      )
+      throw error
+    }
+
+    for (const item of prepared) {
+      this.enqueueDictionaryImport({ request: item.workerRequest, onReady })
+    }
+    return prepared.map(({ imported }) => imported)
+  }
+
+  private async prepareDictionaryImport(
+    mdxPath: string,
+    sourceFiles: DictionaryImportSourceFile[],
+    copyFiles: boolean
+  ): Promise<{
+    imported: ImportedDictionary
+    workerRequest: DictionaryImportWorkerRequest
+  }> {
+    const normalizedMdxPath = resolve(mdxPath)
+    const normalizedFiles = sourceFiles.map((file) => ({
+      sourcePath: resolve(file.sourcePath),
+      relativePath: file.relativePath
+    }))
+    const mdxFile = normalizedFiles.find(
+      (file) =>
+        file.sourcePath === normalizedMdxPath && extname(file.relativePath).toLowerCase() === '.mdx'
+    )
+    if (!mdxFile) throw new Error(`未找到 MDX 文件：${mdxPath}`)
+    if (new Set(normalizedFiles.map((file) => file.relativePath)).size !== normalizedFiles.length) {
+      throw new Error('导入文件列表包含重复路径')
+    }
+    if (normalizedFiles.some((file) => !isSafeImportRelativePath(file.relativePath))) {
+      throw new Error('导入文件路径无效')
+    }
+
+    const dictionaryUuid = randomUUID()
+    const targetDirectory = copyFiles
+      ? join(app.getPath('userData'), 'dictionaries', dictionaryUuid)
+      : dirname(normalizedMdxPath)
+    const dictionaryName = basename(normalizedMdxPath, extname(normalizedMdxPath))
+    const dictionaryId = await this.dictionaryRepo.createImporting(
+      dictionaryName,
+      targetDirectory,
+      !copyFiles,
+      dictionaryUuid
+    )
+
+    try {
+      const workerFiles: DictionaryImportWorkerFile[] = []
+      for (const file of normalizedFiles) {
+        const fileType = getImportFileType(file.relativePath)
+        const targetPath = copyFiles ? join(targetDirectory, file.relativePath) : file.sourcePath
+        const sourceStats = await stat(file.sourcePath, { bigint: true })
+        let fileId: number | null = null
+        if (fileType) {
+          fileId = await this.fileRepo.create({
+            dictionaryId,
+            fileName: basename(file.relativePath),
+            filePath: targetPath,
+            fileType,
+            fileSize: toSafeNumber(sourceStats.size, 'file size'),
+            lastModified: toSafeNumber(sourceStats.mtimeMs, 'last modified'),
+            checksum: null
+          })
+        }
+        workerFiles.push({ ...file, id: fileId })
+      }
+
+      const indexPath = join(getDictionaryIndexRoot(), dictionaryUuid, 'index.didx')
+      await this.db.insert(dictionaryIndex).values({
+        dictionaryId,
+        formatVersion: 0,
+        normalizationVersion: 0,
+        comparisonVersion: 1,
+        sourceFingerprint: null,
+        status: 'building'
+      })
+
+      return {
+        imported: {
+          id: String(dictionaryId),
+          name: dictionaryName,
+          status: 'importing',
+          directory: targetDirectory,
+          files: workerFiles
+            .filter((file): file is DictionaryImportWorkerFile & { id: number } => file.id !== null)
+            .map((file) => ({
+              id: String(file.id),
+              name: basename(file.relativePath),
+              type: getImportFileType(file.relativePath)!
+            }))
+        },
+        workerRequest: {
+          databasePath: getDatabasePath(),
+          dictionaryId,
+          dictionaryUuid,
+          mdxPath: mdxFile.sourcePath,
+          sourceFiles: workerFiles,
+          copyFiles,
+          targetDirectory,
+          indexPath
+        }
+      }
+    } catch (error) {
+      await this.dictionaryRepo.deleteById(dictionaryId)
+      throw error
+    }
+  }
+
+  private enqueueDictionaryImport(item: QueuedDictionaryImport): void {
+    this.pendingDictionaryImports.push(item)
+    this.drainDictionaryImports()
+  }
+
+  private drainDictionaryImports(): void {
+    while (
+      this.activeDictionaryImports < IMPORT_WORKER_CONCURRENCY &&
+      this.pendingDictionaryImports.length > 0
+    ) {
+      const item = this.pendingDictionaryImports.shift()!
+      this.activeDictionaryImports += 1
+      void this.runDictionaryImportWorker(item)
+        .catch((error) => {
+          console.error('Dictionary import Worker failed', error)
+        })
+        .finally(() => {
+          this.activeDictionaryImports -= 1
+          this.drainDictionaryImports()
+        })
+    }
+  }
+
+  private runDictionaryImportWorker(item: QueuedDictionaryImport): Promise<void> {
     const workerPath =
       process.env.DICTOL_IMPORT_WORKER_PATH ?? join(__dirname, 'dictionary-import-worker.js')
-    const worker = new Worker(workerPath, {
-      workerData: {
-        databasePath: getDatabasePath(),
-        mdxPath,
-        sourceFiles,
-        copyFiles,
-        userDataPath: app.getPath('userData'),
-        targetDirectoryName: randomUUID()
-      }
-    })
+    const worker = new Worker(workerPath, { workerData: item.request })
 
-    return new Promise<ImportedDictionary>((resolvePromise, rejectPromise) => {
-      let created = false
-      const failBeforeCreation = (error: Error): void => {
-        if (created) {
-          console.error('Dictionary import failed after creation', error)
-          return
-        }
-        rejectPromise(error)
-      }
-
+    return new Promise<void>((resolvePromise, rejectPromise) => {
+      let workerMessageError: Error | undefined
       worker.on('message', (message: DictionaryImportWorkerMessage) => {
-        switch (message.type) {
-          case 'created':
-            created = true
-            resolvePromise(message.value)
-            break
-          case 'ready':
-            onReady?.(message.name)
-            break
-          case 'error':
-            failBeforeCreation(new Error(message.error || '词典导入失败'))
-            break
-        }
+        if (message.type === 'ready') item.onReady?.(message.name, message.indexElapsedMs)
+        if (message.type === 'error')
+          workerMessageError = new Error(message.error || '词典导入失败')
       })
-      worker.once('error', (error) => failBeforeCreation(error))
+      worker.once('error', rejectPromise)
       worker.once('exit', (code) => {
-        if (!created && code !== 0) {
-          failBeforeCreation(new Error(`词典导入 Worker 异常退出（${code}）`))
-        } else if (!created) {
-          failBeforeCreation(new Error('词典导入 Worker 未创建词典记录'))
+        if (workerMessageError) {
+          rejectPromise(workerMessageError)
         } else if (code !== 0) {
-          console.error(`Dictionary import Worker exited unexpectedly (${code})`)
+          rejectPromise(new Error(`词典导入 Worker 异常退出（${code}）`))
+        } else {
+          resolvePromise()
         }
       })
     })
   }
 
-  async searchDictionaryEntries(prefix: string, limit = 50): Promise<DictionarySearchResult[]> {
-    const normalizedPrefix = prefix.trim().toLowerCase()
-    if (!normalizedPrefix) return []
-
-    const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 100)
-    return this.entryRepo.searchByPrefix(normalizedPrefix, safeLimit)
+  async listDictionarySearchGroups(): Promise<DictionarySearchGroup[]> {
+    const groups: SearchDictionaryGroup[] = await this.dictionaryGroupRepo.listSearchable()
+    return groups.map((group) => ({ ...group, id: String(group.id) }))
   }
 
-  async lookupDictionaryEntryGroup(term: string): Promise<DictionaryEntryGroup | null> {
-    const normalizedTerm = term.trim().toLowerCase()
-    if (!normalizedTerm) return null
-
-    const group = (await this.loadDictionaryEntryGroups([normalizedTerm]))[0] ?? null
-    return group
+  async listDictionaryGroups(): Promise<DictionaryGroupSummary[]> {
+    const groups: DictionaryGroupWithMembers[] = await this.dictionaryGroupRepo.listAll()
+    return groups.map((group) => this.toDictionaryGroupSummary(group))
   }
 
-  async getDictionaryEntryRecord(entryId: string): Promise<DictionaryEntryRecord | null> {
-    const numericEntryId = Number(entryId)
-    if (!Number.isSafeInteger(numericEntryId) || numericEntryId <= 0) return null
+  async createDictionaryGroup(name: string): Promise<DictionaryGroupSummary> {
+    const normalizedName = this.normalizeDictionaryGroupName(name)
+    const created = await this.dictionaryGroupRepo.create(normalizedName)
+    return this.toDictionaryGroupSummary({ ...created, dictionaryIds: [] })
+  }
 
-    const row = await this.entryRepo.findEntryContent(numericEntryId)
-    if (!row) return null
-
-    return {
-      id: String(row.id),
-      dictionaryId: String(row.dictionaryId),
-      dictionaryName: row.dictionaryName,
-      word: row.word,
-      recordStartOffset: row.recordStartOffset,
-      recordEndOffset: row.recordEndOffset
+  async updateDictionaryGroupName(groupId: string, name: string): Promise<void> {
+    const numericGroupId = this.parseDictionaryGroupId(groupId)
+    const normalizedName = this.normalizeDictionaryGroupName(name)
+    if (!(await this.dictionaryGroupRepo.updateName(numericGroupId, normalizedName))) {
+      throw new Error('词典组不存在')
     }
   }
 
-  async getRandomDictionaryEntry(
+  async deleteDictionaryGroup(groupId: string): Promise<void> {
+    const numericGroupId = this.parseDictionaryGroupId(groupId)
+    if (!(await this.dictionaryGroupRepo.deleteById(numericGroupId))) {
+      throw new Error('词典组不存在')
+    }
+  }
+
+  async updateDictionaryGroupMembers(groupId: string, dictionaryIds: string[]): Promise<void> {
+    const numericGroupId = this.parseDictionaryGroupId(groupId)
+    if (!Array.isArray(dictionaryIds)) throw new Error('无效的词典组成员')
+
+    const numericDictionaryIds = dictionaryIds.map((dictionaryId) =>
+      this.parseDictionaryId(dictionaryId)
+    )
+    if (new Set(numericDictionaryIds).size !== numericDictionaryIds.length) {
+      throw new Error('词典组成员包含重复的词典')
+    }
+    await this.dictionaryGroupRepo.updateMembers(numericGroupId, numericDictionaryIds)
+  }
+
+  async searchDictionaryEntries(
+    prefix: string,
+    limit = 50,
+    groupId?: number
+  ): Promise<DictionarySearchResult[]> {
+    const query = prefix.trim()
+    if (!query) return []
+
+    const dictionaries = await this.listReadyDictionaryIndexes(groupId)
+    const service = new DidxQueryService(dictionaries, { getBaseForms: () => [] }, 8)
+    return service.candidate(query, limit).then((matches) =>
+      matches.map((match) => ({
+        word: match.keyText,
+        normalizedWord: match.normalizedKey,
+        dictionaryIds: match.dictionaryIds.map(String)
+      }))
+    )
+  }
+
+  async lookupDictionaryEntryGroup(
+    term: string,
+    groupId?: number
+  ): Promise<DictionaryEntryGroup | null> {
+    const query = term.trim()
+    if (!query) return null
+
+    const dictionaries = await this.listSearchableDictionaries()
+    const memberIds =
+      groupId === undefined
+        ? undefined
+        : await this.dictionaryGroupRepo.listSearchableMemberIds(groupId)
+    const dictionariesById = new Map(dictionaries.map((dictionary) => [dictionary.id, dictionary]))
+    const scopedDictionaries =
+      memberIds === undefined
+        ? dictionaries
+        : memberIds
+            .map((id) => dictionariesById.get(id))
+            .filter((dictionary) => dictionary !== undefined)
+    const service = new DidxQueryService(
+      await this.dictionaryIndexProvider.acquireMany(scopedDictionaries.map(({ id }) => id)),
+      { getBaseForms: () => [] },
+      8
+    )
+    const exact = await service.exact(query)
+    if (exact.length === 0) return null
+
+    const hitDictionaryIds = new Set(exact.map(({ dictionaryId }) => dictionaryId))
+    const matchedDictionaries = scopedDictionaries.filter(({ id }) => hitDictionaryIds.has(id))
+    return {
+      word: exact[0].keyText,
+      normalizedWord: exact[0].normalizedKey,
+      dictionaries: await Promise.all(
+        matchedDictionaries.map(async (dictionary) => ({
+          dictionaryId: String(dictionary.id),
+          dictionaryName: dictionary.name,
+          dictionaryIconUrl: await this.createDictionaryIconUrl(dictionary)
+        }))
+      )
+    }
+  }
+
+  async lookupDictionaryEntry(
     dictionaryId: string,
-    recordCount?: number | null
-  ): Promise<DictionaryEntryRecord | null> {
-    const numericDictionaryId = Number(dictionaryId)
-    if (!Number.isSafeInteger(numericDictionaryId) || numericDictionaryId <= 0) return null
+    term: string
+  ): Promise<DictionaryEntryMatch | null> {
+    const numericDictionaryId = this.parseDictionaryId(dictionaryId)
+    const query = term.trim()
+    if (!query) return null
 
-    const total = recordCount ?? (await this.entryRepo.countByDictionaryId(numericDictionaryId))
-    const row = await this.entryRepo.findRandomEntryContent(numericDictionaryId, total)
-    if (!row) return null
+    const target = await this.dictionaryRepo.findById(numericDictionaryId)
+    if (!target || target.status !== 'ready') return null
 
-    return {
-      id: String(row.id),
-      dictionaryId: String(row.dictionaryId),
-      dictionaryName: row.dictionaryName,
-      word: row.word,
-      recordStartOffset: row.recordStartOffset,
-      recordEndOffset: row.recordEndOffset
-    }
+    const [dictionaryIndex] = await this.dictionaryIndexProvider.acquireMany([numericDictionaryId])
+    const [match] = await dictionaryIndex.index.exact(query)
+    return match
+      ? {
+          word: match.keyText,
+          normalizedWord: match.normalizedKey
+        }
+      : null
   }
 
-  /**
-   * 返回一个展示入口对应的全部同词典同规范化 key record。
-   *
-   * 一个 MDX 词条可能由重复 key 的多个连续 record 组成；调用方应按此顺序解码并拼接。
-   */
-  async getDictionaryEntryRecords(entryId: string): Promise<DictionaryEntryRecord[]> {
-    const numericEntryId = Number(entryId)
-    if (!Number.isSafeInteger(numericEntryId) || numericEntryId <= 0) return []
+  private async listReadyDictionaryRowsWithIndexStatus(): Promise<
+    Array<{
+      dictionary: Dictionary
+      indexStatus: 'building' | 'ready' | 'error' | 'needs_reindex' | null
+    }>
+  > {
+    return this.db
+      .select({ dictionary, indexStatus: dictionaryIndex.status })
+      .from(dictionary)
+      .leftJoin(dictionaryIndex, eq(dictionaryIndex.dictionaryId, dictionary.id))
+      .where(eq(dictionary.status, 'ready'))
+      .orderBy(asc(dictionary.sortOrder), asc(dictionary.id))
+  }
 
-    const rows = await this.entryRepo.findEntryContentsForDisplay(numericEntryId)
-
-    return rows.map((row) => ({
-      id: String(row.id),
-      dictionaryId: String(row.dictionaryId),
-      dictionaryName: row.dictionaryName,
-      word: row.word,
-      recordStartOffset: row.recordStartOffset,
-      recordEndOffset: row.recordEndOffset
-    }))
+  private async listSearchableDictionaries(): Promise<Dictionary[]> {
+    const rows = await this.listReadyDictionaryRowsWithIndexStatus()
+    if (rows.some(({ indexStatus }) => indexStatus !== 'ready')) {
+      throw new Error('词典索引需要升级，请先完成重新索引。')
+    }
+    return rows
+      .map(({ dictionary: readyDictionary }) => readyDictionary)
+      .filter(({ enabled }) => enabled)
   }
 
   async listDictionaryResourceFiles(dictionaryId: number): Promise<
@@ -781,6 +1099,31 @@ export class DBService {
     const numericId = Number(dictionaryId)
     if (!Number.isSafeInteger(numericId) || numericId <= 0) throw new Error('无效的词典 ID')
     return numericId
+  }
+
+  private parseDictionaryGroupId(groupId: string): number {
+    const numericId = Number(groupId)
+    if (!Number.isSafeInteger(numericId) || numericId <= 0) {
+      throw new Error('无效的词典组 ID')
+    }
+    return numericId
+  }
+
+  private normalizeDictionaryGroupName(name: string): string {
+    if (typeof name !== 'string') throw new Error('无效的词典组名称')
+    const normalizedName = name.trim()
+    if (!normalizedName) throw new Error('词典组名称不能为空')
+    if (normalizedName.length > 100) throw new Error('词典组名称不能超过 100 个字符')
+    return normalizedName
+  }
+
+  private toDictionaryGroupSummary(group: DictionaryGroupWithMembers): DictionaryGroupSummary {
+    return {
+      id: String(group.id),
+      name: group.name,
+      sortOrder: group.sortOrder,
+      dictionaryIds: group.dictionaryIds.map(String)
+    }
   }
 
   private parseOnlineDictionaryId(id: string): number {
@@ -888,53 +1231,6 @@ export class DBService {
     this.wordbookExportListeners.forEach((listener) => listener(status))
   }
 
-  private async loadDictionaryEntryGroups(
-    normalizedWords: string[]
-  ): Promise<DictionaryEntryGroup[]> {
-    if (normalizedWords.length === 0) return []
-    const matches = await this.entryRepo.lookupByNormalizedWords(normalizedWords)
-
-    const mdxFileIds = [...new Set(matches.map((match) => match.dictionaryFileId))]
-    const mdxFiles = await this.fileRepo.listMdxByIds(mdxFileIds)
-    const mdxPathById = new Map(mdxFiles.map((file) => [file.id, file.filePath]))
-
-    const iconPaths = await Promise.all(
-      matches.map((match) =>
-        match.dictionaryPath && mdxPathById.has(match.dictionaryFileId)
-          ? findDictionaryIconPath(match.dictionaryPath, mdxPathById.get(match.dictionaryFileId)!)
-          : null
-      )
-    )
-
-    const groups = new Map<string, DictionaryEntryGroup>()
-    for (const [index, match] of matches.entries()) {
-      let group = groups.get(match.normalizedWord)
-      if (!group) {
-        group = {
-          normalizedWord: match.normalizedWord,
-          word: match.word,
-          dictionaries: []
-        }
-        groups.set(match.normalizedWord, group)
-      } else if (match.word < group.word) {
-        group.word = match.word
-      }
-
-      group.dictionaries.push({
-        entryId: String(match.entryId),
-        dictionaryId: String(match.dictionaryId),
-        dictionaryName: match.dictionaryName,
-        dictionaryIconUrl: iconPaths[index]
-          ? createDictionaryAssetUrl(match.dictionaryId, iconPaths[index])
-          : null
-      })
-    }
-    const result = [...new Set(normalizedWords)]
-      .map((normalizedWord) => groups.get(normalizedWord))
-      .filter((group): group is DictionaryEntryGroup => Boolean(group))
-    return result
-  }
-
   private async getDictionaryIconPath(
     dictionaryId: number,
     dictionaryPath: string | null
@@ -966,6 +1262,27 @@ function parseWordbookImportText(text: string): string[] {
     words.push(word)
   }
   return words
+}
+
+function getImportFileType(filePath: string): 'mdx' | 'mdd' | null {
+  const extension = extname(filePath).toLowerCase()
+  if (extension === '.mdx') return 'mdx'
+  if (extension === '.mdd') return 'mdd'
+  return null
+}
+
+function isSafeImportRelativePath(filePath: string): boolean {
+  if (!filePath || isAbsolute(filePath)) return false
+  const normalized = filePath.split(sep).join('/')
+  return normalized !== '..' && !normalized.startsWith('../')
+}
+
+function toSafeNumber(value: number | bigint, field: string): number {
+  const number = Number(value)
+  if (!Number.isSafeInteger(number) || number < 0) {
+    throw new Error(`${field} 超出 SQLite/JavaScript 安全整数范围：${value}`)
+  }
+  return number
 }
 
 function getImageMimeType(filePath: string): string {

@@ -188,12 +188,15 @@
       event.preventDefault()
       event.stopPropagation()
 
-      const target = href.replace(/^entry:\/\/\/?/i, '').split('#', 1)[0]
+      const hashIndex = href.indexOf('#')
+      const targetHref = hashIndex < 0 ? href : href.slice(0, hashIndex)
+      const hash = hashIndex < 0 ? '' : href.slice(hashIndex)
+      const target = targetHref.replace(/^entry:\/\/\/?/i, '')
       try {
         // 需要额外处理 entry://@topic_literature-and-writing_level=b1 里的 @ 符号，避免被当作uri分隔符
-        location.assign(`entry:///${encodeURIComponent(decodeURIComponent(target))}`)
+        location.assign(`entry:///${encodeURIComponent(decodeURIComponent(target))}${hash}`)
       } catch {
-        location.assign(`entry:///${encodeURIComponent(target)}`)
+        location.assign(`entry:///${encodeURIComponent(target)}${hash}`)
       }
     },
     true

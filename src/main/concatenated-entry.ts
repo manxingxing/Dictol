@@ -141,6 +141,11 @@ function findHtmlAttribute(
 }
 
 function rewriteDictionaryHref(href: string, dictionaryId: number): string {
+  if (/^entry:\/\//i.test(href)) {
+    const hashIndex = href.indexOf('#')
+    const target = hashIndex < 0 ? href : href.slice(0, hashIndex)
+    return `${target}#dictionary-${dictionaryId}`
+  }
   if (/^(?:sound|audio|file):\/\//i.test(href)) {
     const url = new URL(href)
     const resourcePath = url.hostname ? `/${url.hostname}${url.pathname}` : url.pathname

@@ -17,6 +17,7 @@ export type WordCaptureStatus = {
   registered: boolean
   shortcut: string
   lookupWordOnSelection: boolean
+  selectionDictionaryGroupId: string | null
   excludedPrograms: string[]
 }
 
@@ -41,6 +42,7 @@ export class WordCaptureController extends BaseController {
     ipcMain.handle('word-capture:open-input-monitoring-settings', this.openInputMonitoringSettings)
     ipcMain.handle('word-capture:set-shortcut', this.setShortcut)
     ipcMain.handle('word-capture:set-selection-enabled', this.setSelectionEnabled)
+    ipcMain.handle('word-capture:set-selection-dictionary-group', this.setSelectionDictionaryGroup)
     ipcMain.handle('word-capture:remove-excluded-program', this.removeExcludedProgram)
   }
 
@@ -160,6 +162,46 @@ export class WordCaptureController extends BaseController {
     }
   }
 
+  setSelectionDictionaryGroup = async (
+    event: IpcMainInvokeEvent,
+    groupId: unknown
+  ): Promise<WordCaptureShortcutResult | null> => {
+    if (!this.acceptsSender(event.sender)) return null
+    if (groupId !== null && typeof groupId !== 'string') {
+      return { ok: false, status: this.createStatus(), error: '无效的取词组。' }
+    }
+    const numericGroupId = groupId === null ? undefined : Number(groupId)
+    if (
+      numericGroupId !== undefined &&
+      (!Number.isSafeInteger(numericGroupId) || numericGroupId <= 0)
+    ) {
+      return { ok: false, status: this.createStatus(), error: '无效的取词组。' }
+    }
+    if (numericGroupId !== undefined) {
+      const groups = await this.db.listDictionaryGroups()
+      if (!groups.some((group) => group.id === String(numericGroupId))) {
+        return { ok: false, status: this.createStatus(), error: '词典组不存在。' }
+      }
+    }
+
+    const previousConfig = this.runtime.appConfig.load()
+    const nextConfig: AppConfig = {
+      ...previousConfig,
+      selection: {
+        ...previousConfig.selection,
+        dictionaryGroupId: numericGroupId
+      }
+    }
+    try {
+      this.runtime.appConfig.save(nextConfig)
+      this.runtime.selectionDictionaryGroupId = numericGroupId
+      return { ok: true, status: this.createStatus() }
+    } catch (error) {
+      console.error('Failed to update selection dictionary group', { groupId, error })
+      return { ok: false, status: this.createStatus(), error: '无法更新取词组。' }
+    }
+  }
+
   removeExcludedProgram = (
     event: IpcMainInvokeEvent,
     programName: string
@@ -199,6 +241,10 @@ export class WordCaptureController extends BaseController {
       registered: this.runtime.shortcutRegister.isRegistered(LOOKUP_WORD_ON_SHORTCUT),
       shortcut: config.shortcuts.lookupWordOnShortcut,
       lookupWordOnSelection: config.featureFlags.lookupWordOnSelection,
+      selectionDictionaryGroupId:
+        this.runtime.selectionDictionaryGroupId === undefined
+          ? null
+          : String(this.runtime.selectionDictionaryGroupId),
       excludedPrograms: [...config.selection.excludedPrograms]
     }
   }

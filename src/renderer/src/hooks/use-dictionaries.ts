@@ -17,6 +17,9 @@ type ReadyDictionary = Awaited<ReturnType<Window['dictol']['dictionaries']['list
 type ImportedDictionary = Awaited<ReturnType<Window['dictol']['dictionaries']['import']>>
 type DictionaryImportRequest = Parameters<Window['dictol']['dictionaries']['import']>[0]
 type ReorderDictionariesContext = { previousDictionaries?: DictionarySummary[] }
+type DictionaryIndexMigrationResult = Awaited<
+  ReturnType<Window['dictol']['dictionaries']['migrateIndexes']>
+>
 
 export function useDictionaryInfo(
   dictionaryId: string | null
@@ -51,6 +54,21 @@ export function useReadyDictionaries(): UseQueryResult<ReadyDictionary[], Error>
   })
 }
 
+export function useMigrateDictionaryIndexes(): UseMutationResult<
+  DictionaryIndexMigrationResult,
+  Error,
+  void
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => window.dictol.dictionaries.migrateIndexes(),
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: readyDictionariesQueryKey })
+    }
+  })
+}
+
 export function useImportDictionary(): UseMutationResult<
   ImportedDictionary,
   Error,
@@ -60,6 +78,24 @@ export function useImportDictionary(): UseMutationResult<
 
   return useMutation({
     mutationFn: (request) => window.dictol.dictionaries.import(request),
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: dictionariesQueryKey }),
+        queryClient.invalidateQueries({ queryKey: readyDictionariesQueryKey })
+      ])
+    }
+  })
+}
+
+export function useImportDictionariesFromFolder(): UseMutationResult<
+  Awaited<ReturnType<Window['dictol']['dictionaries']['importFolder']>>,
+  Error,
+  Parameters<Window['dictol']['dictionaries']['importFolder']>[0]
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (request) => window.dictol.dictionaries.importFolder(request),
     onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: dictionariesQueryKey }),

@@ -4,7 +4,7 @@ import { AppConfigStore, type AppConfig } from './app-config'
 import { AiLookupService } from './ai-service'
 import { BuiltInLexiconService } from './built-in-lexicon-service'
 import { initDrizzleDB, type DictolDatabase, type SqliteDatabase } from './db/drizzle'
-import { getDatabasePath, getMigrationsPath } from './db/paths'
+import { getDatabasePath, getDictionaryIndexRoot, getMigrationsPath } from './db/paths'
 import { DBService } from './db-service'
 import { MdictResourceManager } from './mdict-resource-manager'
 import { ResourceCache } from './resource-cache'
@@ -14,6 +14,8 @@ import { TrayManager } from './tray-manager'
 import { WindowManager } from './window-manager'
 import { MainWindowShortcutRouter } from './main-window-shortcut-router'
 import { AdBlockService } from './ad-block-service'
+import { DictionaryIndexManager } from './dictionary-index-manager'
+import { DictionarySearchScope } from './dictionary-search-scope'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 
 export const LOOKUP_WORD_ON_SHORTCUT = 'lookupWordOnShortcut'
@@ -27,6 +29,7 @@ export class AppRuntime {
   db: DictolDatabase | undefined
   dbService: DBService | undefined
   private dbConnection: SqliteDatabase | undefined
+  private _dictionaryIndexManager: DictionaryIndexManager | undefined
   private _mdictResourceManager: MdictResourceManager | undefined
   private mainWindowInitializer: MainWindowInitializer | undefined
   windowManager: WindowManager = new WindowManager()
@@ -40,6 +43,8 @@ export class AppRuntime {
   mainWindowShortcutRouter: MainWindowShortcutRouter | undefined
   adBlockService: AdBlockService = new AdBlockService()
   dictionaryLayout: DictionaryLayout = 'single'
+  dictionarySearchScope: DictionarySearchScope = new DictionarySearchScope()
+  selectionDictionaryGroupId: number | undefined
 
   get isInitialized(): boolean {
     return this.initialized
@@ -57,6 +62,11 @@ export class AppRuntime {
   get mdictResourceManager(): MdictResourceManager {
     if (!this._mdictResourceManager) throw new Error('MDict 资源管理器尚未初始化')
     return this._mdictResourceManager
+  }
+
+  get dictionaryIndexManager(): DictionaryIndexManager {
+    if (!this._dictionaryIndexManager) throw new Error('词典索引管理器尚未初始化')
+    return this._dictionaryIndexManager
   }
 
   get activeDictionaryView():
@@ -79,7 +89,8 @@ export class AppRuntime {
         error
       )
     }
-    this.dbService = new DBService(orm, this.builtInLexicon)
+    this._dictionaryIndexManager = new DictionaryIndexManager(orm, getDictionaryIndexRoot())
+    this.dbService = new DBService(orm, this.builtInLexicon, this._dictionaryIndexManager)
     this._mdictResourceManager = new MdictResourceManager(this.dbService)
     this.dbConnection = conn
   }
@@ -131,13 +142,15 @@ export class AppRuntime {
     return mainWindow
   }
 
-  initialize(): void {
+  async initialize(): Promise<void> {
     if (this.initialized) return
     if (this.disposed) throw new Error('AppRuntime 已销毁，不能重新初始化')
 
     const config = this.appConfig.load()
     this.dictionaryLayout = config.dictionaryLayout
+    this.selectionDictionaryGroupId = config.selection.dictionaryGroupId
     this.initDB()
+    await this._dictionaryIndexManager!.initialize()
     this.adBlockService.initialize()
     this.initWindowManager()
     this.initSelectionHook(config)
@@ -224,6 +237,9 @@ export class AppRuntime {
     this.aiLookupService.dispose()
     this._mdictResourceManager?.dispose()
     this._mdictResourceManager = undefined
+    this._dictionaryIndexManager?.dispose()
+    this._dictionaryIndexManager = undefined
+    this.dictionarySearchScope.clear()
     this.builtInLexicon?.dispose()
     this.builtInLexicon = undefined
     this.closeDB()

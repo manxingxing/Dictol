@@ -3,7 +3,9 @@ import { LoaderCircle, Search } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import useDebounce from 'react-use/lib/useDebounce'
 
-import { useDictionarySearch } from '@/hooks/use-dictionary-entries'
+import { useDictionarySearch, useDictionarySearchGroups } from '@/hooks/use-dictionary-entries'
+import { useReadyDictionaries } from '@/hooks/use-dictionaries'
+import { useDictionarySearchScope } from '@/hooks/use-dictionary-search-scope'
 import { useQueryHistory } from '@/hooks/use-query-history'
 import { useSearchShortCut } from '@/hooks/use-search-shortcut'
 import { cn } from '@/lib/utils'
@@ -14,6 +16,7 @@ import {
   SEARCH_POPOVER_SUGGESTION_LIMIT
 } from '../../../shared/search-popover'
 import { MAIN_WINDOW_TITLEBAR_CONTROL_HEIGHT } from '../../../shared/window-chrome'
+import { DICTIONARY_SEARCH_ERROR_MESSAGE } from '../../../shared/dictionary-search-error'
 
 type Suggestion = {
   word: string
@@ -25,6 +28,9 @@ const POPOVER_HORIZONTAL_GUTTER = 12
 const POPOVER_BOTTOM_GUTTER = 8
 const POPOVER_OFFSET = 3
 const POPOVER_SURFACE_HEIGHT = 10
+const POPOVER_SCOPE_HEIGHT = 38
+const POPOVER_SCOPE_MENU_ROW_HEIGHT = 36
+const POPOVER_SCOPE_MENU_SURFACE_HEIGHT = 14
 
 export const CompactTitleBarSearch = (): React.JSX.Element => {
   const navigate = useNavigate()
@@ -37,14 +43,34 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
   const [popoverVisible, setPopoverVisible] = useState(false)
   const [debouncedQuery, setDebouncedQuery] = useState(query)
   const [delayedLoadingQuery, setDelayedLoadingQuery] = useState<string | null>(null)
+  const [scopeMenuOpen, setScopeMenuOpen] = useState(false)
   const searchShortcutLabel = window.dictol.platform === 'darwin' ? '⌘ K' : 'Ctrl K'
+  const { data: readyDictionaries, isLoading: areDictionariesLoading } = useReadyDictionaries()
+  const searchDisabled =
+    areDictionariesLoading ||
+    !readyDictionaries?.length ||
+    readyDictionaries.some(({ indexStatus }) => indexStatus !== 'ready')
 
   useDebounce(() => setDebouncedQuery(query.trim()), 120, [query])
 
   const { data: history = [] } = useQueryHistory()
-  const { data: results = [], isFetching } = useDictionarySearch(
-    debouncedQuery,
-    SEARCH_POPOVER_SUGGESTION_LIMIT
+  const { data: groups } = useDictionarySearchGroups()
+  const scopes = useMemo(
+    () => [
+      { id: null, name: '全部', dictionaryCount: null },
+      ...(groups ?? []).map((group) => ({ ...group, dictionaryCount: group.dictionaryCount }))
+    ],
+    [groups]
+  )
+  const { scopeId: activeScopeId, selectedScope } = useDictionarySearchScope(scopes)
+  const {
+    data: results = [],
+    isFetching,
+    isError: isSearchError
+  } = useDictionarySearch(
+    searchDisabled ? '' : debouncedQuery,
+    SEARCH_POPOVER_SUGGESTION_LIMIT,
+    activeScopeId
   )
 
   const normalizedQuery = query.trim()
@@ -65,20 +91,24 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
         recent: true
       }))
     }
+    if (isSearchError) return []
     return results.slice(0, SEARCH_POPOVER_SUGGESTION_LIMIT).map((result) => ({
       word: result.word,
+      description: '词典',
       recent: false
     }))
-  }, [history, query, results])
+  }, [history, isSearchError, query, results])
 
   const showDelayedLoading =
     searchPending && suggestions.length === 0 && delayedLoadingQuery === normalizedQuery
-  const popoverStatus: 'loading' | 'empty' | undefined = normalizedQuery
-    ? showDelayedLoading
-      ? 'loading'
-      : !searchPending && suggestions.length === 0
-        ? 'empty'
-        : undefined
+  const popoverStatus: 'loading' | 'empty' | 'error' | undefined = normalizedQuery
+    ? isSearchError
+      ? 'error'
+      : showDelayedLoading
+        ? 'loading'
+        : !searchPending && suggestions.length === 0
+          ? 'empty'
+          : undefined
     : undefined
 
   const hidePopover = useCallback((): void => {
@@ -88,11 +118,12 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
   }, [])
 
   const showPopover = useCallback((): boolean => {
+    if (searchDisabled) return false
     popoverOpenRef.current = true
     setPopoverVisible(false)
     setPopoverOpen(true)
     return true
-  }, [])
+  }, [searchDisabled])
 
   useSearchShortCut(showPopover)
 
@@ -102,10 +133,10 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
       if (!normalizedWord) return
       setQuery(normalizedWord)
       hidePopover()
+      const params = new URLSearchParams()
       const dictionaryId = searchParams.get('dictionary')
-      const dictionaryQuery = dictionaryId
-        ? `?${new URLSearchParams({ dictionary: dictionaryId })}`
-        : ''
+      if (dictionaryId) params.set('dictionary', dictionaryId)
+      const dictionaryQuery = params.size ? `?${params}` : ''
       void navigate(`/search/${encodeURIComponent(normalizedWord)}${dictionaryQuery}`)
     },
     [hidePopover, navigate, searchParams, setQuery]
@@ -131,11 +162,11 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
       }
 
       const first = await window.dictol.entries
-        .search(normalizedSubmittedQuery, 1)
+        .search(normalizedSubmittedQuery, 1, activeScopeId)
         .then((items) => items[0])
       if (first) openWord(first.word)
     },
-    [isFetching, normalizedQuery, openWord, suggestions]
+    [activeScopeId, isFetching, normalizedQuery, openWord, suggestions]
   )
 
   useEffect(() => window.dictol.searchPopover.onSelect(openWord), [openWord])
@@ -152,6 +183,7 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
       }),
     [openFirstResult]
   )
+  useEffect(() => window.dictol.searchPopover.onScopeMenuOpen(setScopeMenuOpen), [])
   useEffect(
     () =>
       window.dictol.searchPopover.onDismiss(() => {
@@ -184,13 +216,22 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
     const hasSuggestions = suggestions.length > 0 || popoverStatus !== undefined
     const suggestionSurfaceHeight = hasSuggestions
       ? POPOVER_OFFSET +
+        POPOVER_SCOPE_HEIGHT +
         Math.min(Math.max(1, suggestions.length), SEARCH_POPOVER_MAX_VISIBLE_ROWS) *
           SEARCH_POPOVER_ROW_HEIGHT +
         POPOVER_SURFACE_HEIGHT
+      : POPOVER_OFFSET + POPOVER_SCOPE_HEIGHT + POPOVER_SURFACE_HEIGHT
+    const scopeMenuHeight = scopeMenuOpen
+      ? POPOVER_OFFSET +
+        POPOVER_SCOPE_HEIGHT +
+        scopes.length * POPOVER_SCOPE_MENU_ROW_HEIGHT +
+        POPOVER_SCOPE_MENU_SURFACE_HEIGHT
       : 0
     const popoverY = Math.max(0, bounds.y)
     const desiredHeight =
-      MAIN_WINDOW_TITLEBAR_CONTROL_HEIGHT + suggestionSurfaceHeight + POPOVER_BOTTOM_GUTTER
+      MAIN_WINDOW_TITLEBAR_CONTROL_HEIGHT +
+      Math.max(suggestionSurfaceHeight, scopeMenuHeight) +
+      POPOVER_BOTTOM_GUTTER
 
     window.dictol.searchPopover.show()
     window.dictol.searchPopover.setBounds({
@@ -203,9 +244,12 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
       query,
       suggestions,
       suggestions.length > 0 ? 0 : -1,
-      popoverStatus
+      popoverStatus,
+      isSearchError ? DICTIONARY_SEARCH_ERROR_MESSAGE : undefined,
+      scopes,
+      activeScopeId
     )
-  }, [popoverStatus, query, suggestions])
+  }, [activeScopeId, isSearchError, popoverStatus, query, scopeMenuOpen, scopes, suggestions])
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current
@@ -233,6 +277,9 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
   }, [hidePopover, popoverOpen])
 
   useEffect(() => () => window.dictol.searchPopover.hide(), [])
+  useEffect(() => {
+    if (searchDisabled && popoverOpenRef.current) hidePopover()
+  }, [hidePopover, searchDisabled])
 
   return (
     <div
@@ -246,23 +293,30 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
         aria-label="搜索单词"
         aria-keyshortcuts={window.dictol.platform === 'darwin' ? 'Meta+K' : 'Control+K'}
         className={cn(
-          'titlebar-search-trigger relative flex h-full w-full cursor-text items-center rounded-lg border pl-9 pr-3 text-left text-sm shadow-none outline-none',
+          'titlebar-search-trigger relative flex h-full w-full cursor-text items-center rounded-lg border px-3 text-left text-sm shadow-none outline-none',
           popoverOpen && popoverVisible && 'invisible'
         )}
         onClick={showPopover}
+        disabled={searchDisabled}
         type="button"
       >
-        {searchPending ? (
-          <LoaderCircle className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-        ) : (
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        )}
+        <span className="max-w-20 truncate text-xs text-muted-foreground">
+          {selectedScope.name}
+        </span>
+        <span aria-hidden="true" className="mx-2 h-4 w-px bg-border" />
         <span
           className={
-            query ? 'truncate flex-1 text-foreground' : 'truncate flex-1 text-muted-foreground'
+            query
+              ? 'pointer-events-none absolute left-1/2 flex max-w-[52%] -translate-x-1/2 items-center gap-2 truncate text-foreground'
+              : 'pointer-events-none absolute left-1/2 flex max-w-[52%] -translate-x-1/2 items-center gap-2 truncate text-muted-foreground'
           }
         >
-          {query || '搜索单词…'}
+          {searchPending ? (
+            <LoaderCircle className="size-4 shrink-0 animate-spin text-muted-foreground" />
+          ) : (
+            <Search className="size-4 shrink-0 text-muted-foreground" />
+          )}
+          <span className="truncate">{query || '搜索'}</span>
         </span>
         <kbd className="titlebar-search-shortcut">{searchShortcutLabel}</kbd>
       </button>

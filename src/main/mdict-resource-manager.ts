@@ -3,7 +3,7 @@ import { dirname } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 
 import { validateMdictFile, type MdictFileDescriptor } from './mdict-file-validator'
-import { MdictResourceFiles, type MdictRecordLocator } from './mdict-resource-files'
+import { MdictResourceFiles } from './mdict-resource-files'
 
 const CLOSE_RETRY_DELAY_MS = 20
 const CLOSE_RETRY_LIMIT = 100
@@ -18,7 +18,6 @@ export type DictionaryResourceFileRecord = MdictFileDescriptor & {
 export interface MdictResourceDatabase {
   listDictionaryResourceFiles(dictionaryId: number): Promise<DictionaryResourceFileRecord[]>
   updateDictionaryFileLastModified(fileId: number, lastModified: number): Promise<void>
-  getDictionaryEntryRecords(entryId: string): Promise<MdictEntryRecord[]>
 }
 
 export type MdictResourceInfo = {
@@ -26,13 +25,10 @@ export type MdictResourceInfo = {
   dictionaryFileNames: string[]
 }
 
-export type MdictEntryRecord = MdictRecordLocator & {
+export type MdictEntry = {
   id: string
   dictionaryId: string
   word: string
-}
-
-export type MdictEntry = Omit<MdictEntryRecord, keyof MdictRecordLocator> & {
   html: string
 }
 
@@ -75,17 +71,18 @@ export class MdictResourceManager {
     }
   }
 
-  async getEntry(entryId: string): Promise<MdictEntry | null> {
-    const records = await this.db.getDictionaryEntryRecords(entryId)
-    const record = records[0]
-    if (!record) return null
-
-    const resource = await this.acquire(Number(record.dictionaryId))
-    const texts = await resource.readRecords(records)
+  async getEntryByLocators(
+    dictionaryId: number,
+    word: string,
+    locators: readonly Buffer[]
+  ): Promise<MdictEntry | null> {
+    if (locators.length === 0) return null
+    const resource = await this.acquire(dictionaryId)
+    const texts = await resource.readIndexRecords(locators)
     return {
-      id: record.id,
-      dictionaryId: record.dictionaryId,
-      word: record.word,
+      id: `${dictionaryId}:${word}`,
+      dictionaryId: String(dictionaryId),
+      word,
       html: [...new Set(texts)].join(ENTRY_SEPARATOR)
     }
   }

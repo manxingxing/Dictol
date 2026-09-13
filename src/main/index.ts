@@ -73,7 +73,7 @@ function startPrimaryInstance(initialDeepLink: DeepLinkIntent | null): void {
 
   void app
     .whenReady()
-    .then(() => {
+    .then(async () => {
       electronApp.setAppUserModelId('com.dictol.app')
       app.on('browser-window-created', (_, window) => {
         optimizer.watchWindowShortcuts(window)
@@ -81,7 +81,7 @@ function startPrimaryInstance(initialDeepLink: DeepLinkIntent | null): void {
 
       try {
         registerResourceProtocolHandlers(runtime)
-        runtime.initialize()
+        await runtime.initialize()
         registerIPCHandlers(runtime)
         runtime.setMainWindowInitializer((mainWindow) => configureMainWindow(runtime, mainWindow))
         configureMainWindow(runtime, requireMainWindow(runtime))

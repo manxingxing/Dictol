@@ -1,18 +1,26 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom'
-import { Globe2, LoaderCircle, Search, X } from 'lucide-react'
+import { Check, Funnel, Globe2, LoaderCircle, Search, X } from 'lucide-react'
 import useDebounce from 'react-use/lib/useDebounce'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
-import { useDictionarySearch } from '@/hooks/use-dictionary-entries'
+import { useDictionarySearch, useDictionarySearchGroups } from '@/hooks/use-dictionary-entries'
+import { useDictionarySearchScope } from '@/hooks/use-dictionary-search-scope'
 import { useOnlineDictionaries } from '@/hooks/use-online-dictionaries'
 import { useQueryHistory } from '@/hooks/use-query-history'
 import { useSearchShortCut } from '@/hooks/use-search-shortcut'
 import { RIGHT_SIDEBAR_MAX_SIZE, selectCompactMode, useAppStore } from '@/stores/app-store'
 import { SearchHistory } from '@/components/SearchHistory'
 import { isVisible } from '@/lib/utils'
+import { DICTIONARY_SEARCH_ERROR_MESSAGE } from '../../../shared/dictionary-search-error'
 
 export const SearchPanel = (): React.JSX.Element => {
   const navigate = useNavigate()
@@ -39,16 +47,44 @@ export const SearchPanel = (): React.JSX.Element => {
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery)
   useDebounce(() => setDebouncedQuery(searchQuery.trim()), 100, [searchQuery])
 
-  const { data: results = [], isFetching } = useDictionarySearch(debouncedQuery)
+  const { data: groups } = useDictionarySearchGroups()
+  const searchScopes = useMemo(
+    () => [{ id: null, name: '全部', dictionaryCount: null }, ...(groups ?? [])],
+    [groups]
+  )
+  const {
+    scopeId: groupId,
+    selectedScope,
+    selectScope
+  } = useDictionarySearchScope(searchScopes, 'search-panel')
+  const {
+    data: results = [],
+    isFetching,
+    isError: isSearchError
+  } = useDictionarySearch(debouncedQuery, 50, groupId)
   const { data: onlineDictionaries = [] } = useOnlineDictionaries()
   const { data: history = [] } = useQueryHistory()
+
   const createSearchResultPath = useCallback(
     (word: string): string => {
       const dictionaryId = searchParams.get('dictionary')
-      const query = dictionaryId ? `?${new URLSearchParams({ dictionary: dictionaryId })}` : ''
+      const params = new URLSearchParams()
+      if (dictionaryId) params.set('dictionary', dictionaryId)
+      const query = params.size ? `?${params}` : ''
       return `/search/${encodeURIComponent(word)}${query}`
     },
     [searchParams]
+  )
+
+  const selectSearchScope = useCallback(
+    (nextGroupId: string | null): void => {
+      const nextScope = searchScopes.find((scope) => scope.id === nextGroupId)
+      if (!nextScope) return
+
+      selectScope(nextScope)
+      requestAnimationFrame(() => searchInputRef.current?.focus({ preventScroll: true }))
+    },
+    [searchScopes, selectScope]
   )
 
   const normalizedQuery = searchQuery.trim()
@@ -93,9 +129,18 @@ export const SearchPanel = (): React.JSX.Element => {
         ? results[0]
         : undefined
     const currentFirst =
-      first ?? (await window.dictol.entries.search(normalizedQuery, 1).then((items) => items[0]))
+      first ??
+      (await window.dictol.entries.search(normalizedQuery, 1, groupId).then((items) => items[0]))
     await navigate(createSearchResultPath(currentFirst?.word ?? normalizedQuery))
-  }, [createSearchResultPath, debouncedQuery, isFetching, navigate, normalizedQuery, results])
+  }, [
+    createSearchResultPath,
+    debouncedQuery,
+    groupId,
+    isFetching,
+    navigate,
+    normalizedQuery,
+    results
+  ])
 
   const openSelectedCandidate = useCallback(async (): Promise<void> => {
     if (!hasQuery) {
@@ -142,12 +187,11 @@ export const SearchPanel = (): React.JSX.Element => {
           ) : (
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           )}
-
           <Input
             ref={searchInputRef}
             aria-label="搜索单词"
             autoFocus={!displayInCompactMode}
-            className="h-9 border-[var(--border-strong)] bg-card px-9 shadow-none"
+            className="h-9 border-[var(--border-strong)] bg-card px-9 pr-20 shadow-none"
             onChange={(event) => setSearchQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -170,13 +214,13 @@ export const SearchPanel = (): React.JSX.Element => {
                 })
               }
             }}
-            placeholder="搜索单词…"
+            placeholder="搜索"
             value={searchQuery}
           />
           {searchQuery.length > 0 && (
             <Button
               aria-label="清空搜索"
-              className="absolute right-1.5 top-1/2 size-7 -translate-y-1/2 rounded-md text-muted-foreground hover:text-foreground"
+              className="absolute right-9 top-1/2 size-7 -translate-y-1/2 rounded-md text-muted-foreground hover:text-foreground"
               onClick={() => {
                 setSearchQuery('')
                 searchInputRef.current?.focus()
@@ -189,6 +233,33 @@ export const SearchPanel = (): React.JSX.Element => {
               <X />
             </Button>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                aria-label={groupId ? `已选择词典组：${selectedScope.name}` : '筛选词典组'}
+                className={`absolute right-1.5 top-1/2 size-7 -translate-y-1/2 rounded-md text-muted-foreground hover:text-foreground ${
+                  groupId ? 'bg-primary/10 text-primary hover:bg-primary/15' : ''
+                }`}
+                size="icon"
+                title="筛选词典组"
+                type="button"
+                variant="ghost"
+              >
+                <Funnel />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-[11.25rem] w-40 overflow-y-auto">
+              {searchScopes.map((scope) => (
+                <DropdownMenuItem
+                  key={scope.id ?? 'all'}
+                  onSelect={() => selectSearchScope(scope.id)}
+                >
+                  <span className="min-w-0 flex-1 truncate">{scope.name}</span>
+                  {scope.id === groupId && <Check className="size-4 shrink-0" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -199,6 +270,10 @@ export const SearchPanel = (): React.JSX.Element => {
             onPointerMove={setSelectedCandidateIndex}
             selectedIndex={selectedCandidateIndex}
           />
+        ) : isSearchError ? (
+          <p className="px-3 py-8 text-center text-sm text-destructive" role="alert">
+            {DICTIONARY_SEARCH_ERROR_MESSAGE}
+          </p>
         ) : !hasCandidates && !isFetching ? (
           onlineDictionaries.length > 0 ? (
             <ScrollArea className="min-h-0 flex-1" viewportClassName="[&>div]:!block">
@@ -258,7 +333,7 @@ export const SearchPanel = (): React.JSX.Element => {
             <ul className="space-y-1">
               {results.map((result, index) => (
                 <li
-                  key={result.normalizedWord}
+                  key={result.word.toLowerCase()}
                   ref={(element) => {
                     resultItemRefs.current[index] = element
                   }}

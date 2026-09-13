@@ -1,7 +1,8 @@
-import { readdir, stat } from 'node:fs/promises'
-import { basename, dirname, extname, join } from 'node:path'
+import { readFile, readdir, stat } from 'node:fs/promises'
+import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
 
 import type {
+  DictionaryFolderImportPreview,
   DictionaryImportPreview,
   DictionaryImportRequest,
   DictionaryImportSourceFile
@@ -29,15 +30,19 @@ export type ResourceFile = {
   relativePath: string
 }
 
-export async function collectResourceFiles(
-  rootPath: string
-): Promise<ResourceFile[]> {
+export async function collectResourceFiles(rootPath: string): Promise<ResourceFile[]> {
   return collectFilesWithExtensions(rootPath, RESOURCE_EXTENSIONS)
+}
+
+/** 收集一个词典目录下的伴随资源，不会把其他 MDX 当成资源。 */
+export async function collectDictionaryCompanionFiles(rootPath: string): Promise<ResourceFile[]> {
+  return collectResourceFiles(rootPath)
 }
 
 async function collectFilesWithExtensions(
   rootPath: string,
-  extensions: ReadonlySet<string>
+  extensions: ReadonlySet<string>,
+  recursive = true
 ): Promise<ResourceFile[]> {
   const files: ResourceFile[] = []
 
@@ -50,7 +55,7 @@ async function collectFilesWithExtensions(
       const relativePath = join(relativeDirectory, entry.name)
 
       if (entry.isDirectory()) {
-        await visit(sourcePath, relativePath)
+        if (recursive) await visit(sourcePath, relativePath)
         continue
       }
       if (entry.name.startsWith('.')) continue
@@ -66,13 +71,14 @@ async function collectFilesWithExtensions(
   return files
 }
 
-async function collectDictionaryImportFiles(
-  mdxPath: string
+export async function collectDictionaryImportFiles(
+  mdxPath: string,
+  recursive = true
 ): Promise<Array<DictionaryImportSourceFile & { required: boolean }>> {
   const mdxName = basename(mdxPath)
   const mdxBaseName = basename(mdxPath, extname(mdxPath)).toLowerCase()
   const rootPath = dirname(mdxPath)
-  const resourceFiles = await collectResourceFiles(rootPath)
+  const resourceFiles = await collectFilesWithExtensions(rootPath, RESOURCE_EXTENSIONS, recursive)
   const iconRelativePath = resourceFiles
     .filter(
       (file) =>
@@ -99,6 +105,9 @@ export async function createDictionaryImportPreview(
   mdxPath: string
 ): Promise<DictionaryImportPreview> {
   const sourceFiles = await collectDictionaryImportFiles(mdxPath)
+  const iconFile = sourceFiles.find(
+    (file) => file.required && file.relativePath !== basename(mdxPath)
+  )
 
   return {
     mdxPath,
@@ -107,7 +116,77 @@ export async function createDictionaryImportPreview(
         ...file,
         fileSize: (await stat(file.sourcePath)).size
       }))
-    )
+    ),
+    icon: iconFile ? await createIconPreview(iconFile) : null
+  }
+}
+
+export type DictionaryImportFolderPlan = {
+  mdxPath: string
+  relativePath: string
+  sourceFiles: DictionaryImportSourceFile[]
+}
+
+export function selectDictionaryImportPlans(
+  plans: readonly DictionaryImportFolderPlan[],
+  selectedMdxPaths: readonly string[]
+): DictionaryImportFolderPlan[] {
+  const selectedPaths = selectedMdxPaths.map((path) => resolve(path))
+  if (new Set(selectedPaths).size !== selectedPaths.length) {
+    throw new Error('词典选择列表包含重复路径')
+  }
+
+  const availablePaths = new Set(plans.map((plan) => plan.mdxPath))
+  for (const path of selectedPaths) {
+    if (!availablePaths.has(path)) {
+      throw new Error(`词典选择列表包含未扫描到的 MDX 文件：${path}`)
+    }
+  }
+
+  const selectedPathSet = new Set(selectedPaths)
+  return plans.filter((plan) => selectedPathSet.has(plan.mdxPath))
+}
+
+/** 递归扫描目录并按每个 MDX 生成独立的导入计划。 */
+export async function resolveDictionaryImportFolder(
+  rootPath: string,
+  excludedDictionaryPaths: readonly string[] = []
+): Promise<DictionaryImportFolderPlan[]> {
+  const normalizedRoot = resolve(rootPath)
+  const excludedDirectories = new Set(excludedDictionaryPaths.map((path) => resolve(path)))
+  const mdxFiles = await collectFilesWithExtensions(normalizedRoot, new Set(['.mdx']))
+  const plans = mdxFiles
+    .filter((file) => !excludedDirectories.has(resolve(dirname(file.sourcePath))))
+    .map((file) => ({ mdxPath: resolve(file.sourcePath), relativePath: file.relativePath }))
+    .sort((left, right) => left.relativePath.localeCompare(right.relativePath))
+
+  validateDictionaryFolderLayout(plans)
+
+  return Promise.all(
+    plans.map(async (plan) => ({
+      ...plan,
+      sourceFiles: (await collectDictionaryImportFiles(plan.mdxPath, false)).map(
+        ({ sourcePath, relativePath }) => ({ sourcePath, relativePath })
+      )
+    }))
+  )
+}
+
+export async function createDictionaryFolderImportPreview(
+  rootPath: string,
+  excludedDictionaryPaths: readonly string[] = []
+): Promise<DictionaryFolderImportPreview> {
+  const normalizedRoot = resolve(rootPath)
+  if (!isAbsolute(rootPath)) throw new Error('词典目录必须是绝对路径')
+  const plans = await resolveDictionaryImportFolder(normalizedRoot, excludedDictionaryPaths)
+
+  return {
+    rootPath: normalizedRoot,
+    dictionaries: plans.map((plan) => ({
+      mdxPath: plan.mdxPath,
+      relativePath: plan.relativePath,
+      companionFileCount: plan.sourceFiles.length - 1
+    }))
   }
 }
 
@@ -152,4 +231,46 @@ export async function resolveExternalDictionaryFiles(
       .filter((file) => extname(file.relativePath).toLowerCase() === '.mdd')
       .map(({ sourcePath, relativePath }) => ({ sourcePath, relativePath }))
   ]
+}
+
+function validateDictionaryFolderLayout(
+  plans: Array<Pick<DictionaryImportFolderPlan, 'mdxPath' | 'relativePath'>>
+): void {
+  const directories = plans.map((plan) => resolve(dirname(plan.mdxPath)))
+  const firstMdxByDirectory = new Map<string, string>()
+  for (let index = 0; index < plans.length; index += 1) {
+    const directory = directories[index]
+    const firstMdx = firstMdxByDirectory.get(directory)
+    if (firstMdx) {
+      throw new Error(
+        `同一目录中发现多个 MDX 文件，无法判断伴随资源归属：${firstMdx}、${plans[index].relativePath}`
+      )
+    }
+    firstMdxByDirectory.set(directory, plans[index].relativePath)
+  }
+}
+
+async function createIconPreview(
+  file: DictionaryImportSourceFile & { required: boolean }
+): Promise<{ relativePath: string; previewUrl: string }> {
+  const bytes = await readFile(file.sourcePath)
+  const mimeType = getImageMimeType(file.sourcePath)
+  return {
+    relativePath: file.relativePath,
+    previewUrl: `data:${mimeType};base64,${bytes.toString('base64')}`
+  }
+}
+
+function getImageMimeType(filePath: string): string {
+  switch (extname(filePath).toLowerCase()) {
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg'
+    case '.webp':
+      return 'image/webp'
+    case '.gif':
+      return 'image/gif'
+    default:
+      return 'image/png'
+  }
 }

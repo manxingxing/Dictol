@@ -1,13 +1,16 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { AiLookupButton } from '@/components/AiLookupButton'
 import { OnlineDictionaryButton } from '@/components/OnlineDictionaryButton'
 import { StarButton } from '@/components/StarButton'
 import { useDictionaryLookup } from '@/hooks/use-dictionary-entries'
+import { useDictionarySearchGroups } from '@/hooks/use-dictionary-entries'
+import { useDictionarySearchScope } from '@/hooks/use-dictionary-search-scope'
 import { useRecordQueryHistory } from '@/hooks/use-query-history'
 import { useAppStore } from '@/stores/app-store'
 import { useAiLookupConfig } from '@/hooks/use-ai-lookup'
 import { useOnlineDictionaries } from '@/hooks/use-online-dictionaries'
+import { DICTIONARY_SEARCH_ERROR_MESSAGE } from '../../../shared/dictionary-search-error'
 import { SingleDictionaryResult } from './search-result/SingleDictionaryResult'
 import { AggregateDictionaryResult } from './search-result/AggregateDictionaryResult'
 import { SearchResultToolbar } from './search-result/SearchResultToolbar'
@@ -16,6 +19,12 @@ export function SearchResultPage(): React.JSX.Element {
   const location = useLocation()
   const { term } = useParams()
   const normalizedTerm = term?.trim()
+  const { data: groups } = useDictionarySearchGroups()
+  const searchScopes = useMemo(
+    () => [{ id: null, name: '全部', dictionaryCount: null }, ...(groups ?? [])],
+    [groups]
+  )
+  const { scopeId: groupId } = useDictionarySearchScope(searchScopes)
   const dictionaryLayout = useAppStore((state) => state.dictionaryLayout)
   const recordedPathname = useRef<string | null>(null)
   const {
@@ -24,7 +33,7 @@ export function SearchResultPage(): React.JSX.Element {
     isFetching,
     isError,
     isPlaceholderData
-  } = useDictionaryLookup(normalizedTerm)
+  } = useDictionaryLookup(normalizedTerm, groupId)
   const aiConfig = useAiLookupConfig()
   const { data: onlineDictionaries = [] } = useOnlineDictionaries()
   const hasDictionaryEntries = Boolean(group?.dictionaries.length)
@@ -65,6 +74,17 @@ export function SearchResultPage(): React.JSX.Element {
     )
   }
 
+  if (isError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+        <p className="text-sm font-medium text-destructive">查词失败</p>
+        <p className="mt-2 max-w-lg text-xs leading-5 text-muted-foreground" role="alert">
+          {DICTIONARY_SEARCH_ERROR_MESSAGE}
+        </p>
+      </div>
+    )
+  }
+
   const searchActions = (
     <div
       aria-label="查询和操作"
@@ -73,7 +93,7 @@ export function SearchResultPage(): React.JSX.Element {
       {onlineDictionaries.length > 0 && (
         <div
           aria-label="在线词典"
-          className="online-dictionary-collapse group/online-dictionary-collapse shrink-0"
+          className="online-dictionary-collapse group/online-dictionary-collapse shrink-0 mr-1"
           style={
             {
               '--online-dictionary-expanded-width': `${onlineDictionaries.length * 32}px`
@@ -117,6 +137,8 @@ export function SearchResultPage(): React.JSX.Element {
     term: resultTerm,
     dictionaries: group.dictionaries,
     isFetching,
+    isPlaceholderData,
+    groupId,
     actions: hasSearchActions ? searchActions : null
   }
   return dictionaryLayout === 'aggregate' ? (

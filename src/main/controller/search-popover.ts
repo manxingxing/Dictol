@@ -2,20 +2,10 @@ import { ipcMain, type IpcMainEvent, type Rectangle } from 'electron'
 import type { AppRuntime } from '../app-runtime'
 import type { WebContentsViewManager } from '../web-contents-view-manager'
 import { resolveRendererUrl } from '../output-path'
+import type { SearchPopoverItem, SearchPopoverPayload } from '../../shared/search-popover'
 import { BaseController } from './base-controller'
 
-export type SearchPopoverItem = {
-  word: string
-  description: string
-  recent: boolean
-}
-
-export type SearchPopoverPayload = {
-  query: string
-  items: SearchPopoverItem[]
-  selectedIndex: number
-  status?: 'loading' | 'empty'
-}
+export type { SearchPopoverItem, SearchPopoverPayload } from '../../shared/search-popover'
 
 export function dismissSearchPopover(runtime: AppRuntime): void {
   const popover = runtime.windowManager.searchPopoverView
@@ -42,6 +32,7 @@ export class SearchPopoverController extends BaseController {
     ipcMain.on('search-popover:select', this.select)
     ipcMain.on('search-popover:query-change', this.queryChange)
     ipcMain.on('search-popover:submit', this.submit)
+    ipcMain.on('search-popover:scope-menu-open', this.scopeMenuOpen)
     ipcMain.on('search-popover:dismiss', this.dismiss)
   }
 
@@ -94,6 +85,11 @@ export class SearchPopoverController extends BaseController {
   submit = (event: IpcMainEvent, query: string): void => {
     if (!this.currentPopover?.acceptsSender(event.sender.id) || typeof query !== 'string') return
     this.sendTextToHost('search-popover:submitted', query.trim(), false)
+  }
+
+  scopeMenuOpen = (event: IpcMainEvent, open: boolean): void => {
+    if (!this.currentPopover?.acceptsSender(event.sender.id) || typeof open !== 'boolean') return
+    this.currentPopover.sendToMainWindow('search-popover:scope-menu-opened', open)
   }
 
   dismiss = (event: IpcMainEvent): void => {
@@ -196,6 +192,8 @@ function isSearchPopoverPayload(value: unknown): value is SearchPopoverPayload {
     items?: unknown
     selectedIndex?: unknown
     status?: unknown
+    scopes?: unknown
+    scopeId?: unknown
   }
   if (
     typeof payload.query !== 'string' ||
@@ -205,18 +203,48 @@ function isSearchPopoverPayload(value: unknown): value is SearchPopoverPayload {
     (payload.items.length === 0
       ? payload.selectedIndex !== -1
       : payload.selectedIndex < 0 || payload.selectedIndex >= payload.items.length) ||
-    (payload.status !== undefined && payload.status !== 'loading' && payload.status !== 'empty') ||
+    (payload.status !== undefined &&
+      payload.status !== 'loading' &&
+      payload.status !== 'empty' &&
+      payload.status !== 'error') ||
     (payload.items.length > 0 && payload.status !== undefined)
   ) {
     return false
   }
-  return payload.items.every((item: unknown) => {
-    if (typeof item !== 'object' || item === null) return false
-    const candidate = item as Partial<SearchPopoverItem>
-    return (
-      typeof candidate.word === 'string' &&
-      candidate.word.length > 0 &&
-      typeof candidate.recent === 'boolean'
+  if (
+    !Array.isArray(payload.scopes) ||
+    (payload.scopeId !== null && typeof payload.scopeId !== 'string') ||
+    !payload.scopes.some(
+      (scope) =>
+        typeof scope === 'object' &&
+        scope !== null &&
+        (scope as { id?: unknown }).id === payload.scopeId
     )
-  })
+  ) {
+    return false
+  }
+  return (
+    payload.items.every((item: unknown) => {
+      if (typeof item !== 'object' || item === null) return false
+      const candidate = item as Partial<SearchPopoverItem>
+      return (
+        typeof candidate.word === 'string' &&
+        candidate.word.length > 0 &&
+        typeof candidate.recent === 'boolean'
+      )
+    }) &&
+    payload.scopes.every((scope: unknown) => {
+      if (typeof scope !== 'object' || scope === null) return false
+      const candidate = scope as { id?: unknown; name?: unknown; dictionaryCount?: unknown }
+      return (
+        (candidate.id === null ||
+          (typeof candidate.id === 'string' && /^\d+$/.test(candidate.id))) &&
+        typeof candidate.name === 'string' &&
+        (candidate.dictionaryCount === null ||
+          (typeof candidate.dictionaryCount === 'number' &&
+            Number.isSafeInteger(candidate.dictionaryCount) &&
+            candidate.dictionaryCount >= 0))
+      )
+    })
+  )
 }

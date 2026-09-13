@@ -2,7 +2,7 @@ import { AiLookupSettingsCard } from '@/components/AiLookupSettingsCard'
 import { AboutSettingsCard } from '@/components/AboutSettingsCard'
 import { AppearanceSettingsCard } from '@/components/AppearanceSettingsCard'
 import { KeyboardSettingsCard } from '@/components/KeyboardSettingsCard'
-import { ResourceCacheSettingsCard } from '@/components/ResourceCacheSettingsCard'
+import { StorageSettingsCard } from '@/components/StorageSettingsCard'
 import { TtsSettingsCard } from '@/components/TtsSettingsCard'
 import { WordCaptureSettingsCard } from '@/components/WordCaptureSettingsCard'
 
@@ -17,7 +17,7 @@ export function SettingsPage(): React.JSX.Element {
         <AiLookupSettingsCard />
         <TtsSettingsCard />
         <KeyboardSettingsCard />
-        <ResourceCacheSettingsCard />
+        <StorageSettingsCard />
         <AboutSettingsCard />
       </div>
     </section>

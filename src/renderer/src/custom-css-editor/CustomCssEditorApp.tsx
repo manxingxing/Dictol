@@ -2,7 +2,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Code2,
-  Dices,
   LoaderCircle,
   Moon,
   Save,
@@ -40,7 +39,7 @@ export default function CustomCssEditorApp(): React.JSX.Element {
       if (!active || !initialState) return
       setState(initialState)
       setCss(initialState.customCss)
-      setPreviewLoading(!previewReady)
+      setPreviewLoading(initialState.entryId !== '' && !previewReady)
     })
     return () => {
       active = false
@@ -51,9 +50,9 @@ export default function CustomCssEditorApp(): React.JSX.Element {
     return window.dictolCustomCssEditor.onState((nextState) => {
       setState(nextState)
       setCss(nextState.customCss)
+      setPreviewLoading(nextState.entryId !== '')
       setError(null)
       setSaveSuccess(false)
-      setPreviewLoading(true)
     })
   }, [])
 
@@ -108,22 +107,18 @@ export default function CustomCssEditorApp(): React.JSX.Element {
     }
   }
 
-  const changeEntry = async (searchTerm?: string): Promise<void> => {
+  const searchEntry = async (searchTerm: string): Promise<void> => {
     setChangingEntry(true)
     setError(null)
     try {
-      if (searchTerm === undefined) {
-        setState(await window.dictolCustomCssEditor.randomEntry())
-      } else {
-        const result = await window.dictolCustomCssEditor.searchEntry(searchTerm)
-        if (!result.ok) {
-          setError(result.message)
-          return
-        }
-        setState(result.state)
+      const result = await window.dictolCustomCssEditor.searchEntry(searchTerm)
+      if (!result.ok) {
+        setError(result.message)
+        return
       }
-    } catch (randomizeError) {
-      setError(randomizeError instanceof Error ? randomizeError.message : '更换词条失败')
+      setState(result.state)
+    } catch (searchError) {
+      setError(searchError instanceof Error ? searchError.message : '搜索词条失败')
     } finally {
       setChangingEntry(false)
     }
@@ -162,7 +157,7 @@ export default function CustomCssEditorApp(): React.JSX.Element {
             onSubmit={(event) => {
               event.preventDefault()
               if (state.entryWord.trim() && !saving && !changingEntry) {
-                void changeEntry(state.entryWord.trim())
+                void searchEntry(state.entryWord.trim())
               }
             }}
           >
@@ -190,17 +185,6 @@ export default function CustomCssEditorApp(): React.JSX.Element {
               <Search aria-hidden="true" className="size-4" />
             </Button>
           </form>
-          <Button
-            disabled={saving || changingEntry}
-            onClick={() => void changeEntry()}
-            size="sm"
-            title="随机更换一个词条"
-            type="button"
-            variant="outline"
-          >
-            {changingEntry ? <LoaderCircle className="animate-spin" /> : <Dices />}
-            随机词条
-          </Button>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <Tabs
@@ -250,7 +234,11 @@ export default function CustomCssEditorApp(): React.JSX.Element {
               </div>
             )}
             <div className="custom-css-editor-preview-label">
-              {previewLoading ? '词条预览' : `词条预览 · ${state.entryWord}`}
+              {previewLoading
+                ? '词条预览'
+                : state.entryId
+                  ? `词条预览 · ${state.entryWord}`
+                  : '输入词条后预览'}
             </div>
           </div>
         </ResizablePanel>

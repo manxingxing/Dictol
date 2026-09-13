@@ -176,8 +176,8 @@ export class DictionaryResourceProtocolHandlers {
       const entry = parseDictionaryEntryUrl(request.url)
       if (entry) return this.loadEntryDocument(request, entry.dictionaryId, entry.term)
 
-      const aggregateTerm = parseDictionaryAggregateUrl(request.url)
-      if (aggregateTerm) return this.loadAggregateEntryDocument(request, aggregateTerm)
+      const aggregate = parseDictionaryAggregateUrl(request.url)
+      if (aggregate) return this.loadAggregateEntryDocument(request, aggregate.term)
 
       // mdd资源文件
       const resource = parseDictionaryEntryResourceUrl(request.url)
@@ -272,14 +272,16 @@ export class DictionaryResourceProtocolHandlers {
     const dictionary = await requireDBService(this.runtime).getDictionary(String(dictionaryId))
     if (!dictionary) return textResponse('Dictionary not found', 404)
 
-    const group = await requireDBService(this.runtime).lookupDictionaryEntryGroup(term)
-    const match = group?.dictionaries.find(
-      (candidate) => candidate.dictionaryId === String(dictionaryId)
-    )
-    if (!match) return textResponse('Entry not found', 404)
+    const index = await this.runtime.dictionaryIndexManager.acquire(dictionaryId)
+    const indexMatches = await index.index.exact(term)
+    const indexMatch = indexMatches[0]
+    if (!indexMatch) return textResponse('Entry not found', 404)
 
-    const entryId = match.entryId
-    const entry = await this.runtime.mdictResourceManager.getEntry(entryId)
+    const entry = await this.runtime.mdictResourceManager.getEntryByLocators(
+      dictionaryId,
+      indexMatch.keyText,
+      indexMatches.map((candidate) => candidate.locator)
+    )
     if (!entry) return textResponse('Entry not found', 404)
 
     if (entry.dictionaryId !== String(dictionaryId)) {
@@ -298,7 +300,7 @@ export class DictionaryResourceProtocolHandlers {
     console.debug('[DictionaryEntry] load document', {
       dictionaryId,
       dictionaryName: dictionary.name,
-      entryId,
+      keyText: indexMatch.keyText,
       htmlBytes: Buffer.byteLength(entry.html, 'utf8'),
       takeMs: performance.now() - startedAt
     })
@@ -306,14 +308,26 @@ export class DictionaryResourceProtocolHandlers {
   }
 
   private async loadAggregateEntryDocument(request: Request, term: string): Promise<Response> {
-    const group = await requireDBService(this.runtime).lookupDictionaryEntryGroup(term)
+    const group = await requireDBService(this.runtime).lookupDictionaryEntryGroup(
+      term,
+      this.runtime.dictionarySearchScope.get()
+    )
     if (!group) return textResponse('Entries not found', 404)
 
     const entries = await Promise.all(
-      group.dictionaries.map(async ({ dictionaryId, entryId }) => {
+      group.dictionaries.map(async ({ dictionaryId }) => {
+        const index = await this.runtime.dictionaryIndexManager.acquire(Number(dictionaryId))
+        const indexMatches = await index.index.exact(term)
+        const indexMatch = indexMatches[0]
         const [dictionary, entry] = await Promise.all([
           requireDBService(this.runtime).getDictionary(String(dictionaryId)),
-          this.runtime.mdictResourceManager.getEntry(entryId)
+          indexMatch
+            ? this.runtime.mdictResourceManager.getEntryByLocators(
+                Number(dictionaryId),
+                indexMatch.keyText,
+                indexMatches.map((candidate) => candidate.locator)
+              )
+            : Promise.resolve(null)
         ])
         if (!dictionary || !entry || entry.dictionaryId !== String(dictionaryId)) return null
         return {

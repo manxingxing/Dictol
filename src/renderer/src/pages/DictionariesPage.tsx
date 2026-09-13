@@ -1,20 +1,26 @@
 import { useState } from 'react'
+import { NavLink } from 'react-router-dom'
 import {
   CircleAlert,
   CircleCheck,
   Clock3,
   Code2,
+  ChevronDown,
+  Database,
   Files,
   FolderOpen,
+  FolderSearch,
   GripVertical,
   Info,
+  Library,
   LoaderCircle,
   MoreHorizontal,
   Pencil,
   Trash2,
   Upload,
   Plus,
-  Power
+  Power,
+  RefreshCw
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -41,6 +47,7 @@ import {
   useDeleteDictionary,
   useDictionaries,
   useImportDictionary,
+  useImportDictionariesFromFolder,
   useReorderDictionaries,
   useUpdateDictionaryEnabled,
   useUpdateDictionaryName
@@ -50,14 +57,19 @@ import {
   useRemoveOnlineDictionary,
   useReorderOnlineDictionaries
 } from '@/hooks/use-online-dictionaries'
-import { formatFileSize } from '@/lib/utils'
+import { formatFileSize, formatTime } from '@/lib/utils'
 
 type DictionaryImportPreview = NonNullable<
   Awaited<ReturnType<Window['dictol']['dictionaries']['selectFile']>>
 >
+type DictionaryFolderImportPreview = NonNullable<
+  Awaited<ReturnType<Window['dictol']['dictionaries']['selectFolder']>>
+>
+type DictionaryIndexInfo = Awaited<ReturnType<Window['dictol']['dictionaries']['getIndexInfo']>>
 export function DictionariesPage(): React.JSX.Element {
   const { data: dictionaries = [], isLoading, isError } = useDictionaries()
   const importDictionary = useImportDictionary()
+  const importDictionariesFromFolder = useImportDictionariesFromFolder()
   const deleteDictionary = useDeleteDictionary()
   const reorderDictionaries = useReorderDictionaries()
   const updateDictionaryName = useUpdateDictionaryName()
@@ -79,6 +91,13 @@ export function DictionariesPage(): React.JSX.Element {
   )
   const [selectingImportFile, setSelectingImportFile] = useState(false)
   const [importFileError, setImportFileError] = useState<string | null>(null)
+  const [folderImportDialogOpen, setFolderImportDialogOpen] = useState(false)
+  const [folderImportPreview, setFolderImportPreview] =
+    useState<DictionaryFolderImportPreview | null>(null)
+  const [selectedFolderMdxPaths, setSelectedFolderMdxPaths] = useState<Set<string>>(() => new Set())
+  const [copyFolderDictionaryFiles, setCopyFolderDictionaryFiles] = useState(true)
+  const [selectingImportFolder, setSelectingImportFolder] = useState(false)
+  const [folderImportError, setFolderImportError] = useState<string | null>(null)
   const [isOnlineDictionaryDialogOpen, setIsOnlineDictionaryDialogOpen] = useState(false)
   const [nameEditor, setNameEditor] = useState<{
     id: string
@@ -98,6 +117,14 @@ export function DictionariesPage(): React.JSX.Element {
   const [openingDictionaryId, setOpeningDictionaryId] = useState<string | null>(null)
   const [openingCustomCssId, setOpeningCustomCssId] = useState<string | null>(null)
   const [dictionaryInfoId, setDictionaryInfoId] = useState<string | null>(null)
+  const [indexDialog, setIndexDialog] = useState<{ id: string; name: string } | null>(null)
+  const [indexInfo, setIndexInfo] = useState<DictionaryIndexInfo | null>(null)
+  const [indexInfoError, setIndexInfoError] = useState<string | null>(null)
+  const [isLoadingIndexInfo, setIsLoadingIndexInfo] = useState(false)
+  const [isReindexing, setIsReindexing] = useState(false)
+  const [isOpeningIndexDirectory, setIsOpeningIndexDirectory] = useState(false)
+
+  const selectedFolderDictionaryCount = selectedFolderMdxPaths.size
 
   const finishDragging = (): void => {
     setDraggedDictionaryId(null)
@@ -128,6 +155,48 @@ export function DictionariesPage(): React.JSX.Element {
 
   const openDictionaryInfo = (dictionaryId: string): void => {
     setDictionaryInfoId(dictionaryId)
+  }
+
+  const openIndexDialog = (dictionaryId: string, dictionaryName: string): void => {
+    setIndexDialog({ id: dictionaryId, name: dictionaryName })
+    setIndexInfo(null)
+    setIndexInfoError(null)
+    setIsLoadingIndexInfo(true)
+    void window.dictol.dictionaries
+      .getIndexInfo(dictionaryId)
+      .then(setIndexInfo)
+      .catch((error: unknown) => {
+        setIndexInfoError(error instanceof Error ? error.message : '无法读取索引信息。')
+      })
+      .finally(() => setIsLoadingIndexInfo(false))
+  }
+
+  const reindexDictionary = async (): Promise<void> => {
+    if (!indexDialog) return
+    setIsReindexing(true)
+    setIndexInfoError(null)
+    try {
+      setIndexInfo(await window.dictol.dictionaries.reindex(indexDialog.id))
+      toast.success(`“${indexDialog.name}”已重新索引`)
+    } catch (error) {
+      setIndexInfoError(error instanceof Error ? error.message : '重新索引失败。')
+    } finally {
+      setIsReindexing(false)
+    }
+  }
+
+  const openIndexDirectory = async (): Promise<void> => {
+    if (!indexDialog) return
+    setIsOpeningIndexDirectory(true)
+    try {
+      await window.dictol.dictionaries.openIndexDirectory(indexDialog.id)
+    } catch (error) {
+      toast.error('无法打开索引所在文件夹', {
+        description: error instanceof Error ? error.message : '请稍后重试。'
+      })
+    } finally {
+      setIsOpeningIndexDirectory(false)
+    }
   }
 
   const openCustomCssEditor = async (
@@ -161,6 +230,66 @@ export function DictionariesPage(): React.JSX.Element {
     } finally {
       setSelectingImportFile(false)
     }
+  }
+
+  const openImportDialog = (): void => {
+    importDictionary.reset()
+    setImportDialogStep('select')
+    setImportPreview(null)
+    setSelectedImportFiles(new Set())
+    setCopyDictionaryFiles(true)
+    setImportFileError(null)
+    setImportDialogOpen(true)
+  }
+
+  const openFolderImportDialog = (): void => {
+    importDictionariesFromFolder.reset()
+    setFolderImportPreview(null)
+    setSelectedFolderMdxPaths(new Set())
+    setCopyFolderDictionaryFiles(true)
+    setFolderImportError(null)
+    setFolderImportDialogOpen(true)
+  }
+
+  const selectImportFolder = async (): Promise<void> => {
+    importDictionariesFromFolder.reset()
+    setSelectingImportFolder(true)
+    setFolderImportPreview(null)
+    setSelectedFolderMdxPaths(new Set())
+    setFolderImportError(null)
+    try {
+      const preview = await window.dictol.dictionaries.selectFolder()
+      if (preview) {
+        setFolderImportPreview(preview)
+        setSelectedFolderMdxPaths(
+          new Set(preview.dictionaries.map((dictionary) => dictionary.mdxPath))
+        )
+      }
+    } catch (error) {
+      console.error('Failed to scan dictionary folder', error)
+      setFolderImportError(error instanceof Error ? error.message : '无法扫描词典目录。')
+    } finally {
+      setSelectingImportFolder(false)
+    }
+  }
+
+  const closeFolderImportDialog = (): void => {
+    setFolderImportDialogOpen(false)
+    setFolderImportPreview(null)
+    setSelectedFolderMdxPaths(new Set())
+    setCopyFolderDictionaryFiles(true)
+    setFolderImportError(null)
+  }
+
+  const submitFolderImport = async (): Promise<void> => {
+    if (!folderImportPreview) return
+    const imported = await importDictionariesFromFolder.mutateAsync({
+      rootPath: folderImportPreview.rootPath,
+      copyFiles: copyFolderDictionaryFiles,
+      selectedMdxPaths: [...selectedFolderMdxPaths]
+    })
+    closeFolderImportDialog()
+    toast.success(`已加入 ${imported.length} 部词典，正在建立索引`)
   }
 
   const closeImportDialog = (): void => {
@@ -224,23 +353,44 @@ export function DictionariesPage(): React.JSX.Element {
                 拖动词典调整优先级；查词结果中的词典标签会使用相同顺序。
               </p>
             </div>
-            <Button
-              className="shrink-0"
-              onClick={() => {
-                importDictionary.reset()
-                setImportDialogStep('select')
-                setImportPreview(null)
-                setSelectedImportFiles(new Set())
-                setCopyDictionaryFiles(true)
-                setImportFileError(null)
-                setImportDialogOpen(true)
-              }}
-              size="sm"
-              type="button"
-            >
-              <Upload />
-              导入词典
-            </Button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button asChild className="h-8 shrink-0" size="sm" type="button" variant="outline">
+                <NavLink to="/dictionaries/groups">
+                  <Library className="size-4" />
+                  词典组
+                </NavLink>
+              </Button>
+              <div className="flex shrink-0 items-stretch">
+                <Button
+                  className="h-8 rounded-r-none"
+                  onClick={openImportDialog}
+                  size="sm"
+                  type="button"
+                >
+                  <Upload />
+                  导入词典
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      aria-label="更多导入方式"
+                      className="rounded-l-none border-l border-primary-foreground/30 px-2"
+                      size="sm"
+                      title="更多导入方式"
+                      type="button"
+                    >
+                      <ChevronDown className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem onSelect={openFolderImportDialog}>
+                      <FolderSearch className="size-4" />
+                      扫描文件夹导入
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
           </div>
           <div className="overflow-hidden rounded-lg border border-border bg-muted/30">
             {isLoading && (
@@ -413,6 +563,13 @@ export function DictionariesPage(): React.JSX.Element {
                           >
                             <Info className="size-3.5" />
                             信息
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-sm"
+                            onClick={() => openIndexDialog(dictionary.id, dictionary.name)}
+                          >
+                            <Database className="size-3.5" />
+                            索引
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-sm"
@@ -853,6 +1010,167 @@ export function DictionariesPage(): React.JSX.Element {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={folderImportDialogOpen}
+        onOpenChange={(open) => {
+          if (open || importDictionariesFromFolder.isPending || selectingImportFolder) return
+          closeFolderImportDialog()
+        }}
+      >
+        <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-2xl">
+          <DialogHeader className="border-b border-border px-6 pb-5 pt-6 pr-14">
+            <DialogTitle>扫描文件夹导入</DialogTitle>
+            <DialogDescription>
+              递归查找 MDX；每个 MDX 只使用所在目录中的资源。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 min-w-0 overflow-y-auto px-6 py-5">
+            <div className="grid min-w-0 gap-2">
+              <label className="text-sm font-medium" htmlFor="dictionary-import-folder">
+                词典目录
+              </label>
+              <div className="flex min-w-0 items-center gap-2">
+                <Input
+                  className="h-9 w-0 min-w-0 flex-1"
+                  id="dictionary-import-folder"
+                  placeholder="尚未选择目录"
+                  readOnly
+                  value={folderImportPreview?.rootPath ?? ''}
+                />
+                <Button
+                  className="shrink-0"
+                  disabled={importDictionariesFromFolder.isPending || selectingImportFolder}
+                  onClick={() => void selectImportFolder()}
+                  type="button"
+                  variant="outline"
+                >
+                  {selectingImportFolder ? '正在扫描…' : '选择目录'}
+                </Button>
+              </div>
+            </div>
+
+            {folderImportPreview && (
+              <>
+                <label className="mt-5 flex items-center gap-2 text-sm">
+                  <input
+                    checked={copyFolderDictionaryFiles}
+                    className="size-4 accent-primary"
+                    disabled={importDictionariesFromFolder.isPending || selectingImportFolder}
+                    onChange={(event) => setCopyFolderDictionaryFiles(event.target.checked)}
+                    type="checkbox"
+                  />
+                  将词典文件复制到软件中
+                </label>
+                <div className="mt-5 overflow-hidden rounded-xl border border-border">
+                  <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/30 px-3 py-2">
+                    <label className="flex items-center gap-2 text-sm font-medium">
+                      <input
+                        aria-label="全选词典"
+                        checked={
+                          folderImportPreview.dictionaries.length > 0 &&
+                          selectedFolderDictionaryCount === folderImportPreview.dictionaries.length
+                        }
+                        className="size-4 accent-primary"
+                        disabled={importDictionariesFromFolder.isPending || selectingImportFolder}
+                        onChange={(event) => {
+                          setSelectedFolderMdxPaths(
+                            event.target.checked
+                              ? new Set(
+                                  folderImportPreview.dictionaries.map(
+                                    (dictionary) => dictionary.mdxPath
+                                  )
+                                )
+                              : new Set()
+                          )
+                        }}
+                        type="checkbox"
+                      />
+                      已选择 {selectedFolderDictionaryCount} /{' '}
+                      {folderImportPreview.dictionaries.length} 部词典
+                    </label>
+                    <span className="text-xs text-muted-foreground">索引将在后台建立</span>
+                  </div>
+                  <ul className="divide-y divide-border">
+                    {folderImportPreview.dictionaries.map((dictionary) => (
+                      <li
+                        className="flex min-w-0 items-center justify-between gap-4 px-3 py-2.5"
+                        key={dictionary.mdxPath}
+                      >
+                        <label className="flex min-w-0 items-center gap-2">
+                          <input
+                            aria-label={`选择 ${dictionary.relativePath}`}
+                            checked={selectedFolderMdxPaths.has(dictionary.mdxPath)}
+                            className="size-4 shrink-0 accent-primary"
+                            disabled={
+                              importDictionariesFromFolder.isPending || selectingImportFolder
+                            }
+                            onChange={(event) => {
+                              setSelectedFolderMdxPaths((current) => {
+                                const next = new Set(current)
+                                if (event.target.checked) next.add(dictionary.mdxPath)
+                                else next.delete(dictionary.mdxPath)
+                                return next
+                              })
+                            }}
+                            type="checkbox"
+                          />
+                          <span className="min-w-0 truncate text-sm" title={dictionary.mdxPath}>
+                            {dictionary.relativePath}
+                          </span>
+                        </label>
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                          {dictionary.companionFileCount} 个资源
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            )}
+            {folderImportPreview && folderImportPreview.dictionaries.length === 0 && (
+              <p className="mt-5 rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                这个目录及其子目录中没有找到 MDX 文件。
+              </p>
+            )}
+            {folderImportPreview &&
+              folderImportPreview.dictionaries.length > 0 &&
+              selectedFolderDictionaryCount === 0 && (
+                <p className="mt-4 text-sm text-muted-foreground">请至少选择一部词典。</p>
+              )}
+            {folderImportError && (
+              <p className="mt-4 text-sm text-destructive">扫描失败：{folderImportError}</p>
+            )}
+            {importDictionariesFromFolder.isError && (
+              <p className="mt-4 text-sm text-destructive">
+                导入失败：{importDictionariesFromFolder.error.message}
+              </p>
+            )}
+          </div>
+          <DialogFooter className="border-t border-border bg-muted/20 px-6 py-4">
+            <Button
+              disabled={importDictionariesFromFolder.isPending || selectingImportFolder}
+              onClick={closeFolderImportDialog}
+              type="button"
+              variant="outline"
+            >
+              取消
+            </Button>
+            <Button
+              disabled={
+                !folderImportPreview ||
+                folderImportPreview.dictionaries.length === 0 ||
+                selectedFolderDictionaryCount === 0 ||
+                importDictionariesFromFolder.isPending
+              }
+              onClick={() => void submitFolderImport().catch(() => undefined)}
+              type="button"
+            >
+              {importDictionariesFromFolder.isPending ? '正在导入…' : '导入已选词典'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {isOnlineDictionaryDialogOpen && (
         <AddOnlineDictionaryDialog onClose={() => setIsOnlineDictionaryDialogOpen(false)} />
       )}
@@ -913,6 +1231,114 @@ export function DictionariesPage(): React.JSX.Element {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setIndexDialog(null)
+            setIndexInfo(null)
+            setIndexInfoError(null)
+          }
+        }}
+        open={indexDialog !== null}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>索引 · {indexDialog?.name ?? ''}</DialogTitle>
+            <DialogDescription>查看当前词典索引的位置和构建状态。</DialogDescription>
+          </DialogHeader>
+          {isLoadingIndexInfo ? (
+            <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+              <LoaderCircle className="size-4 animate-spin" />
+              正在读取索引信息…
+            </div>
+          ) : indexInfoError ? (
+            <p className="py-6 text-sm text-destructive" role="alert">
+              {indexInfoError}
+            </p>
+          ) : indexInfo ? (
+            <div className="space-y-4 text-sm">
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">索引位置</p>
+                <div className="flex items-center gap-2">
+                  <p className="min-w-0 flex-1 break-all rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-xs">
+                    {indexInfo.indexPath}
+                  </p>
+                  <Button
+                    aria-label="打开索引所在文件夹"
+                    disabled={isOpeningIndexDirectory}
+                    onClick={() => void openIndexDirectory()}
+                    size="icon"
+                    title="打开所在文件夹"
+                    type="button"
+                    variant="outline"
+                  >
+                    {isOpeningIndexDirectory ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <FolderOpen />
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-md border border-border bg-card px-3 py-2">
+                  <p className="text-xs text-muted-foreground">状态</p>
+                  <p className="mt-1 font-medium">
+                    {
+                      {
+                        building: '构建中',
+                        ready: '可用',
+                        error: '错误',
+                        needs_reindex: '需要重建',
+                        missing: '索引文件不存在'
+                      }[indexInfo.status]
+                    }
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-card px-3 py-2">
+                  <p className="text-xs text-muted-foreground">词条数</p>
+                  <p className="mt-1 font-medium">
+                    {indexInfo.entryCount?.toLocaleString() ?? '—'}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-card px-3 py-2">
+                  <p className="text-xs text-muted-foreground">索引大小</p>
+                  <p className="mt-1 font-medium">
+                    {indexInfo.fileSize === null ? '—' : formatFileSize(indexInfo.fileSize)}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-card px-3 py-2">
+                  <p className="text-xs text-muted-foreground">构建时间</p>
+                  <p className="mt-1 font-medium">
+                    {indexInfo.builtAt ? formatTime(indexInfo.builtAt) : '—'}
+                  </p>
+                </div>
+              </div>
+              {indexInfo.status === 'missing' && (
+                <p className="text-sm text-destructive" role="alert">
+                  索引文件不存在，请点击“重新索引”恢复查词功能。
+                </p>
+              )}
+              {indexInfo.status === 'error' && (
+                <p className="text-sm text-destructive" role="alert">
+                  索引验证失败，文件可能已损坏或与词典源文件不匹配，请点击“重新索引”恢复查词功能。
+                </p>
+              )}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button
+              disabled={isLoadingIndexInfo || isReindexing || indexInfo?.status === 'building'}
+              onClick={() => void reindexDictionary()}
+              type="button"
+            >
+              {isReindexing && <RefreshCw className="animate-spin" />}
+              重新索引
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

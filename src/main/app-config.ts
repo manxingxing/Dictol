@@ -17,6 +17,7 @@ export type AppConfig = {
     showMainWindow: string
   }
   selection: {
+    dictionaryGroupId: number | undefined
     excludedPrograms: string[]
   }
   tts: {
@@ -42,6 +43,7 @@ const DEFAULT_CONFIG: AppConfig = {
     showMainWindow: 'CommandOrControl+Alt+D'
   },
   selection: {
+    dictionaryGroupId: undefined,
     excludedPrograms: []
   },
   tts: {
@@ -96,6 +98,7 @@ export class AppConfigStore {
     const nextConfig: AppConfig = {
       ...cloneConfig(config),
       selection: {
+        dictionaryGroupId: config.selection.dictionaryGroupId,
         excludedPrograms: [...config.selection.excludedPrograms, normalizedProgram]
       }
     }
@@ -113,7 +116,7 @@ export class AppConfigStore {
     )
     const nextConfig: AppConfig = {
       ...cloneConfig(config),
-      selection: { excludedPrograms }
+      selection: { dictionaryGroupId: config.selection.dictionaryGroupId, excludedPrograms }
     }
     this.save(nextConfig)
     return nextConfig
@@ -130,7 +133,7 @@ function parseConfig(value: unknown): AppConfig {
       lookupWordOnSelection?: unknown
     }
     shortcuts?: { lookupWordOnShortcut?: unknown; showMainWindow?: unknown }
-    selection?: { excludedPrograms?: unknown }
+    selection?: { dictionaryGroupId?: unknown; excludedPrograms?: unknown }
     tts?: { edgeVoice?: unknown }
     aiLookup?: {
       enabled?: unknown
@@ -167,6 +170,7 @@ function parseConfig(value: unknown): AppConfig {
           : DEFAULT_CONFIG.shortcuts.showMainWindow
     },
     selection: {
+      dictionaryGroupId: normalizeDictionaryGroupId(candidate.selection?.dictionaryGroupId),
       excludedPrograms: normalizeExcludedPrograms(candidate.selection?.excludedPrograms)
     },
     tts: {
@@ -195,6 +199,7 @@ function cloneConfig(config: AppConfig): AppConfig {
     featureFlags: { ...config.featureFlags },
     shortcuts: { ...config.shortcuts },
     selection: {
+      dictionaryGroupId: config.selection.dictionaryGroupId,
       excludedPrograms: [...config.selection.excludedPrograms]
     },
     tts: {
@@ -227,6 +232,11 @@ function normalizeExcludedPrograms(value: unknown): string[] {
     if (programs.length >= 200) break
   }
   return programs
+}
+
+function normalizeDictionaryGroupId(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) return undefined
+  return value
 }
 
 function normalizeProgramName(value: unknown): string | null {

@@ -33,7 +33,7 @@ export function DictionaryInfoDialog({
     <Dialog open={dictionaryId !== null} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-2xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 [&>button]:right-3 [&>button]:top-3">
         <DialogHeader className="gap-1 border-b border-border px-[18px] py-3 pr-12">
-          <DialogTitle className="text-base">词典信息 - {dictionaryName}</DialogTitle>
+          <DialogTitle className="text-base">词典信息 · {dictionaryName}</DialogTitle>
           <DialogDescription className="text-xs">信息来自该词典的 MDX metadata。</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 overflow-y-auto px-[18px] pb-3.5">

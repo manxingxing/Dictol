@@ -49,7 +49,7 @@
     "postcss": "^8.5.25",
     "postcss-selector-parser": "^7.1.6",
     "postcss-value-parser": "^4.2.0",
-    "selection-hook": "^2.0.3"
+    "selection-hook": "^2.1.1"
   },
   "devDependencies": {
     "@assistant-ui/react": "^0.15.11",
@@ -94,7 +94,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "js-mdict": "^7.0.0",
     "katex": "^0.18.4",
-    "lucide-react": "^0.468.0",
+    "lucide-react": "^1.45.0",
     "next-themes": "^0.4.6",
     "prettier": "^3.7.4",
     "react": "^19.2.1",
@@ -124,7 +124,7 @@
     "fsevents@2.3.3": true,
     "electron-winstaller@5.4.0": true,
     "better-sqlite3@13.0.2": true,
-    "selection-hook@2.0.3": true,
+    "selection-hook@2.1.1": true,
     "esbuild@0.28.1": true,
     "adblock-rs@0.13.2": true
   }

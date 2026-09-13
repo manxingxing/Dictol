@@ -1,7 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, CircleAlert, Settings, ShieldAlert, Trash2 } from 'lucide-react'
+import {
+  Check,
+  CheckCircle2,
+  CircleAlert,
+  ChevronsUpDown,
+  Settings,
+  ShieldAlert,
+  Trash2
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList
+} from '@/components/ui/command'
 import { SettingsList, SettingsRow, SettingsSection } from '@/components/settings/SettingsSection'
 import {
   Dialog,
@@ -19,7 +35,9 @@ import {
   FieldLabel
 } from '@/components/ui/field'
 import { Switch } from '@/components/ui/switch'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { formatShortcut, shortcutFromKeyboardEvent } from '@/lib/keyboard-shortcut'
+import { useDictionaryGroups } from '@/hooks/use-dictionary-groups'
 
 type WordCaptureStatus = Awaited<ReturnType<typeof window.dictol.wordCapture.getStatus>>
 
@@ -28,9 +46,12 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
   const [recordingShortcut, setRecordingShortcut] = useState(false)
   const [savingShortcut, setSavingShortcut] = useState(false)
   const [savingSelectionLookup, setSavingSelectionLookup] = useState(false)
+  const [savingSelectionGroup, setSavingSelectionGroup] = useState(false)
+  const [selectionGroupPickerOpen, setSelectionGroupPickerOpen] = useState(false)
   const [removingProgram, setRemovingProgram] = useState<string | null>(null)
   const [shortcutError, setShortcutError] = useState<string | null>(null)
   const [selectionLookupError, setSelectionLookupError] = useState<string | null>(null)
+  const [selectionGroupError, setSelectionGroupError] = useState<string | null>(null)
   const [excludedProgramsError, setExcludedProgramsError] = useState<string | null>(null)
   const [openingInputMonitoringSettings, setOpeningInputMonitoringSettings] = useState(false)
   const [inputMonitoringSettingsError, setInputMonitoringSettingsError] = useState<string | null>(
@@ -40,6 +61,10 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
   const refreshCaptureStatus = useCallback(() => {
     void window.dictol.wordCapture.getStatus().then(setCaptureStatus)
   }, [])
+  const { data: dictionaryGroups = [] } = useDictionaryGroups()
+  const selectedSelectionGroup = dictionaryGroups.find(
+    (group) => group.id === captureStatus?.selectionDictionaryGroupId
+  )
 
   useEffect(() => {
     refreshCaptureStatus()
@@ -135,9 +160,108 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
                 {shortcutError}
               </p>
             )}
-          </SettingsList>
-
-          <SettingsList>
+            <SettingsRow
+              label="取词组"
+              description="选择文字或使用取词快捷键时，查词弹窗使用的词典组"
+              control={
+                <Popover open={selectionGroupPickerOpen} onOpenChange={setSelectionGroupPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      aria-expanded={selectionGroupPickerOpen}
+                      aria-label="取词组"
+                      className="w-56 max-w-[60vw] min-w-20 justify-between border border-input bg-background font-normal shadow-xs hover:bg-background"
+                      disabled={savingSelectionGroup}
+                      role="combobox"
+                      variant="outline"
+                    >
+                      <span className="truncate">{selectedSelectionGroup?.name ?? '全部词典'}</span>
+                      <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    className="w-[var(--radix-popover-trigger-width)] p-0"
+                  >
+                    <Command>
+                      <CommandInput placeholder="搜索词典组..." />
+                      <CommandList className="max-h-[min(18rem,50vh)]">
+                        <CommandEmpty>没有找到匹配的词典组。</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="全部词典"
+                            onSelect={() => {
+                              setSelectionGroupError(null)
+                              setSavingSelectionGroup(true)
+                              void window.dictol.wordCapture
+                                .setSelectionDictionaryGroup(null)
+                                .then((result) => {
+                                  if (!result) {
+                                    setSelectionGroupError('无法更新取词组。')
+                                    return
+                                  }
+                                  setCaptureStatus(result.status)
+                                  setSelectionGroupError(result.error ?? null)
+                                  if (!result.error) setSelectionGroupPickerOpen(false)
+                                })
+                                .finally(() => setSavingSelectionGroup(false))
+                            }}
+                          >
+                            <Check
+                              className={
+                                !captureStatus.selectionDictionaryGroupId
+                                  ? 'size-4 opacity-100'
+                                  : 'size-4 opacity-0'
+                              }
+                            />
+                            全部词典
+                          </CommandItem>
+                          {dictionaryGroups.map((group) => (
+                            <CommandItem
+                              key={group.id}
+                              value={group.name}
+                              onSelect={() => {
+                                setSelectionGroupError(null)
+                                setSavingSelectionGroup(true)
+                                void window.dictol.wordCapture
+                                  .setSelectionDictionaryGroup(group.id)
+                                  .then((result) => {
+                                    if (!result) {
+                                      setSelectionGroupError('无法更新取词组。')
+                                      return
+                                    }
+                                    setCaptureStatus(result.status)
+                                    setSelectionGroupError(result.error ?? null)
+                                    if (!result.error) setSelectionGroupPickerOpen(false)
+                                  })
+                                  .finally(() => setSavingSelectionGroup(false))
+                              }}
+                            >
+                              <Check
+                                className={
+                                  captureStatus.selectionDictionaryGroupId === group.id
+                                    ? 'size-4 opacity-100'
+                                    : 'size-4 opacity-0'
+                                }
+                              />
+                              <span className="truncate">{group.name}</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              }
+              className="items-start"
+            />
+            {selectionGroupError && (
+              <p
+                className="border-b border-border bg-card px-4 py-3 text-xs text-destructive"
+                role="alert"
+              >
+                {selectionGroupError}
+              </p>
+            )}
             <div
               className="bg-card px-4 py-3 transition-colors data-[enabled=true]:bg-primary/[0.025]"
               data-enabled={captureStatus.lookupWordOnSelection}

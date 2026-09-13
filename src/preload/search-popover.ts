@@ -1,17 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
-
-type SearchPopoverItem = {
-  word: string
-  description: string
-  recent: boolean
-}
-
-type SearchPopoverPayload = {
-  query: string
-  items: SearchPopoverItem[]
-  selectedIndex: number
-  status?: 'loading' | 'empty'
-}
+import type { SearchPopoverPayload } from '../shared/search-popover'
+import type {
+  DictionarySearchScopeChange,
+  DictionarySearchScopeSource
+} from '../shared/dictionary-search-scope'
 
 type SearchPopoverSubscriber = (payload: SearchPopoverPayload) => void
 
@@ -27,6 +19,14 @@ ipcRenderer.on('search-popover:update', (_event, payload: SearchPopoverPayload):
 ipcRenderer.on('search-popover:focus-input', (): void => {
   focusRequested = true
 })
+
+const scopeSubscribers = new Set<(change: DictionarySearchScopeChange) => void>()
+ipcRenderer.on(
+  'dictionary-search-scope:changed',
+  (_event, change: DictionarySearchScopeChange): void => {
+    scopeSubscribers.forEach((subscriber) => subscriber(change))
+  }
+)
 
 const api = Object.freeze({
   onUpdate: (callback: SearchPopoverSubscriber): (() => void) => {
@@ -46,6 +46,17 @@ const api = Object.freeze({
   changeQuery: (query: string): void => ipcRenderer.send('search-popover:query-change', query),
   select: (word: string): void => ipcRenderer.send('search-popover:select', word),
   submit: (query: string): void => ipcRenderer.send('search-popover:submit', query),
+  dictionarySearchScope: Object.freeze({
+    get: (): Promise<string | null> => ipcRenderer.invoke('dictionary-search-scope:get'),
+    set: (groupId: string | null, source: DictionarySearchScopeSource): Promise<string | null> =>
+      ipcRenderer.invoke('dictionary-search-scope:set', groupId, source),
+    onChanged: (callback: (change: DictionarySearchScopeChange) => void): (() => void) => {
+      scopeSubscribers.add(callback)
+      return () => scopeSubscribers.delete(callback)
+    }
+  }),
+  setScopeMenuOpen: (open: boolean): void =>
+    ipcRenderer.send('search-popover:scope-menu-open', open),
   dismiss: (): void => ipcRenderer.send('search-popover:dismiss')
 })
 

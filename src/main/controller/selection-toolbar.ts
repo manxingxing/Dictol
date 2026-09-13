@@ -10,7 +10,7 @@ import {
   type Point,
   type Rectangle
 } from 'electron'
-import type { DictionaryEntryRecord, DictionaryMatch } from '../db-service'
+import type { DictionaryMatch } from '../db-service'
 import type {
   SelectionExplanationDictionary,
   SelectionExplanationPayload
@@ -28,7 +28,7 @@ import type {
   SelectionListener
 } from '../selection-hook-service'
 import type { WebContentsViewManager } from '../web-contents-view-manager'
-import { createDictionaryEntryUrl } from '../dictionary-entry-url'
+import { createDictionaryEntryUrl, parseDictionaryEntryNavigation } from '../dictionary-entry-url'
 import { resolveRendererUrl } from '../output-path'
 import { hideSelectionWindow, showSelectionWindowInactive } from '../selection-window-behavior'
 import { BaseController } from './base-controller'
@@ -370,7 +370,11 @@ export class SelectionToolbarController extends BaseController {
     if (!this.acceptsExplanationViewSender(event) || typeof word !== 'string') return
     const normalizedWord = word.trim()
     if (!normalizedWord || normalizedWord.length > MAX_SELECTION_LENGTH) return
-    void this.showExplanation(normalizedWord)
+    const sourceDictionaryId =
+      this.explanationPayload?.mode === 'dictionary'
+        ? this.explanationPayload.activeDictionaryId
+        : undefined
+    void this.showExplanation(normalizedWord, sourceDictionaryId)
   }
 
   private readonly copyFromExplanation = (event: IpcMainEvent, text: string): void => {
@@ -581,14 +585,12 @@ export class SelectionToolbarController extends BaseController {
     view.webContents.on('will-navigate', (event) => {
       if (event.url.startsWith('dictol-entry://')) return
       event.preventDefault()
-      if (event.url.startsWith('entry://')) {
-        const word = decodeEntryTarget(event.url)
-        if (word) void this.showExplanation(word)
-      }
+      const navigation = parseDictionaryEntryNavigation(view.getURL(), event.url)
+      if (navigation) void this.showExplanation(navigation.word, navigation.sourceDictionaryId)
     })
   }
 
-  private async showExplanation(word: string): Promise<void> {
+  private async showExplanation(word: string, sourceDictionaryId?: string): Promise<void> {
     const normalizedWord = word.trim()
     if (!normalizedWord || normalizedWord.length > MAX_SELECTION_LENGTH) return
 
@@ -612,32 +614,36 @@ export class SelectionToolbarController extends BaseController {
 
     try {
       const startedAt = performance.now()
-      const lookupPromise = this.db.lookupDictionaryEntryGroup(normalizedWord).then(
-        (group) => {
-          console.debug('[DictionaryLookup] selection popup', {
-            term: normalizedWord,
-            takeMs: performance.now() - startedAt,
-            matched: Boolean(group)
-          })
-          return group
-        },
-        (error: unknown) => {
-          console.debug('[DictionaryLookup] selection popup', {
-            term: normalizedWord,
-            takeMs: performance.now() - startedAt,
-            matched: false,
-            failed: true
-          })
-          throw error
-        }
-      )
+      const lookupPromise = this.db
+        .lookupDictionaryEntryGroup(normalizedWord, this.runtime.selectionDictionaryGroupId)
+        .then(
+          (group) => {
+            console.debug('[DictionaryLookup] selection popup', {
+              term: normalizedWord,
+              takeMs: performance.now() - startedAt,
+              matched: Boolean(group)
+            })
+            return group
+          },
+          (error: unknown) => {
+            console.debug('[DictionaryLookup] selection popup', {
+              term: normalizedWord,
+              takeMs: performance.now() - startedAt,
+              matched: false,
+              failed: true
+            })
+            throw error
+          }
+        )
       await loadingReady
       if (version !== this.lookupVersion) return
       if (!keepWindowVisible) this.showExplanationWindow(window)
 
       const group = await lookupPromise
       if (version !== this.lookupVersion) return
-      const firstMatch = group?.dictionaries[0]
+      const matches = group?.dictionaries ?? []
+      const firstMatch =
+        matches.find((match) => match.dictionaryId === sourceDictionaryId) ?? matches[0]
       if (!firstMatch) {
         const hasReadyDictionary = (await this.db.listReadyDictionaries()).length > 0
         if (version !== this.lookupVersion) return
@@ -654,7 +660,7 @@ export class SelectionToolbarController extends BaseController {
         return
       }
 
-      this.explanationDictionaryMatches = group.dictionaries
+      this.explanationDictionaryMatches = matches
       const dictionaries = this.getExplanationDictionaryOptions()
       this.runtime.windowManager.setSelectionExplanationSwitcherVisible(dictionaries.length > 1)
       this.updateExplanation({
@@ -666,11 +672,15 @@ export class SelectionToolbarController extends BaseController {
         activeDictionaryId: firstMatch.dictionaryId,
         state: 'loading'
       })
-      const entry = await this.db.getDictionaryEntryRecord(firstMatch.entryId)
       if (version !== this.lookupVersion) return
-      if (!entry) throw new Error('首个词典命中的词条记录不存在')
-
-      await this.loadExplanationEntry(entry, version, normalizedWord, dictionaries, true)
+      await this.loadExplanationEntry(
+        firstMatch.dictionaryId,
+        firstMatch.dictionaryName,
+        normalizedWord,
+        version,
+        dictionaries,
+        true
+      )
     } catch (error) {
       if (version !== this.lookupVersion || isNavigationAborted(error)) return
       console.error('Failed to show selection explanation', { word: normalizedWord, error })
@@ -779,10 +789,15 @@ export class SelectionToolbarController extends BaseController {
     })
 
     try {
-      const entry = await this.db.getDictionaryEntryRecord(match.entryId)
       if (version !== this.lookupVersion) return
-      if (!entry) throw new Error('所选词典的词条记录不存在')
-      await this.loadExplanationEntry(entry, version, word, dictionaries, false)
+      await this.loadExplanationEntry(
+        match.dictionaryId,
+        match.dictionaryName,
+        word,
+        version,
+        dictionaries,
+        false
+      )
     } catch (error) {
       if (version !== this.lookupVersion || isNavigationAborted(error)) return
       console.error('Failed to switch selection explanation dictionary', {
@@ -819,14 +834,15 @@ export class SelectionToolbarController extends BaseController {
   }
 
   private async loadExplanationEntry(
-    entry: DictionaryEntryRecord,
-    version: number,
+    dictionaryId: string,
+    dictionaryName: string,
     word: string,
+    version: number,
     dictionaries: SelectionExplanationDictionary[],
     recordQuery: boolean
   ): Promise<void> {
     const view = this.explanationView
-    const url = createDictionaryEntryUrl(entry.dictionaryId, entry.word)
+    const url = createDictionaryEntryUrl(dictionaryId, word)
     let shown = false
     const showLoadedEntry = (): void => {
       if (shown || version !== this.lookupVersion || view.webContents.getURL() !== url) return
@@ -835,13 +851,13 @@ export class SelectionToolbarController extends BaseController {
         mode: 'dictionary',
         requestId: version,
         word,
-        dictionaryName: entry.dictionaryName,
+        dictionaryName,
         dictionaries,
-        activeDictionaryId: entry.dictionaryId,
+        activeDictionaryId: dictionaryId,
         state: 'content'
       })
       view.show()
-      this.loadedExplanationDictionaryId = entry.dictionaryId
+      this.loadedExplanationDictionaryId = dictionaryId
       if (recordQuery) this.recordSuccessfulQuery(word)
     }
     const handleDomReady = (): void => showLoadedEntry()
@@ -1218,15 +1234,6 @@ function insetRectangle(bounds: Rectangle, inset: number): Rectangle {
 
 function getToolbarShadowMargin(): number {
   return process.platform === 'win32' ? SELECTION_TOOLBAR_WINDOWS_SHADOW_MARGIN : 0
-}
-
-function decodeEntryTarget(url: string): string {
-  const target = url.replace(/^entry:\/\/\/?/i, '').split('#', 1)[0]
-  try {
-    return decodeURIComponent(target)
-  } catch {
-    return target
-  }
 }
 
 function isNavigationAborted(error: unknown): boolean {

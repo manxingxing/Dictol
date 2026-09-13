@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { DictionaryTabIcon } from '@/components/DictionaryIcon'
 import { SearchResultToolbar } from './SearchResultToolbar'
 import {
@@ -11,8 +12,12 @@ export function AggregateDictionaryResult({
   term,
   dictionaries,
   isFetching,
+  isPlaceholderData,
+  groupId,
   actions
 }: DictionaryResultProps): React.JSX.Element {
+  const [searchParams] = useSearchParams()
+  const focusDictionaryId = searchParams.get('focusDictionaryId') ?? undefined
   const [result, setResult] = useState<{ term: string; dictionaryId?: string; failed: boolean }>({
     term,
     failed: false
@@ -41,8 +46,9 @@ export function AggregateDictionaryResult({
   }, [selectedId, term])
 
   useEffect(() => {
+    if (isPlaceholderData) return
     let activeRequest = true
-    void window.dictol.dictionaryView.showAggregate(term).catch(() => {
+    void window.dictol.dictionaryView.showAggregate({ term, focusDictionaryId }).catch(() => {
       if (!activeRequest) return
       window.dictol.dictionaryView.hide()
       setResult((current) => ({ ...current, term, failed: true }))
@@ -50,7 +56,7 @@ export function AggregateDictionaryResult({
     return () => {
       activeRequest = false
     }
-  }, [term])
+  }, [focusDictionaryId, groupId, isPlaceholderData, term])
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">

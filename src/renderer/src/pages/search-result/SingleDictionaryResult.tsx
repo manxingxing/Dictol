@@ -13,6 +13,8 @@ export function SingleDictionaryResult({
   term,
   dictionaries,
   isFetching,
+  isPlaceholderData,
+  groupId,
   actions
 }: DictionaryResultProps): React.JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -39,6 +41,7 @@ export function SingleDictionaryResult({
   }, [dictionaryId, term])
 
   useEffect(() => {
+    if (isPlaceholderData) return
     let activeRequest = true
     void window.dictol.dictionaryView.show({ dictionaryId, term }).catch(() => {
       if (!activeRequest) return
@@ -48,7 +51,7 @@ export function SingleDictionaryResult({
     return () => {
       activeRequest = false
     }
-  }, [dictionaryId, term])
+  }, [dictionaryId, groupId, isPlaceholderData, term])
 
   const failed = result.failed
   return (

@@ -8,6 +8,7 @@ export type DictionaryImportPreviewFile = {
 export type DictionaryImportPreview = {
   mdxPath: string
   files: DictionaryImportPreviewFile[]
+  icon: { relativePath: string; previewUrl: string } | null
 }
 
 export type DictionaryImportRequest = {
@@ -20,3 +21,35 @@ export type DictionaryImportSourceFile = Pick<
   DictionaryImportPreviewFile,
   'sourcePath' | 'relativePath'
 >
+
+export type DictionaryFolderImportCandidate = {
+  mdxPath: string
+  relativePath: string
+  companionFileCount: number
+}
+
+export type DictionaryFolderImportPreview = {
+  rootPath: string
+  dictionaries: DictionaryFolderImportCandidate[]
+}
+
+export type DictionaryFolderImportRequest = {
+  rootPath: string
+  copyFiles: boolean
+  selectedMdxPaths: string[]
+}
+
+export type DictionaryImportWorkerFile = DictionaryImportSourceFile & {
+  id: number | null
+}
+
+export type DictionaryImportWorkerRequest = {
+  databasePath: string
+  dictionaryId: number
+  dictionaryUuid: string
+  mdxPath: string
+  sourceFiles: DictionaryImportWorkerFile[]
+  copyFiles: boolean
+  targetDirectory: string
+  indexPath: string
+}

@@ -37,8 +37,13 @@ body#dictol-aggregate {
 
 .dictol-dictionary-entry {
   position: relative;
-  overflow: hidden;
+  isolation: isolate;
   margin-top: 8px;
+}
+
+.dictol-dictionary-entry img,
+.dictol-dictionary-entry video {
+  max-width: 100%;
 }
 
 .dictol-dictionary-title {
@@ -56,6 +61,13 @@ body#dictol-aggregate {
   cursor: pointer;
   text-align: left;
   appearance: none;
+}
+
+body#dictol-aggregate[data-layout='vertical'] .dictol-dictionary-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: light-dark(#fff, #212121) !important;
 }
 
 .dictol-dictionary-title-name {
@@ -133,6 +145,7 @@ body[data-layout='horizontal'] .dictol-dictionary-section {
   min-width: 0;
   min-height: 0;
   padding: 12px !important;
+  margin: initial !important;
   box-sizing: border-box;
   border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
   border-radius: 10px;

@@ -19,7 +19,7 @@ export class DictionaryFileRepository {
     fileType: 'mdx' | 'mdd'
     fileSize: number
     lastModified: number
-    checksum: string
+    checksum?: string | null
   }): Promise<number> {
     const [row] = await this.db
       .insert(dictionaryFile)
@@ -28,6 +28,17 @@ export class DictionaryFileRepository {
 
     if (!row) throw new Error('创建词典文件记录失败')
     return row.id
+  }
+
+  /** 更新导入完成后的文件统计与校验信息。 */
+  async updateImportMetadata(
+    id: number,
+    values: { fileSize: number; lastModified: number; checksum: string }
+  ): Promise<void> {
+    await this.db
+      .update(dictionaryFile)
+      .set({ ...values, updatedAt: new Date().toISOString() })
+      .where(eq(dictionaryFile.id, id))
   }
 
   /** 更新 MDX/MDD 格式元数据。 */

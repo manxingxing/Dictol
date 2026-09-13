@@ -14,7 +14,6 @@ declare global {
     dictolCustomCssEditor: {
       getState: () => Promise<CustomCssEditorState | null>
       getPreviewReady: () => Promise<boolean>
-      randomEntry: () => Promise<CustomCssEditorState>
       searchEntry: (term: string) => Promise<CustomCssEditorSearchResult>
       setPreviewBounds: (bounds: CustomCssEditorBounds) => void
       setPreviewTheme: (theme: CustomCssEditorTheme) => void
@@ -49,6 +48,7 @@ declare global {
             description: string | null
             recordCount: string | null
             status: 'ready'
+            indexStatus: 'building' | 'ready' | 'error' | 'needs_reindex' | 'missing'
             createdAt: string
             updatedAt: string
           }[]
@@ -60,6 +60,15 @@ declare global {
             relativePath: string
             fileSize: number
             required: boolean
+          }[]
+          icon: { relativePath: string; previewUrl: string } | null
+        } | null>
+        selectFolder: () => Promise<{
+          rootPath: string
+          dictionaries: {
+            mdxPath: string
+            relativePath: string
+            companionFileCount: number
           }[]
         } | null>
         getInfo: (dictionaryId: string) => Promise<{
@@ -76,6 +85,33 @@ declare global {
           keyCaseSensitive: boolean
           stripKey: boolean
         }>
+        getIndexInfo: (dictionaryId: string) => Promise<{
+          dictionaryId: string
+          indexPath: string
+          status: 'building' | 'ready' | 'error' | 'needs_reindex' | 'missing'
+          entryCount: number | null
+          termCount: number | null
+          fileSize: number | null
+          builtAt: string | null
+        }>
+        openIndexDirectory: (dictionaryId: string) => Promise<void>
+        reindex: (dictionaryId: string) => Promise<{
+          dictionaryId: string
+          indexPath: string
+          status: 'building' | 'ready' | 'error' | 'needs_reindex' | 'missing'
+          entryCount: number | null
+          termCount: number | null
+          fileSize: number | null
+          builtAt: string | null
+        }>
+        migrateIndexes: () => Promise<{
+          succeededDictionaryIds: string[]
+          failed: {
+            dictionaryId: string
+            dictionaryName: string
+            error: string
+          }[]
+        }>
         import: (request: {
           mdxPath: string
           copyFiles: boolean
@@ -91,6 +127,23 @@ declare global {
             type: 'mdx' | 'mdd'
           }[]
         }>
+        importFolder: (request: {
+          rootPath: string
+          copyFiles: boolean
+          selectedMdxPaths: string[]
+        }) => Promise<
+          {
+            id: string
+            name: string
+            status: 'importing'
+            directory: string
+            files: {
+              id: string
+              name: string
+              type: 'mdx' | 'mdd'
+            }[]
+          }[]
+        >
         delete: (dictionaryId: string) => Promise<void>
         openDirectory: (dictionaryId: string) => Promise<void>
         reorder: (dictionaryIds: string[]) => Promise<void>
@@ -98,6 +151,25 @@ declare global {
         updateEnabled: (dictionaryId: string, enabled: boolean) => Promise<void>
         openCustomCssEditor: (dictionaryId: string) => Promise<void>
         updateCustomCss: (dictionaryId: string, customCss: string) => Promise<void>
+        groups: {
+          list: () => Promise<
+            {
+              id: string
+              name: string
+              sortOrder: number
+              dictionaryIds: string[]
+            }[]
+          >
+          create: (name: string) => Promise<{
+            id: string
+            name: string
+            sortOrder: number
+            dictionaryIds: string[]
+          }>
+          updateName: (groupId: string, name: string) => Promise<void>
+          delete: (groupId: string) => Promise<void>
+          updateMembers: (groupId: string, dictionaryIds: string[]) => Promise<void>
+        }
       }
       onlineDictionaries: {
         list: () => Promise<
@@ -120,23 +192,47 @@ declare global {
       entries: {
         search: (
           prefix: string,
-          limit?: number
+          limit?: number,
+          groupId?: string | null
         ) => Promise<
           {
             word: string
             normalizedWord: string
+            dictionaryIds: string[]
           }[]
         >
-        lookup: (term: string) => Promise<{
+        lookup: (
+          term: string,
+          groupId?: string | null
+        ) => Promise<{
           word: string
           normalizedWord: string
           dictionaries: {
-            entryId: string
             dictionaryId: string
             dictionaryName: string
             dictionaryIconUrl: string | null
           }[]
         } | null>
+        listGroups: () => Promise<
+          {
+            id: string
+            name: string
+            dictionaryCount: number
+          }[]
+        >
+      }
+      dictionarySearchScope: {
+        get: () => Promise<string | null>
+        set: (
+          groupId: string | null,
+          source: 'search-panel' | 'search-popover'
+        ) => Promise<string | null>
+        onChanged: (
+          callback: (change: {
+            groupId: string | null
+            source: 'search-panel' | 'search-popover'
+          }) => void
+        ) => () => void
       }
       history: {
         list: () => Promise<
@@ -280,6 +376,8 @@ declare global {
         getResourceCacheSize: () => Promise<number>
         clearResourceCache: () => Promise<void>
         openResourceCacheDirectory: () => Promise<void>
+        getViewCacheSize: () => Promise<number>
+        clearViewCache: () => Promise<void>
         onDeepLink: (callback: (intent: DeepLinkIntent) => void) => () => void
         onFocusSearch: (callback: () => void) => () => void
         onShowFindBar: (callback: () => void) => () => void
@@ -353,7 +451,10 @@ declare global {
           query: string,
           items: { word: string; description: string; recent: boolean }[],
           selectedIndex: number,
-          status?: 'loading' | 'empty'
+          status?: 'loading' | 'empty' | 'error',
+          error?: string,
+          scopes?: Array<{ id: string | null; name: string; dictionaryCount: number | null }>,
+          scopeId?: string | null
         ) => void
         onSelect: (callback: (word: string) => void) => () => void
         onQueryChange: (callback: (query: string) => void) => () => void
@@ -361,6 +462,7 @@ declare global {
         onDismiss: (callback: () => void) => () => void
         onShown: (callback: () => void) => () => void
         onHidden: (callback: () => void) => () => void
+        onScopeMenuOpen: (callback: (open: boolean) => void) => () => void
       }
       wordCapture: {
         getStatus: () => Promise<{
@@ -370,6 +472,7 @@ declare global {
           registered: boolean
           shortcut: string
           lookupWordOnSelection: boolean
+          selectionDictionaryGroupId: string | null
           excludedPrograms: string[]
         } | null>
         requestAccess: () => Promise<{
@@ -379,6 +482,7 @@ declare global {
           registered: boolean
           shortcut: string
           lookupWordOnSelection: boolean
+          selectionDictionaryGroupId: string | null
           excludedPrograms: string[]
         } | null>
         openInputMonitoringSettings: () => Promise<{
@@ -394,6 +498,7 @@ declare global {
             registered: boolean
             shortcut: string
             lookupWordOnSelection: boolean
+            selectionDictionaryGroupId: string | null
             excludedPrograms: string[]
           }
           error?: string
@@ -407,6 +512,7 @@ declare global {
             registered: boolean
             shortcut: string
             lookupWordOnSelection: boolean
+            selectionDictionaryGroupId: string | null
             excludedPrograms: string[]
           }
           error?: string
@@ -420,6 +526,21 @@ declare global {
             registered: boolean
             shortcut: string
             lookupWordOnSelection: boolean
+            selectionDictionaryGroupId: string | null
+            excludedPrograms: string[]
+          }
+          error?: string
+        } | null>
+        setSelectionDictionaryGroup: (groupId: string | null) => Promise<{
+          ok: boolean
+          status: {
+            supported: boolean
+            limitation: string | null
+            trusted: boolean
+            registered: boolean
+            shortcut: string
+            lookupWordOnSelection: boolean
+            selectionDictionaryGroupId: string | null
             excludedPrograms: string[]
           }
           error?: string
@@ -436,14 +557,16 @@ declare global {
       }
       dictionaryView: {
         show: (target: { dictionaryId: string; term: string }) => Promise<void>
-        showAggregate: (term: string) => Promise<void>
+        showAggregate: (target: { term: string; focusDictionaryId?: string }) => Promise<void>
         scrollToDictionary: (dictionaryId: string) => void
         hide: () => void
         showFindBar: () => void
         setBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
         onLoadingChanged: (callback: (isLoading: boolean) => void) => () => void
         onActiveDictionaryChanged: (callback: (dictionaryId: string) => void) => () => void
-        onLookupWord: (callback: (word: string) => void) => () => void
+        onLookupWord: (
+          callback: (request: { word: string; sourceDictionaryId?: string }) => void
+        ) => () => void
         onExplainWithAi: (callback: (text: string) => void) => () => void
       }
       embedBrowser: {

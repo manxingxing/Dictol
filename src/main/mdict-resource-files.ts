@@ -17,16 +17,12 @@ export class MdictResourceFiles {
     return this.mdx.metadata
   }
 
-  readRecords(locators: readonly MdictRecordLocator[]): Promise<string[]> {
-    return Promise.all(
-      locators.map((locator) =>
-        this.mdx.readRecordText(
-          BigInt(locator.recordStartOffset),
-          BigInt(locator.recordEndOffset),
-          true
-        )
-      )
-    )
+  readIndexRecord(locator: Buffer): Promise<string> {
+    return this.mdx.readIndexRecord(locator, true)
+  }
+
+  readIndexRecords(locators: readonly Buffer[]): Promise<string[]> {
+    return Promise.all(locators.map((locator) => this.readIndexRecord(locator)))
   }
 
   async loadResource(resourcePath: string): Promise<Buffer | null> {

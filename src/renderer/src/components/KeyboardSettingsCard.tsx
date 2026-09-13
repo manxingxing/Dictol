@@ -87,7 +87,7 @@ export function KeyboardSettingsCard(): React.JSX.Element {
             />
             <SettingsRow
               label="搜索词条"
-              description="打开或聚焦查词输入。"
+              description="聚焦查词搜索框"
               control={
                 <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
                   {formatShortcut('CommandOrControl+K', window.dictol.platform)}
@@ -96,7 +96,7 @@ export function KeyboardSettingsCard(): React.JSX.Element {
             />
             <SettingsRow
               label="查找当前词条内容"
-              description="在当前词条内容中查找文字。"
+              description="在当前词条内容中查找文字"
               control={
                 <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
                   {formatShortcut('CommandOrControl+F', window.dictol.platform)}
