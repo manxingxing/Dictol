@@ -6,13 +6,101 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use mdict::{
-    Entry, FileKind, Key, KeyScanner, Limits, Mdd as CoreMdd, MddKey, MddList as CoreMddList,
-    MddListEntryScanner as CoreMddListEntryScanner, MddListKeyScanner as CoreMddListKeyScanner,
-    Mdict, Mdx as CoreMdx, OpenOptions as CoreOpenOptions,
+    DidxBuildResult as CoreDidxBuildResult, DidxIndex as CoreDidxIndex, Entry, FileKind,
+    IndexEntry, IndexSource, Key, KeyScanner, Limits, Mdd as CoreMdd, MddKey,
+    MddList as CoreMddList, MddListEntryScanner as CoreMddListEntryScanner,
+    MddListKeyScanner as CoreMddListKeyScanner, Mdict, Mdx as CoreMdx, MdxIndexSource,
+    OpenOptions as CoreOpenOptions, decode_mdx_locator,
 };
 use napi::bindgen_prelude::{AsyncTask, BigInt, Buffer};
 use napi::{Env, Error, Result, Status, Task};
 use napi_derive::napi;
+
+/// Lingoes LD2 reader; all I/O-heavy operations run in asynchronous native tasks.
+#[napi]
+pub struct Ld2 {
+    dictionary: CloseableDictionary<mdict::Ld2>,
+}
+
+#[napi]
+impl Ld2 {
+    /// Open LD2 without decompressing the complete dictionary.
+    #[napi(ts_return_type = "Promise<Ld2>")]
+    pub fn open(path: String) -> AsyncTask<OpenLd2Task> {
+        AsyncTask::new(OpenLd2Task { path })
+    }
+
+    #[napi(getter)]
+    pub fn entry_count(&self) -> Result<u32> {
+        Ok(self.dictionary.get()?.entry_count())
+    }
+
+    /// Build DIDX using LD2 physical row locators.
+    #[napi(ts_return_type = "Promise<DidxBuildResult>")]
+    pub fn build_index(&self, output_path: String) -> Result<AsyncTask<BuildLd2IndexTask>> {
+        Ok(AsyncTask::new(BuildLd2IndexTask { dictionary: self.dictionary.get()?, output_path }))
+    }
+
+    /// Open a DIDX index only if it matches this LD2 source and codecs.
+    #[napi(ts_return_type = "Promise<DidxIndex>")]
+    pub fn open_index(&self, index_path: String) -> Result<AsyncTask<OpenLd2IndexTask>> {
+        Ok(AsyncTask::new(OpenLd2IndexTask { dictionary: self.dictionary.get()?, index_path }))
+    }
+
+    /// Return raw Lingoes XML fragments, including directly referenced definitions.
+    #[napi(ts_return_type = "Promise<Array<string>>")]
+    pub fn read_index_record(&self, locator: Buffer) -> Result<AsyncTask<ReadLd2RecordTask>> {
+        Ok(AsyncTask::new(ReadLd2RecordTask { dictionary: self.dictionary.get()?, locator: locator.to_vec() }))
+    }
+
+    #[napi]
+    pub fn close(&self) -> Result<bool> { self.dictionary.close() }
+}
+
+pub struct OpenLd2Task { path: String }
+impl Task for OpenLd2Task {
+    type Output = mdict::Ld2;
+    type JsValue = Ld2;
+    fn compute(&mut self) -> Result<Self::Output> {
+        mdict::Ld2::open(&self.path).map_err(to_napi_error)
+    }
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(Ld2 { dictionary: CloseableDictionary::new(output) })
+    }
+}
+
+pub struct BuildLd2IndexTask { dictionary: Arc<mdict::Ld2>, output_path: String }
+impl Task for BuildLd2IndexTask {
+    type Output = DidxBuildResult;
+    type JsValue = DidxBuildResult;
+    fn compute(&mut self) -> Result<Self::Output> {
+        self.dictionary.build_index(&self.output_path).map(Into::into).map_err(to_napi_error)
+    }
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> { Ok(output) }
+}
+
+pub struct OpenLd2IndexTask { dictionary: Arc<mdict::Ld2>, index_path: String }
+impl Task for OpenLd2IndexTask {
+    type Output = CoreDidxIndex;
+    type JsValue = DidxIndex;
+    fn compute(&mut self) -> Result<Self::Output> {
+        let fingerprint = mdict::Ld2IndexSource(&self.dictionary).fingerprint().map_err(to_napi_error)?;
+        CoreDidxIndex::open_for_source(&self.index_path, fingerprint).map_err(to_napi_error)
+    }
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(DidxIndex { index: CloseableDictionary::new(output) })
+    }
+}
+
+pub struct ReadLd2RecordTask { dictionary: Arc<mdict::Ld2>, locator: Vec<u8> }
+impl Task for ReadLd2RecordTask {
+    type Output = Vec<String>;
+    type JsValue = Vec<String>;
+    fn compute(&mut self) -> Result<Self::Output> {
+        self.dictionary.read_index_record(&self.locator).map_err(to_napi_error)
+    }
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> { Ok(output) }
+}
 
 const DEFAULT_BATCH_SIZE: u32 = 2_048;
 const MAXIMUM_BATCH_SIZE: u32 = 100_000;
@@ -179,6 +267,52 @@ pub struct KeyBatch {
     pub done: bool,
 }
 
+/// DIDX 查询返回的一条物理词条定位。
+#[napi(object, object_from_js = false)]
+pub struct DidxMatch {
+    pub key_text: String,
+    pub normalized_key: String,
+    pub locator: Buffer,
+    pub key_ordinal: u64,
+    pub match_kind: String,
+    pub distance: Option<u32>,
+}
+
+/// DIDX 构建结果。
+#[napi(object, object_from_js = false)]
+pub struct DidxBuildResult {
+    pub entry_count: u64,
+    pub term_count: u64,
+    pub file_size: u64,
+    pub format_version: u32,
+    pub normalization_version: u32,
+}
+
+impl From<mdict::IndexMatch> for DidxMatch {
+    fn from(value: mdict::IndexMatch) -> Self {
+        Self {
+            key_text: value.key_text,
+            normalized_key: value.normalized_key,
+            locator: value.locator.into(),
+            key_ordinal: value.key_ordinal,
+            match_kind: value.match_kind.as_str().to_owned(),
+            distance: value.distance,
+        }
+    }
+}
+
+impl From<CoreDidxBuildResult> for DidxBuildResult {
+    fn from(value: CoreDidxBuildResult) -> Self {
+        Self {
+            entry_count: value.entry_count,
+            term_count: value.term_count,
+            file_size: value.file_size,
+            format_version: value.format_version,
+            normalization_version: value.normalization_version,
+        }
+    }
+}
+
 /// 一批 MDD 列表 key 扫描结果。
 #[napi(object, object_from_js = false)]
 pub struct MddListKeyBatch {
@@ -213,6 +347,163 @@ pub struct Mdx {
     dictionary: CloseableDictionary<CoreMdx>,
 }
 
+/// 已完成构建的 DIDX 只读索引。
+#[napi]
+pub struct DidxIndex {
+    index: CloseableDictionary<CoreDidxIndex>,
+}
+
+#[napi]
+impl DidxIndex {
+    /// 打开一份 DIDX 文件并校验其结构。
+    #[napi(factory)]
+    pub fn open(path: String) -> Result<Self> {
+        CoreDidxIndex::open(path)
+            .map(|index| Self {
+                index: CloseableDictionary::new(index),
+            })
+            .map_err(to_napi_error)
+    }
+
+    /// 返回 DIDX 中的词条和规范化信息。
+    #[napi(getter)]
+    pub fn metadata(&self) -> Result<DidxMetadata> {
+        let metadata = self.index.get()?.metadata();
+        Ok(DidxMetadata {
+            entry_count: metadata.entry_count,
+            term_count: metadata.term_count,
+            source_fingerprint: metadata.source_fingerprint,
+            format_version: metadata.format_version,
+            normalization_version: metadata.normalization_version,
+        })
+    }
+
+    /// Hash the complete MDX source and open only its matching index.
+    #[napi(ts_return_type = "Promise<DidxIndex>")]
+    pub fn open_for_mdx(index_path: String, mdx_path: String) -> AsyncTask<OpenDidxForMdxTask> {
+        AsyncTask::new(OpenDidxForMdxTask {
+            index_path,
+            mdx_path,
+        })
+    }
+
+    /// Build an index from adapter-owned entries without opening the result.
+    #[napi(ts_return_type = "Promise<DidxBuildResult>")]
+    pub fn build(
+        entries: Vec<DidxEntry>,
+        fingerprint: BigInt,
+        output_path: String,
+    ) -> Result<AsyncTask<BuildGenericDidxTask>> {
+        Ok(AsyncTask::new(BuildGenericDidxTask {
+            source: VectorIndexSource {
+                entries: entries
+                    .into_iter()
+                    .map(|entry| IndexEntry {
+                        key_text: entry.key_text,
+                        locator: entry.locator.to_vec(),
+                    })
+                    .collect(),
+                fingerprint: bigint_to_u64(fingerprint, "fingerprint")?,
+            },
+            output_path: PathBuf::from(output_path),
+        }))
+    }
+
+    /// Return every physical match in the strict original/case tier.
+    #[napi(ts_return_type = "Promise<Array<DidxMatch>>")]
+    pub fn exact(&self, query: String) -> Result<AsyncTask<QueryDidxTask>> {
+        Ok(AsyncTask::new(QueryDidxTask {
+            index: self.index.get()?,
+            query,
+            limit: None,
+            kind: DidxQueryKind::Exact,
+        }))
+    }
+
+    #[napi(ts_return_type = "Promise<Array<DidxMatch>>")]
+    pub fn loose(&self, query: String, limit: Option<u32>) -> Result<AsyncTask<QueryDidxTask>> {
+        Ok(AsyncTask::new(QueryDidxTask {
+            index: self.index.get()?,
+            query,
+            limit: limit.map(|n| n as usize),
+            kind: DidxQueryKind::Loose,
+        }))
+    }
+
+    #[napi(ts_return_type = "Promise<Array<DidxMatch>>")]
+    pub fn prefix(&self, query: String, limit: Option<u32>) -> Result<AsyncTask<QueryDidxTask>> {
+        Ok(AsyncTask::new(QueryDidxTask {
+            index: self.index.get()?,
+            query,
+            limit: limit.map(|n| n as usize),
+            kind: DidxQueryKind::Prefix,
+        }))
+    }
+
+    #[napi(ts_return_type = "Promise<Array<DidxMatch>>")]
+    pub fn wildcard(&self, query: String, limit: Option<u32>) -> Result<AsyncTask<QueryDidxTask>> {
+        Ok(AsyncTask::new(QueryDidxTask {
+            index: self.index.get()?,
+            query,
+            limit: limit.map(|n| n as usize),
+            kind: DidxQueryKind::Wildcard,
+        }))
+    }
+
+    #[napi(ts_return_type = "Promise<Array<DidxMatch>>")]
+    pub fn candidates(
+        &self,
+        query: String,
+        limit: Option<u32>,
+    ) -> Result<AsyncTask<QueryDidxTask>> {
+        Ok(AsyncTask::new(QueryDidxTask {
+            index: self.index.get()?,
+            query,
+            limit: limit.map(|n| n as usize),
+            kind: DidxQueryKind::Candidates,
+        }))
+    }
+
+    #[napi(ts_return_type = "Promise<Array<DidxMatch>>")]
+    pub fn fuzzy(
+        &self,
+        query: String,
+        max_distance: Option<u32>,
+        limit: Option<u32>,
+    ) -> Result<AsyncTask<QueryDidxTask>> {
+        Ok(AsyncTask::new(QueryDidxTask {
+            index: self.index.get()?,
+            query,
+            limit: limit.map(|n| n as usize),
+            kind: DidxQueryKind::Fuzzy(max_distance.map(|n| n as usize)),
+        }))
+    }
+
+    /// Verify every block, original spelling and source locator in the index.
+    #[napi(ts_return_type = "Promise<void>")]
+    pub fn validate(&self) -> Result<AsyncTask<ValidateDidxTask>> {
+        Ok(AsyncTask::new(ValidateDidxTask {
+            index: self.index.get()?,
+        }))
+    }
+
+    /// Deterministically release the DIDX memory mapping.
+    #[napi]
+    pub fn close(&self) -> Result<bool> {
+        self.index.close()
+    }
+}
+
+/// DIDX 文件元数据。
+#[napi(object, object_from_js = false)]
+pub struct DidxMetadata {
+    pub entry_count: u64,
+    pub term_count: u64,
+    pub source_fingerprint: u64,
+    pub format_version: u32,
+    pub normalization_version: u32,
+}
+
 #[napi]
 impl Mdx {
     /// 打开一份 MDX 文件。
@@ -241,6 +532,29 @@ impl Mdx {
                 busy: AtomicBool::new(false),
             }),
         })
+    }
+
+    /// 在 Rust 内部扫描当前 MDX 并原子生成 DIDX 文件。
+    #[napi(ts_return_type = "Promise<DidxBuildResult>")]
+    pub fn build_index(&self, output_path: String) -> Result<AsyncTask<BuildDidxTask>> {
+        Ok(AsyncTask::new(BuildDidxTask {
+            dictionary: self.dictionary.get()?,
+            output_path: PathBuf::from(output_path),
+        }))
+    }
+
+    /// Read an opaque MDX index locator, optionally resolving LINK records.
+    #[napi(ts_return_type = "Promise<string>")]
+    pub fn read_index_record(
+        &self,
+        locator: Buffer,
+        redirect_link: Option<bool>,
+    ) -> Result<AsyncTask<ReadIndexRecordTask>> {
+        Ok(AsyncTask::new(ReadIndexRecordTask {
+            dictionary: self.dictionary.get()?,
+            locator: locator.to_vec(),
+            redirect_link: redirect_link.unwrap_or(true),
+        }))
     }
 
     /// 创建顺序 key+record 批量扫描器。
@@ -706,6 +1020,168 @@ impl MddListEntryScanner {
 pub struct NextMdxKeysTask {
     state: Arc<MdxKeyScannerState>,
     batch_size: usize,
+}
+
+#[napi(object, object_to_js = false)]
+pub struct DidxEntry {
+    pub key_text: String,
+    pub locator: Buffer,
+}
+
+struct VectorIndexSource {
+    entries: Vec<IndexEntry>,
+    fingerprint: u64,
+}
+
+impl IndexSource for VectorIndexSource {
+    fn fingerprint(&self) -> mdict::Result<u64> {
+        Ok(self.fingerprint)
+    }
+
+    fn entries(&self) -> mdict::Result<Box<dyn Iterator<Item = mdict::Result<IndexEntry>> + '_>> {
+        Ok(Box::new(self.entries.iter().cloned().map(Ok)))
+    }
+}
+
+pub struct BuildGenericDidxTask {
+    source: VectorIndexSource,
+    output_path: PathBuf,
+}
+
+impl Task for BuildGenericDidxTask {
+    type Output = DidxBuildResult;
+    type JsValue = DidxBuildResult;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        CoreDidxIndex::build(&self.source, &self.output_path)
+            .map(Into::into)
+            .map_err(to_napi_error)
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output)
+    }
+}
+
+pub struct OpenDidxForMdxTask {
+    index_path: String,
+    mdx_path: String,
+}
+
+impl Task for OpenDidxForMdxTask {
+    type Output = CoreDidxIndex;
+    type JsValue = DidxIndex;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        let dictionary = CoreMdx::open(&self.mdx_path).map_err(to_napi_error)?;
+        let fingerprint = MdxIndexSource(dictionary.as_mdict())
+            .fingerprint()
+            .map_err(to_napi_error)?;
+        CoreDidxIndex::open_for_source(&self.index_path, fingerprint).map_err(to_napi_error)
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(DidxIndex {
+            index: CloseableDictionary::new(output),
+        })
+    }
+}
+
+enum DidxQueryKind {
+    Exact,
+    Loose,
+    Prefix,
+    Fuzzy(Option<usize>),
+    Wildcard,
+    Candidates,
+}
+
+pub struct QueryDidxTask {
+    index: Arc<CoreDidxIndex>,
+    query: String,
+    limit: Option<usize>,
+    kind: DidxQueryKind,
+}
+
+impl Task for QueryDidxTask {
+    type Output = Vec<mdict::IndexMatch>;
+    type JsValue = Vec<DidxMatch>;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        match self.kind {
+            DidxQueryKind::Exact => self.index.exact(&self.query, None),
+            DidxQueryKind::Loose => self.index.loose(&self.query, self.limit),
+            DidxQueryKind::Prefix => self.index.prefix(&self.query, self.limit),
+            DidxQueryKind::Fuzzy(distance) => self.index.fuzzy(&self.query, distance, self.limit),
+            DidxQueryKind::Wildcard => self.index.wildcard(&self.query, self.limit),
+            DidxQueryKind::Candidates => self.index.candidates(&self.query, self.limit),
+        }
+        .map_err(to_napi_error)
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output.into_iter().map(Into::into).collect())
+    }
+}
+
+pub struct ValidateDidxTask {
+    index: Arc<CoreDidxIndex>,
+}
+
+impl Task for ValidateDidxTask {
+    type Output = ();
+    type JsValue = ();
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        self.index.validate().map_err(to_napi_error)
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output)
+    }
+}
+
+pub struct ReadIndexRecordTask {
+    dictionary: Arc<CoreMdx>,
+    locator: Vec<u8>,
+    redirect_link: bool,
+}
+
+impl Task for ReadIndexRecordTask {
+    type Output = String;
+    type JsValue = String;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        let (start, end) = decode_mdx_locator(&self.locator).map_err(to_napi_error)?;
+        self.dictionary
+            .read_record_text(start, end, self.redirect_link)
+            .map_err(to_napi_error)
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output)
+    }
+}
+
+/// 在 Node Worker 的异步任务线程中构建 DIDX，避免阻塞 Electron 主线程。
+pub struct BuildDidxTask {
+    dictionary: Arc<CoreMdx>,
+    output_path: PathBuf,
+}
+
+impl Task for BuildDidxTask {
+    type Output = DidxBuildResult;
+    type JsValue = DidxBuildResult;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        CoreDidxIndex::build_from_mdx(self.dictionary.as_mdict(), &self.output_path)
+            .map(Into::into)
+            .map_err(to_napi_error)
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output)
+    }
 }
 
 impl Drop for NextMdxKeysTask {

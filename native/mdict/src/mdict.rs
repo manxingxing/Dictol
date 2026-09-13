@@ -61,6 +61,10 @@ impl Mdict {
         self.source.path()
     }
 
+    pub(crate) fn source_bytes(&self) -> &[u8] {
+        self.source.bytes()
+    }
+
     /// 返回文件的 MDX/MDD 语义类型。
     pub fn kind(&self) -> FileKind {
         self.metadata.kind

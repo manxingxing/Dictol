@@ -700,6 +700,8 @@ if (!nativeBinding) {
 }
 
 module.exports = nativeBinding
+module.exports.DidxIndex = nativeBinding.DidxIndex
+module.exports.Ld2 = nativeBinding.Ld2
 module.exports.Mdd = nativeBinding.Mdd
 module.exports.MddEntryScanner = nativeBinding.MddEntryScanner
 module.exports.MddKeyScanner = nativeBinding.MddKeyScanner

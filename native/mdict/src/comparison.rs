@@ -38,6 +38,19 @@ impl std::fmt::Debug for KeyComparison {
 }
 
 impl KeyComparison {
+    /// 返回写入 DIDX header 的 key 规范化标志。
+    pub(crate) fn index_flags(&self) -> u32 {
+        match self {
+            Self::V2 {
+                case_sensitive,
+                strip_key,
+            } => u32::from(*case_sensitive) | (u32::from(*strip_key) << 1),
+            // v3 的 ICU 比较器不能只用两个 bit 完整序列化；第一版 DIDX
+            // 保留原始 UTF-8 key，后续可增加 ICU sort-key section。
+            Self::V3 { .. } => INDEX_FLAG_PRESERVE,
+        }
+    }
+
     /// 根据 Header 构造 v2 规范化规则或 v3 ICU4X collator；v1 复用此路径。
     pub(crate) fn from_header(header: &Header, warnings: &mut Vec<Warning>) -> Result<Self> {
         if header.version != Version::V3 {
@@ -130,34 +143,38 @@ impl KeyComparison {
     /// 生成 v2 字典用于索引边界比较的规范化 key；v1 同样使用该规则。
     pub(crate) fn normalize(&self, key: &str) -> String {
         match self {
-            Self::V2 {
-                case_sensitive,
-                strip_key,
-            } => {
-                let stripped: String = if *strip_key {
-                    key.chars()
-                        .filter(|character| !is_stripped(*character))
-                        .collect()
-                } else {
-                    key.to_owned()
-                };
-                if *case_sensitive {
-                    stripped
-                } else {
-                    stripped.to_lowercase()
-                }
-            }
+            Self::V2 { .. } => normalize_index_key(key, self.index_flags()),
             Self::V3 { .. } => key.to_owned(),
         }
     }
 }
 
 /// 判断字符是否属于 MDict `StripKey` 约定的移除集合。
-fn is_stripped(character: char) -> bool {
+pub(crate) fn is_stripped(character: char) -> bool {
     matches!(
         character,
         '(' | ')' | '.' | ',' | '-' | '&' | '、' | ' ' | '\'' | '/' | '\\' | '@' | '_' | '$' | '!'
     )
+}
+
+/// DIDX 中表示 v3 原始 key 语义的规范化标志。
+pub(crate) const INDEX_FLAG_PRESERVE: u32 = 1 << 2;
+
+/// One normalization owner for MDX comparison, DIDX building and queries.
+pub(crate) fn normalize_index_key(key: &str, flags: u32) -> String {
+    if flags & INDEX_FLAG_PRESERVE != 0 {
+        return key.to_owned();
+    }
+    let stripped = if flags & 2 != 0 {
+        key.chars().filter(|c| !is_stripped(*c)).collect::<String>()
+    } else {
+        key.to_owned()
+    };
+    if flags & 1 == 0 {
+        stripped.to_lowercase()
+    } else {
+        stripped
+    }
 }
 
 /// 将 BCP-47 locale 与 Unicode 扩展转换为 ICU4X 配置。

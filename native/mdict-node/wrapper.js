@@ -31,3 +31,5 @@ module.exports.Mdx = native.Mdx
 module.exports.MdxEntryScanner = native.MdxEntryScanner
 module.exports.MdxKeyScanner = native.MdxKeyScanner
 module.exports.hashFile = native.hashFile
+module.exports.DidxIndex = native.DidxIndex
+module.exports.Ld2 = native.Ld2
