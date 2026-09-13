@@ -17,7 +17,7 @@ import type {
   ReadyDictionary
 } from '../db-service'
 import { DidxImportService, mapWithConcurrency } from '../didx-import-service'
-import { getDatabasePath, getDictionaryIndexRoot } from '../db/paths'
+import { getDictionaryIndexRoot } from '../db/paths'
 import {
   createDictionaryImportPreview,
   createDictionaryFolderImportPreview,
@@ -136,7 +136,8 @@ export class DictionaryController extends BaseController {
   ): Promise<DictionaryIndexInfo> => {
     const numericId = Number(dictionaryId)
     if (!Number.isSafeInteger(numericId) || numericId <= 0) throw new Error('无效的词典 ID')
-    const service = new DidxImportService(getDatabasePath(), getDictionaryIndexRoot(), 1)
+    if (!this.runtime.db) throw new Error('数据库尚未初始化')
+    const service = new DidxImportService(this.runtime.db, getDictionaryIndexRoot(), 1)
     await this.runtime.dictionaryIndexManager.change(numericId, () => service.rebuild(numericId))
     return this.db.getDictionaryIndexInfo(dictionaryId)
   }
@@ -159,21 +160,14 @@ export class DictionaryController extends BaseController {
     )
     dismissSearchPopover(this.runtime)
 
-    const service = new DidxImportService(getDatabasePath(), getDictionaryIndexRoot(), 2)
+    if (!this.runtime.db) throw new Error('数据库尚未初始化')
+    const service = new DidxImportService(this.runtime.db, getDictionaryIndexRoot(), 2)
     const outcomes = await mapWithConcurrency(targets, 2, async (target) => {
       const dictionaryId = Number(target.id)
       try {
         await this.runtime.dictionaryIndexManager.change(dictionaryId, () =>
           service.rebuild(dictionaryId)
         )
-        try {
-          await this.db.deleteLegacyDictionaryEntries(dictionaryId)
-        } catch (error) {
-          console.warn('Failed to remove migrated legacy dictionary entries', {
-            dictionaryId,
-            error
-          })
-        }
         return { target, error: null }
       } catch (error) {
         return {
@@ -182,6 +176,19 @@ export class DictionaryController extends BaseController {
         }
       }
     })
+
+    // Finish every index before spending time removing legacy lookup rows.
+    for (const { target, error } of outcomes) {
+      if (error !== null) continue
+      try {
+        await this.db.deleteLegacyDictionaryEntries(Number(target.id))
+      } catch (cleanupError) {
+        console.warn('Failed to remove migrated legacy dictionary entries', {
+          dictionaryId: target.id,
+          error: cleanupError
+        })
+      }
+    }
 
     return {
       succeededDictionaryIds: outcomes

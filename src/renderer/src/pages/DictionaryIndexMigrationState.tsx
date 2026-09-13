@@ -34,11 +34,11 @@ export function DictionaryIndexMigrationState({
           </div>
           <CardTitle>需要重新为词典生成索引</CardTitle>
           <CardDescription className="leading-6">
-            以下词典需要重新建立索引。词典原文件、生词本和笔记不会受到影响。
+            以下词典需要重新建立索引。词典原文件不会受到影响。
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="max-h-64 overflow-y-auto rounded-lg border">
+          <div className="max-h-80 overflow-y-auto rounded-lg border">
             {dictionaries.map((dictionary) => {
               const error = failures.get(dictionary.id)
               return (

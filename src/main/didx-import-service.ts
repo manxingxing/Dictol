@@ -6,7 +6,7 @@ import { basename, dirname, extname, join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
 import type { DictionaryImportSourceFile } from '../shared/dictionary-import'
-import { openDrizzleDB } from './db/drizzle'
+import type { DictolDatabase } from './db/drizzle'
 import { dictionary, dictionaryFile, dictionaryIndex } from './db/schema'
 
 const DIDX_COMPARISON_VERSION = 1
@@ -77,12 +77,13 @@ export async function mapWithConcurrency<T, R>(
  * 应用正常导入由 dictionary-import-worker 负责；该服务不参与每次查询。
  */
 export class DidxImportService {
-  private readonly databasePath: string
+  private readonly orm: DictolDatabase
   private readonly indexRoot: string
   private readonly concurrency: number
 
-  constructor(databasePath: string, indexRoot: string, concurrency = 2) {
-    this.databasePath = databasePath
+  /** The caller owns the database connection, including closing it. */
+  constructor(orm: DictolDatabase, indexRoot: string, concurrency = 2) {
+    this.orm = orm
     this.indexRoot = indexRoot
     this.concurrency = concurrency
   }
@@ -105,120 +106,85 @@ export class DidxImportService {
     })
   }
 
-  async openOrRebuild(dictionaryId: number, forceRebuild = false): Promise<DidxIndex> {
-    const { db: connection, orm } = openDrizzleDB(this.databasePath)
+  async rebuild(dictionaryId: number): Promise<void> {
+    const orm = this.orm
+    const [existingDictionary] = await orm
+      .select({ id: dictionary.id, uuid: dictionary.uuid })
+      .from(dictionary)
+      .where(eq(dictionary.id, dictionaryId))
+      .limit(1)
+    if (!existingDictionary) throw new Error(`未找到词典：${dictionaryId}`)
+
+    await orm
+      .insert(dictionaryIndex)
+      .values({
+        dictionaryId,
+        formatVersion: DIDX_FORMAT_VERSION,
+        normalizationVersion: DIDX_NORMALIZATION_VERSION,
+        comparisonVersion: DIDX_COMPARISON_VERSION,
+        status: 'needs_reindex'
+      })
+      .onConflictDoNothing({ target: dictionaryIndex.dictionaryId })
+
     try {
-      const [existingDictionary] = await orm
-        .select({ id: dictionary.id })
-        .from(dictionary)
-        .where(eq(dictionary.id, dictionaryId))
-        .limit(1)
-      if (!existingDictionary) throw new Error(`未找到词典：${dictionaryId}`)
+      const sourceFiles = await this.loadSourceFiles(orm, dictionaryId)
+      const mdxPath = getMdxPath(sourceFiles)
+      const indexPath = getDictionaryIndexPath(this.indexRoot, existingDictionary.uuid)
 
+      const updatedAt = new Date().toISOString()
       await orm
-        .insert(dictionaryIndex)
-        .values({
-          dictionaryId,
-          formatVersion: DIDX_FORMAT_VERSION,
-          normalizationVersion: DIDX_NORMALIZATION_VERSION,
-          comparisonVersion: DIDX_COMPARISON_VERSION,
-          status: 'needs_reindex'
-        })
-        .onConflictDoNothing({ target: dictionaryIndex.dictionaryId })
+        .update(dictionaryIndex)
+        .set({ status: 'building', updatedAt })
+        .where(eq(dictionaryIndex.dictionaryId, dictionaryId))
 
-      const [record] = await orm
-        .select({
-          uuid: dictionary.uuid,
-          formatVersion: dictionaryIndex.formatVersion,
-          normalizationVersion: dictionaryIndex.normalizationVersion,
-          comparisonVersion: dictionaryIndex.comparisonVersion,
-          sourceFingerprint: dictionaryIndex.sourceFingerprint,
-          status: dictionaryIndex.status
-        })
-        .from(dictionary)
-        .innerJoin(dictionaryIndex, eq(dictionaryIndex.dictionaryId, dictionary.id))
-        .where(eq(dictionary.id, dictionaryId))
-      if (!record) throw new Error(`未找到 DIDX 词典：${dictionaryId}`)
-
+      let mdx: Mdx | undefined
       try {
-        const sourceFiles = await this.loadSourceFiles(orm, dictionaryId)
-        const mdxPath = getMdxPath(sourceFiles)
-        const sourceFingerprint = createSourceFingerprint(await statSourceFiles(sourceFiles))
-        const indexPath = getDictionaryIndexPath(this.indexRoot, record.uuid)
-        const current =
-          !forceRebuild &&
-          record.status === 'ready' &&
-          record.formatVersion === DIDX_FORMAT_VERSION &&
-          record.normalizationVersion === DIDX_NORMALIZATION_VERSION &&
-          record.comparisonVersion === DIDX_COMPARISON_VERSION &&
-          record.sourceFingerprint === sourceFingerprint
-
-        if (current) {
-          try {
-            return await openValidatedIndex(indexPath, mdxPath)
-          } catch {
-            // A missing or damaged formal index is rebuilt through the same path below.
-          }
-        }
-
-        const updatedAt = new Date().toISOString()
+        mdx = Mdx.open(mdxPath)
+        const indexStartedAt = performance.now()
+        // Rust fully validates the temporary file before publishing it.
+        const build = await mdx.buildIndex(indexPath)
+        const indexElapsedMs = performance.now() - indexStartedAt
+        console.info('[DIDX] index rebuilt', {
+          dictionaryId,
+          entryCount: build.entryCount.toString(),
+          indexElapsedMs: Number(indexElapsedMs.toFixed(2))
+        })
+        const latestFingerprint = createSourceFingerprint(await statSourceFiles(sourceFiles))
+        const builtAt = new Date().toISOString()
         await orm
           .update(dictionaryIndex)
-          .set({ status: 'building', updatedAt })
-          .where(eq(dictionaryIndex.dictionaryId, dictionaryId))
-
-        let mdx: Mdx | undefined
-        try {
-          mdx = Mdx.open(mdxPath)
-          const indexStartedAt = performance.now()
-          const build = await mdx.buildIndex(indexPath)
-          const indexElapsedMs = performance.now() - indexStartedAt
-          console.info('[DIDX] index rebuilt', {
-            dictionaryId,
-            entryCount: build.entryCount.toString(),
-            indexElapsedMs: Number(indexElapsedMs.toFixed(2))
+          .set({
+            status: 'ready',
+            formatVersion: build.formatVersion,
+            normalizationVersion: build.normalizationVersion,
+            comparisonVersion: DIDX_COMPARISON_VERSION,
+            sourceFingerprint: latestFingerprint,
+            entryCount: toSafeNumber(build.entryCount, 'entry count'),
+            termCount: toSafeNumber(build.termCount, 'term count'),
+            fileSize: toSafeNumber(build.fileSize, 'index file size'),
+            builtAt,
+            updatedAt: builtAt
           })
-          const latestFingerprint = createSourceFingerprint(await statSourceFiles(sourceFiles))
-          const builtAt = new Date().toISOString()
-          await orm
-            .update(dictionaryIndex)
-            .set({
-              status: 'ready',
-              formatVersion: build.formatVersion,
-              normalizationVersion: build.normalizationVersion,
-              comparisonVersion: DIDX_COMPARISON_VERSION,
-              sourceFingerprint: latestFingerprint,
-              entryCount: toSafeNumber(build.entryCount, 'entry count'),
-              termCount: toSafeNumber(build.termCount, 'term count'),
-              fileSize: toSafeNumber(build.fileSize, 'index file size'),
-              builtAt,
-              updatedAt: builtAt
-            })
-            .where(eq(dictionaryIndex.dictionaryId, dictionaryId))
-          return await openValidatedIndex(indexPath, mdxPath)
-        } finally {
-          mdx?.close()
-        }
-      } catch (error) {
+          .where(eq(dictionaryIndex.dictionaryId, dictionaryId))
+      } finally {
+        mdx?.close()
+      }
+    } catch (error) {
+      try {
         await orm
           .update(dictionaryIndex)
           .set({ status: 'error', updatedAt: new Date().toISOString() })
           .where(eq(dictionaryIndex.dictionaryId, dictionaryId))
-        throw error
+      } catch (statusError) {
+        console.warn('Failed to persist DIDX rebuild failure', { dictionaryId, statusError })
       }
-    } finally {
-      connection.close()
+      throw error
     }
-  }
-
-  async rebuild(dictionaryId: number): Promise<void> {
-    const index = await this.openOrRebuild(dictionaryId, true)
-    index.close()
   }
 
   async importOne(request: DidxImportRequest): Promise<DidxImportResult> {
     const startedAt = performance.now()
-    const { db: connection, orm } = openDrizzleDB(this.databasePath)
+    const orm = this.orm
     let dictionaryId: number | undefined
     let indexRowCreated = false
     let mdx: Mdx | undefined
@@ -283,9 +249,8 @@ export class DidxImportService {
       const latestSourceFingerprint = createSourceFingerprint(await statSourceFiles(sourceFiles))
       const builtAt = new Date().toISOString()
 
-      connection.transaction(() => {
-        orm
-          .update(dictionaryIndex)
+      orm.transaction((tx) => {
+        tx.update(dictionaryIndex)
           .set({
             status: 'ready',
             formatVersion: build.formatVersion,
@@ -300,8 +265,7 @@ export class DidxImportService {
           .where(eq(dictionaryIndex.dictionaryId, dictionaryRow.id))
           .run()
 
-        orm
-          .update(dictionary)
+        tx.update(dictionary)
           .set({
             name: metadata.title || dictionaryName,
             description: metadata.description || null,
@@ -311,7 +275,7 @@ export class DidxImportService {
           })
           .where(eq(dictionary.id, dictionaryRow.id))
           .run()
-      })()
+      })
 
       const opened = await openValidatedIndex(indexPath, mdxSourceFile.sourcePath)
       opened.close()
@@ -343,12 +307,11 @@ export class DidxImportService {
       throw error
     } finally {
       mdx?.close()
-      connection.close()
     }
   }
 
   private async loadSourceFiles(
-    orm: ReturnType<typeof openDrizzleDB>['orm'],
+    orm: DictolDatabase,
     dictionaryId: number
   ): Promise<DictionaryImportSourceFile[]> {
     const rows = await orm
