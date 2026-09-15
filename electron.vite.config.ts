@@ -33,7 +33,8 @@ export default defineConfig({
           'selection-entry': resolve('src/preload/selection-entry.ts'),
           'custom-css-editor': resolve('src/preload/custom-css-editor.ts'),
           'custom-css-preview': resolve('src/preload/custom-css-preview.ts'),
-          'find-bar': resolve('src/preload/find-bar.ts')
+          'find-bar': resolve('src/preload/find-bar.ts'),
+          browse: resolve('src/preload/browse.ts')
         }
       }
     }
@@ -47,7 +48,8 @@ export default defineConfig({
           'selection-toolbar': resolve('src/renderer/selection-toolbar.html'),
           'selection-explanation': resolve('src/renderer/selection-explanation.html'),
           'find-bar': resolve('src/renderer/find-bar.html'),
-          'custom-css-editor': resolve('src/renderer/custom-css-editor.html')
+          'custom-css-editor': resolve('src/renderer/custom-css-editor.html'),
+          browse: resolve('src/renderer/browse.html')
         }
       }
     },

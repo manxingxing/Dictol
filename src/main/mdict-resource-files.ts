@@ -25,6 +25,22 @@ export class MdictResourceFiles {
     return Promise.all(locators.map((locator) => this.readIndexRecord(locator)))
   }
 
+  async listEntryWords(): Promise<string[]> {
+    const scanner = this.mdx.keys()
+    const words: string[] = []
+
+    for (;;) {
+      const batch = await scanner.nextBatch(10_000)
+      words.push(...batch.entries.map((entry) => entry.keyText))
+      if (batch.done) return words
+    }
+  }
+
+  async prefixEntryWords(prefix: string): Promise<string[]> {
+    const entries = await this.mdx.prefix(prefix)
+    return entries.map((entry) => entry.keyText)
+  }
+
   async loadResource(resourcePath: string): Promise<Buffer | null> {
     if (!this.mddList) return null
 

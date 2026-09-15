@@ -241,6 +241,8 @@ const api = Object.freeze({
       ipcRenderer.invoke('dictionaries:delete', dictionaryId),
     openDirectory: (dictionaryId: string): Promise<void> =>
       ipcRenderer.invoke('dictionaries:open-directory', dictionaryId),
+    openBrowse: (dictionaryId: string): Promise<void> =>
+      ipcRenderer.invoke('dictionaries:open-browse', dictionaryId),
     reorder: (dictionaryIds: string[]): Promise<void> =>
       ipcRenderer.invoke('dictionaries:reorder', dictionaryIds),
     updateName: (dictionaryId: string, name: string): Promise<void> =>

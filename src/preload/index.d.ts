@@ -23,6 +23,11 @@ declare global {
       onState: (callback: (state: CustomCssEditorState) => void) => () => void
       onPreviewReady: (callback: (ready: boolean) => void) => () => void
     }
+    dictolBrowse: {
+      getDictionaryName: (dictionaryId: string) => Promise<string | null>
+      listEntryWords: (dictionaryId: string) => Promise<string[]>
+      prefixEntryWords: (dictionaryId: string, prefix: string) => Promise<string[]>
+    }
     dictol: {
       platform: NodeJS.Platform
       dictionaries: {
@@ -146,6 +151,7 @@ declare global {
         >
         delete: (dictionaryId: string) => Promise<void>
         openDirectory: (dictionaryId: string) => Promise<void>
+        openBrowse: (dictionaryId: string) => Promise<void>
         reorder: (dictionaryIds: string[]) => Promise<void>
         updateName: (dictionaryId: string, name: string) => Promise<void>
         updateEnabled: (dictionaryId: string, enabled: boolean) => Promise<void>

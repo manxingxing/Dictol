@@ -87,6 +87,16 @@ export class MdictResourceManager {
     }
   }
 
+  async listEntryWords(dictionaryId: number): Promise<string[]> {
+    const resource = await this.acquire(dictionaryId)
+    return resource.listEntryWords()
+  }
+
+  async prefixEntryWords(dictionaryId: number, prefix: string): Promise<string[]> {
+    const resource = await this.acquire(dictionaryId)
+    return resource.prefixEntryWords(prefix)
+  }
+
   async loadResource(dictionaryId: number, resourcePath: string): Promise<Buffer | null> {
     const resource = await this.acquire(dictionaryId)
     return resource.loadResource(resourcePath)

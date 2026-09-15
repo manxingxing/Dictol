@@ -1,6 +1,6 @@
 {
   "name": "dictol",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "A desktop dictionary reader for MDX and MDD dictionaries",
   "main": "./out/main/index.js",
   "author": "Alan Mann",
@@ -76,6 +76,7 @@
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-virtual": "^3.14.13",
     "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "latest",
     "@types/node": "^22.19.1",
@@ -125,7 +126,8 @@
     "electron-winstaller@5.4.0": true,
     "better-sqlite3@13.0.2": true,
     "selection-hook@2.1.1": true,
-    "esbuild@0.28.1": true,
-    "adblock-rs@0.13.2": true
+    "adblock-rs@0.13.2": true,
+    "esbuild@0.18.20": true,
+    "esbuild@0.25.12": true
   }
 }

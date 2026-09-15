@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeTheme, systemPreferences } from 'electron'
+import { BrowserWindow, nativeTheme, screen, systemPreferences } from 'electron'
 
 import icon from '../../resources/icon.png?asset'
 import {
@@ -26,6 +26,7 @@ export class WindowManager {
   selectionExplanationView: WebContentsViewManager | undefined
   findBarView: WebContentsViewManager | undefined
   customCssEditorWindow: BrowserWindow | undefined
+  browseWindow: BrowserWindow | undefined
   customCssEditorPreviewView: WebContentsViewManager | undefined
   private activeSpaceSubscriptionId: number | undefined
   private observingNativeAppearance = false
@@ -361,6 +362,48 @@ export class WindowManager {
     return window
   }
 
+  createBrowseWindow(mainWindow: BrowserWindow): BrowserWindow {
+    if (this.browseWindow && !this.browseWindow.isDestroyed()) return this.browseWindow
+
+    const mainBounds = mainWindow.getBounds()
+    const display = screen.getDisplayMatching(mainBounds)
+    const { x: workAreaX, y: workAreaY, width: workAreaWidth, height: workAreaHeight } =
+      display.workArea
+    const width = 350
+    const gap = 8
+    const height = Math.min(mainBounds.height, workAreaHeight)
+    const rightX = mainBounds.x + mainBounds.width + gap
+    const leftX = mainBounds.x - width - gap
+    const x =
+      rightX + width <= workAreaX + workAreaWidth
+        ? rightX
+        : Math.max(workAreaX, Math.min(leftX, workAreaX + workAreaWidth - width))
+    const y = Math.max(workAreaY, Math.min(mainBounds.y, workAreaY + workAreaHeight - height))
+
+    const window = new BrowserWindow({
+      x,
+      y,
+      width,
+      height,
+      minWidth: 300,
+      minHeight: 420,
+      show: false,
+      backgroundColor: nativeTheme.shouldUseDarkColors ? '#232323' : '#fdfdfb',
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: resolvePreloadPath('browse.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    })
+    window.on('closed', () => {
+      if (this.browseWindow === window) this.browseWindow = undefined
+    })
+    this.browseWindow = window
+    return window
+  }
+
   setSelectionExplanationSwitcherVisible(visible: boolean): void {
     if (this.selectionExplanationSwitcherVisible === visible) return
     this.selectionExplanationSwitcherVisible = visible
@@ -400,6 +443,9 @@ export class WindowManager {
     if (this.customCssEditorWindow && !this.customCssEditorWindow.isDestroyed()) {
       this.customCssEditorWindow.destroy()
     }
+    if (this.browseWindow && !this.browseWindow.isDestroyed()) {
+      this.browseWindow.destroy()
+    }
 
     this.dictionaryView = undefined
     this.aggregateDictionaryView = undefined
@@ -413,6 +459,7 @@ export class WindowManager {
     this.findBarView = undefined
     this.customCssEditorWindow = undefined
     this.customCssEditorPreviewView = undefined
+    this.browseWindow = undefined
     this.mainWindow = undefined
   }
 

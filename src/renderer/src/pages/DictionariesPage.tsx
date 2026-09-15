@@ -20,7 +20,8 @@ import {
   Upload,
   Plus,
   Power,
-  RefreshCw
+  RefreshCw,
+  BookText
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -350,7 +351,7 @@ export function DictionariesPage(): React.JSX.Element {
             <div className="min-w-0">
               <h2 className="text-[15px] font-semibold leading-5">本地词典</h2>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                拖动词典调整优先级；查词结果中的词典标签会使用相同顺序。
+                拖动以调整词典顺序。查词结果中的词典会使用相同顺序
               </p>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
@@ -557,6 +558,24 @@ export function DictionariesPage(): React.JSX.Element {
                         <DropdownMenuContent align="end" className="w-40">
                           <DropdownMenuItem
                             className="text-sm"
+                            disabled={
+                              dictionary.status !== 'ready' ||
+                              (updateDictionaryEnabled.isPending &&
+                                updateDictionaryEnabled.variables?.dictionaryId === dictionary.id)
+                            }
+                            onClick={() => {
+                              updateDictionaryEnabled.mutate({
+                                dictionaryId: dictionary.id,
+                                enabled: !dictionary.enabled
+                              })
+                            }}
+                          >
+                            <Power className="size-3.5" />
+                            {dictionary.enabled ? '禁用' : '启用'}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-sm"
                             onClick={() => {
                               openDictionaryInfo(dictionary.id)
                             }}
@@ -566,10 +585,20 @@ export function DictionariesPage(): React.JSX.Element {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-sm"
+                            disabled={dictionary.status !== 'ready'}
+                            onClick={() => {
+                              void window.dictol.dictionaries.openBrowse(dictionary.id)
+                            }}
+                          >
+                            <BookText className="size-3.5" />
+                            浏览
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-sm"
                             onClick={() => openIndexDialog(dictionary.id, dictionary.name)}
                           >
                             <Database className="size-3.5" />
-                            索引
+                            查看索引
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-sm"
@@ -586,23 +615,6 @@ export function DictionariesPage(): React.JSX.Element {
                             打开所在目录
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-sm"
-                            disabled={
-                              dictionary.status !== 'ready' ||
-                              (updateDictionaryEnabled.isPending &&
-                                updateDictionaryEnabled.variables?.dictionaryId === dictionary.id)
-                            }
-                            onClick={() => {
-                              updateDictionaryEnabled.mutate({
-                                dictionaryId: dictionary.id,
-                                enabled: !dictionary.enabled
-                              })
-                            }}
-                          >
-                            <Power className="size-3.5" />
-                            {dictionary.enabled ? '禁用词典' : '启用词典'}
-                          </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-sm hover:bg-destructive/10 hover:text-destructive focus:bg-destructive/10 focus:text-destructive"
                             disabled={
@@ -1020,9 +1032,7 @@ export function DictionariesPage(): React.JSX.Element {
         <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className="border-b border-border px-6 pb-5 pt-6 pr-14">
             <DialogTitle>扫描文件夹导入</DialogTitle>
-            <DialogDescription>
-              递归查找 MDX；每个 MDX 只使用所在目录中的资源。
-            </DialogDescription>
+            <DialogDescription>递归查找 MDX；每个 MDX 只使用所在目录中的资源。</DialogDescription>
           </DialogHeader>
           <div className="min-h-0 min-w-0 overflow-y-auto px-6 py-5">
             <div className="grid min-w-0 gap-2">

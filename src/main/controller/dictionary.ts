@@ -25,6 +25,7 @@ import {
   resolveDictionaryImportSelection
 } from '../dictionary-import-files'
 import { parseDictionaryEntryUrl } from '../dictionary-entry-url'
+import { resolveRendererUrl } from '../output-path'
 import { dismissSearchPopover } from './search-popover'
 import { BaseController } from './base-controller'
 
@@ -45,6 +46,10 @@ export class DictionaryController extends BaseController {
     ipcMain.handle('dictionaries:import-folder', this.importDictionaryFolder)
     ipcMain.handle('dictionaries:delete', this.deleteDictionary)
     ipcMain.handle('dictionaries:open-directory', this.openDirectory)
+    ipcMain.handle('dictionaries:open-browse', this.openBrowse)
+    ipcMain.handle('browse:get-dictionary-name', this.getBrowseDictionaryName)
+    ipcMain.handle('browse:list-entry-words', this.listBrowseEntryWords)
+    ipcMain.handle('browse:prefix-entry-words', this.prefixBrowseEntryWords)
     ipcMain.handle('dictionaries:reorder', this.reorderDictionaries)
     ipcMain.handle('dictionaries:update-name', this.updateDictionaryName)
     ipcMain.handle('dictionaries:update-enabled', this.updateDictionaryEnabled)
@@ -266,6 +271,69 @@ export class DictionaryController extends BaseController {
 
     const error = await shell.openPath(dictionaryPath)
     if (error) throw new Error(error)
+  }
+
+  openBrowse = async (event: IpcMainInvokeEvent, dictionaryId: string): Promise<void> => {
+    const mainWindow = this.runtime.mainWindow
+    // 仅允许从mainWindow发来的请求
+    if (!mainWindow || mainWindow.webContents.id !== event.sender.id) return
+    const dictionary = await this.db.getDictionary(dictionaryId)
+    if (!dictionary || dictionary.status !== 'ready') throw new Error('词典尚未准备完成')
+
+    const window = this.runtime.windowManager.createBrowseWindow(mainWindow)
+    await window.loadURL(
+      `${resolveRendererUrl('browse.html')}?dictionaryId=${encodeURIComponent(dictionaryId)}`
+    )
+    window.show()
+    window.focus()
+  }
+
+  listBrowseEntryWords = async (
+    event: IpcMainInvokeEvent,
+    dictionaryId: string
+  ): Promise<string[]> => {
+    this.requireBrowseWindow(event)
+    const numericId = await this.getReadyBrowseDictionaryId(event, dictionaryId)
+    return this.runtime.mdictResourceManager.listEntryWords(numericId)
+  }
+
+  getBrowseDictionaryName = async (
+    event: IpcMainInvokeEvent,
+    dictionaryId: string
+  ): Promise<string | null> => {
+    this.requireBrowseWindow(event)
+    const dictionary = await this.db.getDictionary(dictionaryId)
+    return dictionary?.name ?? null
+  }
+
+  prefixBrowseEntryWords = async (
+    event: IpcMainInvokeEvent,
+    dictionaryId: string,
+    prefix: string
+  ): Promise<string[]> => {
+    const numericId = await this.getReadyBrowseDictionaryId(event, dictionaryId)
+    if (!prefix) return []
+    return this.runtime.mdictResourceManager.prefixEntryWords(numericId, prefix)
+  }
+
+  // 来自浏览字典窗口
+  private requireBrowseWindow(event: IpcMainInvokeEvent): void {
+    const browseWindow = this.runtime.windowManager.browseWindow
+    if (!browseWindow || browseWindow.webContents.id !== event.sender.id) {
+      throw new Error('无效的浏览窗口')
+    }
+  }
+
+  private async getReadyBrowseDictionaryId(
+    event: IpcMainInvokeEvent,
+    dictionaryId: string
+  ): Promise<number> {
+    this.requireBrowseWindow(event)
+    const numericId = Number(dictionaryId)
+    if (!Number.isSafeInteger(numericId) || numericId <= 0) throw new Error('无效的词典 ID')
+    const dictionary = await this.db.getDictionary(dictionaryId)
+    if (!dictionary || dictionary.status !== 'ready') throw new Error('词典尚未准备完成')
+    return numericId
   }
 
   reorderDictionaries = async (
