@@ -59,7 +59,7 @@ export function useDictionaryWordNavigation(dictionaryId?: string): void {
         console.log({value, sourceDictionaryId})
         const params = new URLSearchParams()
         if (dictionaryId) params.set('dictionary', dictionaryId)
-        else if (sourceDictionaryId) params.set('focusDictionaryId', sourceDictionaryId)
+        else if (sourceDictionaryId) params.set('dictionaryId', sourceDictionaryId)
         const query = params.toString() ? `?${params}` : ''
         console.log(query)
         void navigate(`/search/${encodeURIComponent(word)}${query}`)

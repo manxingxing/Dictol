@@ -17,7 +17,7 @@ export function AggregateDictionaryResult({
   actions
 }: DictionaryResultProps): React.JSX.Element {
   const [searchParams] = useSearchParams()
-  const focusDictionaryId = searchParams.get('focusDictionaryId') ?? undefined
+  const focusDictionaryId = searchParams.get('dictionaryId') ?? undefined
   const [result, setResult] = useState<{ term: string; dictionaryId?: string; failed: boolean }>({
     term,
     failed: false
@@ -48,7 +48,7 @@ export function AggregateDictionaryResult({
   useEffect(() => {
     if (isPlaceholderData) return
     let activeRequest = true
-    void window.dictol.dictionaryView.showAggregate({ term, focusDictionaryId }).catch(() => {
+    void window.dictol.dictionaryView.showAggregate({ term, dictionaryId: focusDictionaryId }).catch(() => {
       if (!activeRequest) return
       window.dictol.dictionaryView.hide()
       setResult((current) => ({ ...current, term, failed: true }))

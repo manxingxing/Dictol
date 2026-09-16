@@ -120,7 +120,7 @@
   observeSections()
 
   const getFocusDictionaryId = () => {
-    const raw = new URL(location.href).searchParams.get('focusDictionaryId')
+    const raw = new URL(location.href).searchParams.get('dictionaryId')
     const dictionaryId = Number(raw)
     return Number.isSafeInteger(dictionaryId) && dictionaryId > 0 ? dictionaryId : null
   }

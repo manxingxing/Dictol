@@ -5,5 +5,5 @@ export type DictionaryLookupRequest = {
 
 export type DictionaryAggregateRequest = {
   term: string
-  focusDictionaryId?: string
+  dictionaryId?: string
 }

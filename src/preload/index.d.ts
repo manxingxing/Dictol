@@ -562,7 +562,7 @@ declare global {
       }
       dictionaryView: {
         show: (target: { dictionaryId: string; term: string }) => Promise<void>
-        showAggregate: (target: { term: string; focusDictionaryId?: string }) => Promise<void>
+        showAggregate: (target: { term: string; dictionaryId?: string }) => Promise<void>
         scrollToDictionary: (dictionaryId: string) => void
         hide: () => void
         showFindBar: () => void

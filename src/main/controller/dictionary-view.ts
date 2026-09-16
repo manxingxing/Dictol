@@ -69,7 +69,7 @@ export class DictionaryViewController extends BaseController {
       !this.acceptsHostSender(event.sender.id) ||
       !target ||
       typeof target.term !== 'string' ||
-      (target.focusDictionaryId !== undefined && typeof target.focusDictionaryId !== 'string')
+      (target.dictionaryId !== undefined && typeof target.dictionaryId !== 'string')
     ) {
       return
     }
@@ -78,7 +78,7 @@ export class DictionaryViewController extends BaseController {
     if (!normalizedTerm || normalizedTerm.length > 200) return
 
     const url = createDictionaryAggregateUrl(normalizedTerm, {
-      focusDictionaryId: target.focusDictionaryId
+      dictionaryId: target.dictionaryId
     })
     this.desiredUrl = url
     const version = ++this.loadVersion

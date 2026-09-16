@@ -11,7 +11,7 @@ export type DictionaryEntryLocation = {
 
 export type DictionaryAggregateLocation = {
   term: string
-  focusDictionaryId?: number
+  dictionaryId?: number
 }
 
 export type DictionaryResourceLocation = {
@@ -41,17 +41,17 @@ export function createDictionaryEntryUrl(
 
 export function createDictionaryAggregateUrl(
   term: string,
-  options: { focusDictionaryId?: string | number } = {}
+  options: { dictionaryId?: string | number } = {}
 ): string {
   const normalizedTerm = term.trim()
   if (!normalizedTerm || normalizedTerm.length > 200) throw new Error('Invalid aggregate term')
 
   const url = new URL(`${ENTRY_SCHEME}://app.dictol${ENTRY_AGGREGATE_PATH}`)
   url.searchParams.set('term', normalizedTerm)
-  if (options.focusDictionaryId !== undefined) {
-    const focusDictionaryId = parsePositiveSafeInteger(String(options.focusDictionaryId))
-    if (focusDictionaryId === null) throw new Error('Invalid focus dictionary ID')
-    url.searchParams.set('focusDictionaryId', String(focusDictionaryId))
+  if (options.dictionaryId !== undefined) {
+    const dictionaryId = parsePositiveSafeInteger(String(options.dictionaryId))
+    if (dictionaryId === null) throw new Error('Invalid dictionary ID')
+    url.searchParams.set('dictionaryId', String(dictionaryId))
   }
   return url.href
 }
@@ -115,11 +115,11 @@ export function parseDictionaryAggregateUrl(value: string): DictionaryAggregateL
   }
 
   const terms = url.searchParams.getAll('term')
-  const focusDictionaryIds = url.searchParams.getAll('focusDictionaryId')
+  const dictionaryIds = url.searchParams.getAll('dictionaryId')
   if (
     terms.length !== 1 ||
-    focusDictionaryIds.length > 1 ||
-    Array.from(url.searchParams.keys()).some((key) => key !== 'term' && key !== 'focusDictionaryId')
+    dictionaryIds.length > 1 ||
+    Array.from(url.searchParams.keys()).some((key) => key !== 'term' && key !== 'dictionaryId')
   ) {
     return null
   }
@@ -127,9 +127,9 @@ export function parseDictionaryAggregateUrl(value: string): DictionaryAggregateL
   const term = terms[0]?.trim() ?? ''
   if (!term || term.length > 200) return null
 
-  if (focusDictionaryIds.length === 0) return { term }
-  const focusDictionaryId = parsePositiveSafeInteger(focusDictionaryIds[0])
-  return focusDictionaryId === null ? null : { term, focusDictionaryId }
+  if (dictionaryIds.length === 0) return { term }
+  const dictionaryId = parsePositiveSafeInteger(dictionaryIds[0])
+  return dictionaryId === null ? null : { term, dictionaryId }
 }
 
 export function parseDictionaryEntryNavigation(
