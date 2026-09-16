@@ -15,7 +15,7 @@ export const dictionary = sqliteTable(
     name: text('name').notNull(),
     description: text('description'),
     recordCount: integer('record_count'),
-    dictPath: text('dict_path').unique(),
+    dictPath: text('dict_path'),
     external: integer('external', { mode: 'boolean' }).notNull().default(false),
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
     customCss: text('custom_css').notNull().default(''),
@@ -75,7 +75,7 @@ export const dictionaryFile = sqliteTable(
       .notNull()
       .references(() => dictionary.id, { onDelete: 'cascade' }),
     fileName: text('file_name').notNull(),
-    filePath: text('file_path').notNull(),
+    filePath: text('file_path').notNull().unique(),
     fileType: text('file_type', { enum: ['mdx', 'mdd'] }).notNull(),
     fileSize: integer('file_size'),
     lastModified: integer('last_modified', { mode: 'number' }),
