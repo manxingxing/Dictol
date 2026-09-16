@@ -88,10 +88,10 @@ export function AggregateDictionaryResult({
           ))}
         </div>
       </SearchResultToolbar>
-      <div aria-label="多词典汇总词条内容" className="min-h-0 flex-1" ref={contentRef}>
+      <div aria-label="多词典查询结果汇总" className="min-h-0 flex-1" ref={contentRef}>
         {result.failed && (
           <div className="flex h-full items-center justify-center text-sm text-destructive">
-            无法读取词典汇总内容
+            无法获取词典查询结果
           </div>
         )}
       </div>

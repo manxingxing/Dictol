@@ -68,7 +68,7 @@ export class CustomCssEditorController extends BaseController {
     preview.hide()
 
     if (!window.webContents.getURL()) {
-      await window.loadURL(resolveRendererUrl(`custom-css-editor.html?dictionaryId=${dictionaryId}`))
+      await window.loadURL(resolveRendererUrl(`custom-css-editor.html`))
     } else {
       window.webContents.send('custom-css-editor:state', this.state)
     }
