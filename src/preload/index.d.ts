@@ -13,7 +13,6 @@ declare global {
   interface Window {
     dictolCustomCssEditor: {
       getState: () => Promise<CustomCssEditorState | null>
-      getPreviewReady: () => Promise<boolean>
       searchEntry: (term: string) => Promise<CustomCssEditorSearchResult>
       setPreviewBounds: (bounds: CustomCssEditorBounds) => void
       setPreviewTheme: (theme: CustomCssEditorTheme) => void

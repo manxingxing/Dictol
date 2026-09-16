@@ -32,14 +32,11 @@ export default function CustomCssEditorApp(): React.JSX.Element {
 
   useEffect(() => {
     let active = true
-    void Promise.all([
-      window.dictolCustomCssEditor.getState(),
-      window.dictolCustomCssEditor.getPreviewReady()
-    ]).then(([initialState, previewReady]) => {
+    void window.dictolCustomCssEditor.getState().then((initialState) => {
       if (!active || !initialState) return
       setState(initialState)
       setCss(initialState.customCss)
-      setPreviewLoading(initialState.entryId !== '' && !previewReady)
+      setPreviewLoading(false)
     })
     return () => {
       active = false
@@ -50,7 +47,7 @@ export default function CustomCssEditorApp(): React.JSX.Element {
     return window.dictolCustomCssEditor.onState((nextState) => {
       setState(nextState)
       setCss(nextState.customCss)
-      setPreviewLoading(nextState.entryId !== '')
+      setPreviewLoading(nextState.entryWord !== '')
       setError(null)
       setSaveSuccess(false)
     })
@@ -236,7 +233,7 @@ export default function CustomCssEditorApp(): React.JSX.Element {
             <div className="custom-css-editor-preview-label">
               {previewLoading
                 ? '词条预览'
-                : state.entryId
+                : state.entryWord
                   ? `词条预览 · ${state.entryWord}`
                   : '输入词条后预览'}
             </div>

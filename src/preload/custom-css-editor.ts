@@ -12,8 +12,6 @@ contextBridge.exposeInMainWorld(
   Object.freeze({
     getState: (): Promise<CustomCssEditorState | null> =>
       ipcRenderer.invoke('custom-css-editor:get-state'),
-    getPreviewReady: (): Promise<boolean> =>
-      ipcRenderer.invoke('custom-css-editor:get-preview-ready'),
     searchEntry: (term: string): Promise<CustomCssEditorSearchResult> =>
       ipcRenderer.invoke('custom-css-editor:search-entry', term),
     setPreviewBounds: (bounds: CustomCssEditorBounds): void =>

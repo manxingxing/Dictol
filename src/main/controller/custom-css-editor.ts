@@ -34,9 +34,8 @@ export class CustomCssEditorController extends BaseController {
   private previewReady = false
 
   override mount(): void {
-    ipcMain.handle('dictionaries:open-custom-css-editor', this.open)
+    ipcMain.handle('dictionaries:open-custom-css-editor', this.openCSSEditor)
     ipcMain.handle('custom-css-editor:get-state', this.getState)
-    ipcMain.handle('custom-css-editor:get-preview-ready', this.getPreviewReady)
     ipcMain.handle('custom-css-editor:search-entry', this.searchEntry)
     ipcMain.on('custom-css-editor:set-preview-bounds', this.setPreviewBounds)
     ipcMain.on('custom-css-editor:set-preview-theme', this.setPreviewTheme)
@@ -45,19 +44,16 @@ export class CustomCssEditorController extends BaseController {
     ipcMain.handle('custom-css-editor:save', this.save)
   }
 
-  open = async (event: IpcMainInvokeEvent, dictionaryId: string): Promise<void> => {
+  openCSSEditor = async (event: IpcMainInvokeEvent, dictionaryId: string): Promise<void> => {
     if (!this.acceptsMainSender(event.sender) || typeof dictionaryId !== 'string') return
 
     const dictionary = await this.db.getDictionary(dictionaryId)
     if (!dictionary || dictionary.status !== 'ready') throw new Error('词典尚未准备完成')
-    const recordCount = dictionary.recordCount === null ? null : Number(dictionary.recordCount)
 
     this.state = {
       dictionaryId,
       dictionaryName: dictionary.name,
       customCss: dictionary.customCss,
-      recordCount,
-      entryId: '',
       entryWord: ''
     }
     await this.previewCssTask
@@ -72,25 +68,18 @@ export class CustomCssEditorController extends BaseController {
     preview.hide()
 
     if (!window.webContents.getURL()) {
-      await window.loadURL(resolveRendererUrl('custom-css-editor.html'))
+      await window.loadURL(resolveRendererUrl(`custom-css-editor.html?dictionaryId=${dictionaryId}`))
     } else {
       window.webContents.send('custom-css-editor:state', this.state)
     }
 
     window.show()
     window.focus()
-
-    // The preview is loaded after the user searches for a concrete entry.
   }
 
   getState = (event: IpcMainInvokeEvent): CustomCssEditorState | null => {
     if (!this.acceptsEditorSender(event.sender)) return null
     return this.state ?? null
-  }
-
-  getPreviewReady = (event: IpcMainInvokeEvent): boolean => {
-    if (!this.acceptsEditorSender(event.sender)) return false
-    return this.previewReady
   }
 
   searchEntry = async (
@@ -105,15 +94,15 @@ export class CustomCssEditorController extends BaseController {
     }
     const match = await this.db.lookupDictionaryEntry(state.dictionaryId, term)
     if (!match) return { ok: false, message: '当前词典中未找到该词条' }
+
     return {
       ok: true,
-      state: await this.loadPreviewEntry(state, `${state.dictionaryId}:${match.word}`, match.word)
+      state: await this.loadPreviewEntry(state, match.word)
     }
   }
 
   private async loadPreviewEntry(
     state: CustomCssEditorState,
-    entryId: string,
     entryWord: string,
     notifyRenderer = false
   ): Promise<CustomCssEditorState> {
@@ -131,7 +120,7 @@ export class CustomCssEditorController extends BaseController {
     await this.applyPreviewTheme(preview, this.previewTheme).catch((error: unknown) => {
       console.error('Failed to initialize custom CSS preview theme', { error })
     })
-    const nextState = { ...state, entryId, entryWord }
+    const nextState = { ...state, entryWord }
     this.state = nextState
     if (notifyRenderer) this.notifyState(nextState)
     this.setPreviewReady(true)
@@ -273,7 +262,7 @@ export class CustomCssEditorController extends BaseController {
     try {
       const match = await this.db.lookupDictionaryEntry(state.dictionaryId, normalizedWord)
       if (!match) return
-      await this.loadPreviewEntry(state, `${state.dictionaryId}:${match.word}`, match.word, true)
+      await this.loadPreviewEntry(state, match.word, true)
     } catch (error) {
       console.error('Failed to navigate custom CSS preview entry', {
         word: normalizedWord,
