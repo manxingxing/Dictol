@@ -104,14 +104,19 @@ impl Mdict {
     /// v1/v2 会先应用大小写规则但保留 StripKey 字符；若不存在这种优先匹配，
     /// 再回退到文件顺序中的第一个规范化匹配。
     pub fn find_key(&self, key: &str) -> Result<Option<Key>> {
+        let mut preferred = None;
         let mut fallback = None;
         for candidate in self.find_keys(key)? {
-            if self.comparison.is_preferred_match(&candidate.text, key) {
+            if candidate.text == key {
                 return Ok(Some(candidate));
+            }
+            if self.comparison.is_preferred_match(&candidate.text, key) {
+                preferred.get_or_insert(candidate);
+                continue;
             }
             fallback.get_or_insert(candidate);
         }
-        Ok(fallback)
+        Ok(preferred.or(fallback))
     }
 
     /// 返回比较规则下所有精确匹配的重复 key。

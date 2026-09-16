@@ -130,8 +130,7 @@ impl Mdx {
                 }
                 .into());
             }
-            let normalized = self.inner.comparison.normalize(target);
-            if !visited.insert(normalized) {
+            if !visited.insert(target.to_owned()) {
                 return Err(LinkError::Cycle {
                     target: target.to_owned(),
                 }
