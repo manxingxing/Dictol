@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { useAddOnlineDictionary } from '@/hooks/use-online-dictionaries'
 
-export function AddOnlineDictionaryDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
+export function OnlineDictionaryDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
   const [editor, setEditor] = useState({
     name: '',
     faviconUrl: '',
