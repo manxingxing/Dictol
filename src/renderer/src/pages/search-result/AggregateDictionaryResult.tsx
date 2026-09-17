@@ -50,7 +50,6 @@ export function AggregateDictionaryResult({
     let activeRequest = true
     void window.dictol.dictionaryView.showAggregate({ term, dictionaryId: focusDictionaryId }).catch(() => {
       if (!activeRequest) return
-      window.dictol.dictionaryView.hide()
       setResult((current) => ({ ...current, term, failed: true }))
     })
     return () => {

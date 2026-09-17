@@ -37,6 +37,7 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
   const [searchParams] = useSearchParams()
   const query = useAppStore((state) => state.searchQuery)
   const setQuery = useAppStore((state) => state.setSearchQuery)
+  const dictionaryLayout = useAppStore((state) => state.dictionaryLayout)
   const anchorRef = useRef<HTMLDivElement>(null)
   const popoverOpenRef = useRef(false)
   const [popoverOpen, setPopoverOpen] = useState(false)
@@ -133,10 +134,15 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
       if (!normalizedWord) return
       setQuery(normalizedWord)
       hidePopover()
-      const params = new URLSearchParams()
-      const dictionaryId = searchParams.get('dictionary')
-      if (dictionaryId) params.set('dictionary', dictionaryId)
-      const dictionaryQuery = params.size ? `?${params}` : ''
+
+      let dictionaryQuery = ''
+      if (dictionaryLayout == 'single') {
+        const params = new URLSearchParams()
+        const dictionaryId = searchParams.get('dictionaryId')
+        if (dictionaryId) params.set('dictionaryId', dictionaryId)
+        dictionaryQuery = params.size ? `?${params}` : ''
+      }
+
       void navigate(`/search/${encodeURIComponent(normalizedWord)}${dictionaryQuery}`)
     },
     [hidePopover, navigate, searchParams, setQuery]

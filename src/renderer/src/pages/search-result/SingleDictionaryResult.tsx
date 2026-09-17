@@ -18,7 +18,7 @@ export function SingleDictionaryResult({
   actions
 }: DictionaryResultProps): React.JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams()
-  const requestedId = searchParams.get('dictionary')
+  const requestedId = searchParams.get('dictionaryId')
   const active = dictionaries.find((item) => item.dictionaryId === requestedId) ?? dictionaries[0]!
   const dictionaryId = active.dictionaryId
   const [result, setResult] = useState({ term, dictionaryId, failed: false })
@@ -32,7 +32,7 @@ export function SingleDictionaryResult({
   useEffect(() => {
     if (requestedId === dictionaryId) return
     const next = new URLSearchParams(searchParams)
-    next.set('dictionary', dictionaryId)
+    next.set('dictionaryId', dictionaryId)
     setSearchParams(next, { replace: true })
   }, [dictionaryId, requestedId, searchParams, setSearchParams])
 
@@ -60,8 +60,8 @@ export function SingleDictionaryResult({
       value={dictionaryId}
       onValueChange={(id) => {
         const next = new URLSearchParams(searchParams)
-        next.set('dictionary', id)
-        setSearchParams(next)
+        next.set('dictionaryId', id)
+        setSearchParams(next, { replace: true })
       }}
     >
       <SearchResultToolbar actions={actions} loading={isFetching || loading}>
