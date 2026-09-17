@@ -27,11 +27,10 @@ export class DictionaryRepository {
         status: 'importing',
         sortOrder: sql<number>`coalesce((select max(${dictionary.sortOrder}) from ${dictionary}), -1) + 1`
       })
-      .onConflictDoNothing({ target: dictionary.dictPath })
       .returning({ id: dictionary.id })
 
     if (!row) {
-      throw new Error('此目录已被其他词典使用，无法重复导入。请先删除已有词典，或选择其他目录。')
+      throw new Error('创建词典记录失败')
     }
     return row.id
   }

@@ -24,9 +24,10 @@ export class DictionaryFileRepository {
     const [row] = await this.db
       .insert(dictionaryFile)
       .values(values)
+      .onConflictDoNothing({ target: dictionaryFile.filePath })
       .returning({ id: dictionaryFile.id })
 
-    if (!row) throw new Error('创建词典文件记录失败')
+    if (!row) throw new Error(`记录词典文件失败。请检查文件 ${values.fileName} 是否被其他词典使用`)
     return row.id
   }
 
