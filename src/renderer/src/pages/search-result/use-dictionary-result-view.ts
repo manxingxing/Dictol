@@ -47,18 +47,21 @@ export function useDictionaryResultView(): {
   return { contentRef, loading }
 }
 
+// entry://, 'lookup button in context menu'
 export function useDictionaryWordNavigation(dictionaryId?: string): void {
   const navigate = useNavigate()
   const setSearchQuery = useAppStore((state) => state.setSearchQuery)
-  useEffect(
-    () =>
+  useEffect(() =>
       window.dictol.dictionaryView.onLookupWord(({ word: value, sourceDictionaryId }) => {
         const word = value.trim()
         if (!word) return
         setSearchQuery(word)
         const params = new URLSearchParams()
         const targetId = sourceDictionaryId ?? dictionaryId
-        if (targetId) params.set('dictionaryId', targetId)
+        if (targetId) {
+          params.set('dictionaryId', targetId)
+          params.set('focusDictionaryId', targetId)
+        }
         const query = params.toString() ? `?${params}` : ''
         void navigate(`/search/${encodeURIComponent(word)}${query}`)
       }),

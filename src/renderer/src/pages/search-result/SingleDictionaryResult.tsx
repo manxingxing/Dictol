@@ -36,6 +36,7 @@ export function SingleDictionaryResult({
     setSearchParams(next, { replace: true })
   }, [dictionaryId, requestedId, searchParams, setSearchParams])
 
+  // 词典图标栏自动滚动当前词典图标处
   useLayoutEffect(() => {
     tabRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }, [dictionaryId, term])

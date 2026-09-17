@@ -33,7 +33,6 @@ export const SearchPanel = (): React.JSX.Element => {
   const setEmbedBrowserUrl = useAppStore((state) => state.setEmbedBrowserUrl)
   const setRightSidebarSize = useAppStore((state) => state.setRightSidebarSize)
   const displayInCompactMode = useAppStore(selectCompactMode)
-  const dictionaryLayout = useAppStore((state) => state.dictionaryLayout)
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const focusSearchInput = useCallback((): boolean => {
@@ -68,13 +67,10 @@ export const SearchPanel = (): React.JSX.Element => {
 
   const createSearchResultPath = useCallback(
     (word: string): string => {
-      let query = ''
-      if (dictionaryLayout == 'single') {
-        const dictionaryId = searchParams.get('dictionaryId')
-        const params = new URLSearchParams()
-        if (dictionaryId) params.set('dictionaryId', dictionaryId)
-        query = params.size ? `?${params}` : ''
-      }
+      const params = new URLSearchParams()
+      const dictionaryId = searchParams.get('dictionaryId')
+      if (dictionaryId) params.set('dictionaryId', dictionaryId)
+      const query = params.size ? `?${params}` : ''
       return `/search/${encodeURIComponent(word)}${query}`
     },
     [searchParams]

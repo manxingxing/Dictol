@@ -17,7 +17,8 @@ export function AggregateDictionaryResult({
   actions
 }: DictionaryResultProps): React.JSX.Element {
   const [searchParams] = useSearchParams()
-  const focusDictionaryId = searchParams.get('dictionaryId') ?? undefined
+  const focusDictionaryId = searchParams.get('focusDictionaryId') ?? undefined
+  const isAutoNavRef = useRef(!!focusDictionaryId)
   const [result, setResult] = useState<{ term: string; dictionaryId?: string; failed: boolean }>({
     term,
     failed: false
@@ -30,6 +31,10 @@ export function AggregateDictionaryResult({
     result.term === term && dictionaries.some((item) => item.dictionaryId === result.dictionaryId)
       ? result.dictionaryId
       : dictionaries[0]?.dictionaryId
+
+  useEffect(() => {
+    isAutoNavRef.current = !!focusDictionaryId
+  }, [term, focusDictionaryId])
 
   useEffect(
     () =>
@@ -48,10 +53,18 @@ export function AggregateDictionaryResult({
   useEffect(() => {
     if (isPlaceholderData) return
     let activeRequest = true
-    void window.dictol.dictionaryView.showAggregate({ term, dictionaryId: focusDictionaryId }).catch(() => {
-      if (!activeRequest) return
-      setResult((current) => ({ ...current, term, failed: true }))
-    })
+    void window.dictol.dictionaryView
+      .showAggregate({
+        term,
+        ...(isAutoNavRef.current ? { dictionaryId: focusDictionaryId } : {})
+      })
+      .catch(() => {
+        if (!activeRequest) return
+        setResult((current) => ({ ...current, term, failed: true }))
+      })
+      .finally(() => {
+        isAutoNavRef.current = false
+      })
     return () => {
       activeRequest = false
     }

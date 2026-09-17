@@ -41,12 +41,18 @@ export function AppLayout(): React.JSX.Element {
     })
   }, [navigate])
 
+  // deeplink, 'open in main window from explanation window', 'goto word from dictionary browser'
   useEffect(() => {
     return window.dictol.app.onSearchRequest((request) => {
       console.log(`received search request ${request.term} in dictionary(#${request.dictionaryId}) from ${request.source}`)
+      if (!request.term) return
+
       setSearchQuery(request.term)
       const params = new URLSearchParams()
-      if (request.dictionaryId) params.set('dictionaryId', request.dictionaryId)
+      if (request.dictionaryId) {
+        params.set('dictionaryId', request.dictionaryId)
+        params.set('focusDictionaryId', request.dictionaryId)
+      }
       const query = params.toString() ? `?${params}` : ''
       void navigate(`/search/${encodeURIComponent(request.term)}${query}`)
     })

@@ -309,7 +309,7 @@ export class DictionaryViewController extends BaseController {
 
   private sendLookup(request: DictionaryLookupRequest): void {
     const normalizedWord = request.word.trim()
-    if (!normalizedWord || normalizedWord.length > 200) return
+    if (!normalizedWord) return
     this.activeView.sendToMainWindow('dictionary-view:lookup-word', {
       word: normalizedWord,
       ...(request.sourceDictionaryId ? { sourceDictionaryId: request.sourceDictionaryId } : {})
