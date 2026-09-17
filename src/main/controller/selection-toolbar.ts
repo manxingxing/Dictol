@@ -316,9 +316,13 @@ export class SelectionToolbarController extends BaseController {
   private readonly openExplanationInMain = (event: IpcMainEvent): void => {
     if (!this.acceptsExplanationSender(event)) return
     const word = this.explanationPayload?.word.trim()
-    if (!word || word.length > MAX_SELECTION_LENGTH) return
+    if (!word) return
+    const dictionaryId =
+      this.explanationPayload?.mode === 'dictionary'
+        ? this.explanationPayload.activeDictionaryId
+        : undefined
     this.hideExplanation()
-    this.openWordInMain(word)
+    this.openWordInMain(word, dictionaryId)
   }
 
   private readonly selectExplanationDictionary = (
@@ -1005,27 +1009,22 @@ export class SelectionToolbarController extends BaseController {
     this.activeAiRequestId = undefined
   }
 
-  private openWordInMain(word: string): void {
-    const existingWindow = this.runtime.mainWindow
-    let mainWindow: BrowserWindow
-    try {
-      mainWindow = existingWindow ?? this.runtime.getOrCreateMainWindow()
-    } catch (error) {
-      console.error('Failed to create main window for selection lookup', { word, error })
-      return
-    }
-    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
+  private openWordInMain(word: string, dictionaryId?: string): void {
+    this.runtime.activateMainWindow()
+    const mainWindow = this.runtime.mainWindow
 
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
 
     const sendLookup = (): void => {
       if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
-        mainWindow.webContents.send('word-capture:event', { type: 'lookup', text: word })
+        mainWindow.webContents.send('app:search-request', {
+          term: word,
+          source: 'selection',
+          ...(dictionaryId ? { dictionaryId: dictionaryId }: {})
+        })
       }
     }
-    if (!existingWindow && mainWindow.webContents.isLoading()) {
+    if (mainWindow.webContents.isLoading()) {
       mainWindow.webContents.once('did-finish-load', sendLookup)
     } else {
       sendLookup()

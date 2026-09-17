@@ -1,6 +1,6 @@
 import type { ToastPayload } from '../shared/notification'
 import type { TtsConfig, TtsSaveConfigRequest } from '../shared/tts'
-import type { DeepLinkIntent } from '../shared/deep-link'
+import type { MainWindowSearchRequest } from '../shared/search-request'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type {
   CustomCssEditorBounds,
@@ -26,6 +26,7 @@ declare global {
       getDictionaryName: (dictionaryId: string) => Promise<string | null>
       listEntryWords: (dictionaryId: string) => Promise<string[]>
       prefixEntryWords: (dictionaryId: string, prefix: string) => Promise<string[]>
+      lookup: (dictionaryId: string, term: string) => void
     }
     dictol: {
       platform: NodeJS.Platform
@@ -383,7 +384,7 @@ declare global {
         openResourceCacheDirectory: () => Promise<void>
         getViewCacheSize: () => Promise<number>
         clearViewCache: () => Promise<void>
-        onDeepLink: (callback: (intent: DeepLinkIntent) => void) => () => void
+        onSearchRequest: (callback: (request: MainWindowSearchRequest) => void) => () => void
         onFocusSearch: (callback: () => void) => () => void
         onShowFindBar: (callback: () => void) => () => void
       }
@@ -553,7 +554,6 @@ declare global {
         onEvent: (
           callback: (
             event:
-              | { type: 'lookup'; text: string }
               | { type: 'permission-required' }
               | { type: 'empty' }
               | { type: 'error'; message: string }

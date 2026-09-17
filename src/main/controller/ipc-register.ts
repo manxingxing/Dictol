@@ -16,6 +16,7 @@ import { WordCaptureController } from './word-capture'
 import { WordLookupController } from './word-lookup'
 import { WordbookController } from './wordbook'
 import { KeyboardController } from './keyboard'
+import { BrowseWordsController } from './browse-words'
 
 export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
   const controllers = [
@@ -35,7 +36,8 @@ export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
     new TtsController(appRuntime),
     new WordCaptureController(appRuntime),
     new WordLookupController(appRuntime),
-    new WordbookController(appRuntime)
+    new WordbookController(appRuntime),
+    new BrowseWordsController(appRuntime)
   ]
 
   controllers.forEach((controller) => controller.mount())

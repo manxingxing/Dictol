@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld(
     listEntryWords: (dictionaryId: string): Promise<string[]> =>
       ipcRenderer.invoke('browse:list-entry-words', dictionaryId),
     prefixEntryWords: (dictionaryId: string, prefix: string): Promise<string[]> =>
-      ipcRenderer.invoke('browse:prefix-entry-words', dictionaryId, prefix)
+      ipcRenderer.invoke('browse:prefix-entry-words', dictionaryId, prefix),
+    lookup: (dictionaryId: string, term: string) =>
+      ipcRenderer.invoke('browse:lookup-in-main-window', dictionaryId, term)
   })
 )

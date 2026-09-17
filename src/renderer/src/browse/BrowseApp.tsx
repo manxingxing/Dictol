@@ -1,5 +1,6 @@
+import { Button } from '@/components/ui/button'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { LoaderCircle, Search } from 'lucide-react'
+import { CircleChevronRight, LoaderCircle, Search } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import useDebounce from 'react-use/lib/useDebounce'
 
@@ -88,7 +89,7 @@ export function BrowseApp(): React.JSX.Element {
             >
               {rowVirtualizer.getVirtualItems().map((virtualRow) => (
                 <li
-                  className="absolute left-0 top-0 flex h-10 w-full items-center whitespace-nowrap border-b border-border px-4 text-sm"
+                  className="absolute left-0 top-0 flex h-10 w-full items-center justify-between whitespace-nowrap border-b border-border pl-4 pr-3 text-sm group hover:bg-muted/40"
                   data-index={virtualRow.index}
                   key={virtualRow.key}
                   style={{
@@ -97,6 +98,16 @@ export function BrowseApp(): React.JSX.Element {
                   }}
                 >
                   {words[virtualRow.index]}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="hidden group-hover:inline-flex bg-transparent"
+                    onClick={() =>
+                      dictionaryId && window.dictolBrowse.lookup(dictionaryId, words[virtualRow.index])
+                    }
+                  >
+                    <CircleChevronRight />
+                  </Button>
                 </li>
               ))}
             </ul>

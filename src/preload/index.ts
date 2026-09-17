@@ -13,7 +13,7 @@ import type {
   DictionaryImportRequest
 } from '../shared/dictionary-import'
 import type { DictionaryInfo } from '../shared/dictionary-info'
-import type { DeepLinkIntent } from '../shared/deep-link'
+import type { MainWindowSearchRequest } from '../shared/search-request'
 import type { ToastPayload } from '../shared/notification'
 import type { TtsConfig, TtsSaveConfigRequest } from '../shared/tts'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
@@ -167,7 +167,6 @@ type WordCaptureStatus = {
 }
 
 type WordCaptureEvent =
-  | { type: 'lookup'; text: string }
   | { type: 'permission-required' }
   | { type: 'empty' }
   | { type: 'error'; message: string }
@@ -195,8 +194,9 @@ type WordCaptureSubscriber = (event: WordCaptureEvent) => void
 
 const wordCaptureSubscribers = new Set<WordCaptureSubscriber>()
 let pendingWordCaptureEvent: WordCaptureEvent | undefined
-const deepLinkSubscribers = new Set<(intent: DeepLinkIntent) => void>()
-const pendingDeepLinks: DeepLinkIntent[] = []
+
+const searchRequestSubscribers = new Set<(request: MainWindowSearchRequest) => void>()
+let pendingSearchRequest: MainWindowSearchRequest | undefined
 
 ipcRenderer.on('word-capture:event', (_event, captureEvent: WordCaptureEvent) => {
   if (wordCaptureSubscribers.size === 0) {
@@ -206,12 +206,12 @@ ipcRenderer.on('word-capture:event', (_event, captureEvent: WordCaptureEvent) =>
   wordCaptureSubscribers.forEach((subscriber) => subscriber(captureEvent))
 })
 
-ipcRenderer.on('app:deep-link', (_event, intent: DeepLinkIntent) => {
-  if (deepLinkSubscribers.size === 0) {
-    pendingDeepLinks.push(intent)
+ipcRenderer.on('app:search-request', (_event, request: MainWindowSearchRequest) => {
+  if (searchRequestSubscribers.size === 0) {
+    pendingSearchRequest = request
     return
   }
-  deepLinkSubscribers.forEach((subscriber) => subscriber(intent))
+  searchRequestSubscribers.forEach((subscriber) => subscriber(request))
 })
 
 const api = Object.freeze({
@@ -366,13 +366,14 @@ const api = Object.freeze({
       ipcRenderer.invoke('app:open-resource-cache-directory'),
     getViewCacheSize: (): Promise<number> => ipcRenderer.invoke('app:get-view-cache-size'),
     clearViewCache: (): Promise<void> => ipcRenderer.invoke('app:clear-view-cache'),
-    onDeepLink: (callback: (intent: DeepLinkIntent) => void): (() => void) => {
-      deepLinkSubscribers.add(callback)
-      while (pendingDeepLinks.length > 0) {
-        const intent = pendingDeepLinks.shift()
-        if (intent) callback(intent)
+    onSearchRequest: (callback: (request: MainWindowSearchRequest) => void): (() => void) => {
+      searchRequestSubscribers.add(callback)
+      if (pendingSearchRequest) {
+        const request = pendingSearchRequest
+        pendingSearchRequest = undefined
+        callback(request)
       }
-      return () => deepLinkSubscribers.delete(callback)
+      return () => searchRequestSubscribers.delete(callback)
     },
     onFocusSearch: (callback: () => void): (() => void) => {
       const listener = (): void => callback()

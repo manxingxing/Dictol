@@ -43,7 +43,12 @@ function startPrimaryInstance(initialDeepLink: DeepLinkIntent | null): void {
     if (!runtime.isInitialized || !mainWindow || mainWindow.isDestroyed()) return
 
     while (pendingDeepLinks.length > 0) {
-      mainWindow.webContents.send('app:deep-link', pendingDeepLinks.shift())
+      const intent = pendingDeepLinks.shift()
+      if(!intent) continue
+      mainWindow.webContents.send('app:search-request', {
+        term: intent.term,
+        source: 'deep-link'
+      })
     }
   }
 

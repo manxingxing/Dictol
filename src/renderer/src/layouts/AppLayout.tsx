@@ -28,11 +28,6 @@ export function AppLayout(): React.JSX.Element {
 
   useEffect(() => {
     return window.dictol.wordCapture.onEvent((event) => {
-      if (event.type === 'lookup') {
-        setSearchQuery(event.text)
-        void navigate(`/search/${encodeURIComponent(event.text)}`)
-        return
-      }
       if (event.type === 'permission-required') {
         toast.warning('需要开启辅助功能权限，才能读取其他软件中选中的文字。')
         void navigate('/settings')
@@ -44,13 +39,16 @@ export function AppLayout(): React.JSX.Element {
       }
       toast.error(event.message)
     })
-  }, [navigate, setSearchQuery])
+  }, [navigate])
 
   useEffect(() => {
-    return window.dictol.app.onDeepLink((intent) => {
-      if (intent.type !== 'search') return
-      setSearchQuery(intent.term)
-      void navigate(`/search/${encodeURIComponent(intent.term)}`)
+    return window.dictol.app.onSearchRequest((request) => {
+      console.log(`received search request ${request.term} in dictionary(#${request.dictionaryId}) from ${request.source}`)
+      setSearchQuery(request.term)
+      const params = new URLSearchParams()
+      if (request.dictionaryId) params.set('dictionaryId', request.dictionaryId)
+      const query = params.toString() ? `?${params}` : ''
+      void navigate(`/search/${encodeURIComponent(request.term)}${query}`)
     })
   }, [navigate, setSearchQuery])
 
