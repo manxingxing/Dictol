@@ -99,8 +99,11 @@ export class DictionaryViewController extends BaseController {
       if (this.runtime.isDisposed) return
       if (version !== this.loadVersion || this.desiredUrl !== url) return
       this.notifyLoadingState(false)
-      this.activeView.hide()
-      if (!isNavigationAborted(error)) throw error
+
+      if (!isNavigationAborted(error)) {
+        this.activeView.hide()
+        throw error
+      }
     }
   }
 
