@@ -78,6 +78,10 @@ body#dictol-aggregate[data-layout='vertical'] .dictol-dictionary-title {
   background: light-dark(#fff, #212121) !important;
 }
 
+html:has(body#dictol-aggregate[data-layout='vertical']) {
+  scroll-padding-top: 37px;
+}
+
 .dictol-dictionary-title-name {
   flex: 1;
   min-width: 0;

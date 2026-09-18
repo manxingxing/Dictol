@@ -98,7 +98,7 @@
       if (behavior === 'instant') syncActiveSection()
       return
     }
-    section.scrollIntoView({ behavior, block: 'start' })
+    section.querySelector('.dictol-dictionary-entry').scrollIntoView({ behavior, block: 'start' })
     if (behavior === 'instant') {
       // Chromium 可能把滚动偏移向下取整，留下不足 1px 的上一个词典。
       const top = section.getBoundingClientRect().top
