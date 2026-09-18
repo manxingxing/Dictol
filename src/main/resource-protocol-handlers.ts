@@ -263,6 +263,12 @@ export class DictionaryResourceProtocolHandlers {
     }
   }
 
+  private sortByKeyPosition(a, b) {
+    if (a.keyOrdinal > b.keyOrdinal) return 1
+    if (a.keyOrdinal < b.keyOrdinal) return -1
+    return 0
+  }
+
   private async loadEntryDocument(
     request: Request,
     dictionaryId: number,
@@ -280,7 +286,7 @@ export class DictionaryResourceProtocolHandlers {
     const entry = await this.runtime.mdictResourceManager.getEntryByLocators(
       dictionaryId,
       indexMatch.keyText,
-      indexMatches.map((candidate) => candidate.locator)
+      indexMatches.sort(this.sortByKeyPosition).map((candidate) => candidate.locator)
     )
     if (!entry) return textResponse('Entry not found', 404)
 
@@ -325,7 +331,7 @@ export class DictionaryResourceProtocolHandlers {
             ? this.runtime.mdictResourceManager.getEntryByLocators(
                 Number(dictionaryId),
                 indexMatch.keyText,
-                indexMatches.map((candidate) => candidate.locator)
+                indexMatches.sort(this.sortByKeyPosition).map((candidate) => candidate.locator)
               )
             : Promise.resolve(null)
         ])

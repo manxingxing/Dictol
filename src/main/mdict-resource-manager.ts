@@ -7,6 +7,7 @@ import { MdictResourceFiles } from './mdict-resource-files'
 
 const CLOSE_RETRY_DELAY_MS = 20
 const CLOSE_RETRY_LIMIT = 100
+const MAX_SENSES_PER_WORD = 10 // 单词允许的最大词条数量，避免加载巨量记录导致应用卡死
 const ENTRY_SEPARATOR = '<hr class="dictol-entry-separator" />'
 
 export type DictionaryResourceFileRecord = MdictFileDescriptor & {
@@ -30,6 +31,7 @@ export type MdictEntry = {
   dictionaryId: string
   word: string
   html: string
+  isTruncated: boolean
 }
 
 export type MdictResourceErrorCode =
@@ -78,12 +80,13 @@ export class MdictResourceManager {
   ): Promise<MdictEntry | null> {
     if (locators.length === 0) return null
     const resource = await this.acquire(dictionaryId)
-    const texts = await resource.readIndexRecords(locators)
+    const texts = await resource.readIndexRecords(locators.slice(0, MAX_SENSES_PER_WORD))
     return {
       id: `${dictionaryId}:${word}`,
       dictionaryId: String(dictionaryId),
       word,
-      html: [...new Set(texts)].join(ENTRY_SEPARATOR)
+      html: [...new Set(texts)].join(ENTRY_SEPARATOR),
+      isTruncated: locators.length > MAX_SENSES_PER_WORD
     }
   }
 

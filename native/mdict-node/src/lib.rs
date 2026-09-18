@@ -409,13 +409,13 @@ impl DidxIndex {
         }))
     }
 
-    /// Return every physical match in the strict original/case tier.
+    /// Return physical matches in the strict original/case tier, optionally truncated.
     #[napi(ts_return_type = "Promise<Array<DidxMatch>>")]
-    pub fn exact(&self, query: String) -> Result<AsyncTask<QueryDidxTask>> {
+    pub fn exact(&self, query: String, limit: Option<u32>) -> Result<AsyncTask<QueryDidxTask>> {
         Ok(AsyncTask::new(QueryDidxTask {
             index: self.index.get()?,
             query,
-            limit: None,
+            limit: limit.map(|n| n as usize),
             kind: DidxQueryKind::Exact,
         }))
     }
@@ -1109,7 +1109,7 @@ impl Task for QueryDidxTask {
 
     fn compute(&mut self) -> Result<Self::Output> {
         match self.kind {
-            DidxQueryKind::Exact => self.index.exact(&self.query, None),
+            DidxQueryKind::Exact => self.index.exact(&self.query, self.limit),
             DidxQueryKind::Loose => self.index.loose(&self.query, self.limit),
             DidxQueryKind::Prefix => self.index.prefix(&self.query, self.limit),
             DidxQueryKind::Fuzzy(distance) => self.index.fuzzy(&self.query, distance, self.limit),

@@ -10,8 +10,8 @@ export declare class DidxIndex {
   static openForMdx(indexPath: string, mdxPath: string): Promise<DidxIndex>
   /** Build an index from adapter-owned entries without opening the result. */
   static build(entries: Array<DidxEntry>, fingerprint: bigint, outputPath: string): Promise<DidxBuildResult>
-  /** Return every physical match in the strict original/case tier. */
-  exact(query: string): Promise<Array<DidxMatch>>
+  /** Return physical matches in the strict original/case tier, optionally truncated. */
+  exact(query: string, limit?: number | undefined | null): Promise<Array<DidxMatch>>
   loose(query: string, limit?: number | undefined | null): Promise<Array<DidxMatch>>
   prefix(query: string, limit?: number | undefined | null): Promise<Array<DidxMatch>>
   wildcard(query: string, limit?: number | undefined | null): Promise<Array<DidxMatch>>
