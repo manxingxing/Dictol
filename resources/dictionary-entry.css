@@ -39,11 +39,19 @@ body#dictol-aggregate {
   position: relative;
   isolation: isolate;
   margin-top: 8px;
+  container: dictol-dictionary-entry / inline-size;
 }
 
-.dictol-dictionary-entry img,
-.dictol-dictionary-entry video {
-  max-width: 100%;
+@container dictol-dictionary-entry {
+  .dictol-dictionary-entry img,
+  .dictol-dictionary-entry video,
+  .dictol-dictionary-entry iframe {
+    max-width: min(90cqw, 95vw);
+  }
+}
+
+img, video, iframe {
+  max-width: calc(95vw - 40px);
 }
 
 .dictol-dictionary-title {
