@@ -11,10 +11,15 @@ export const readyDictionariesQueryKey = ['dictionaries', 'ready'] as const
 export const dictionariesQueryKey = ['dictionaries', 'all'] as const
 export const dictionaryInfoQueryKey = (dictionaryId: string | null) =>
   ['dictionary-info', dictionaryId] as const
+export const dictionaryIndexInfoQueryKey = (dictionaryId: string | null) =>
+  ['dictionary-index-info', dictionaryId] as const
 
 type DictionarySummary = Awaited<ReturnType<Window['dictol']['dictionaries']['list']>>[number]
 type ReadyDictionary = Awaited<ReturnType<Window['dictol']['dictionaries']['listReady']>>[number]
 type ImportedDictionary = Awaited<ReturnType<Window['dictol']['dictionaries']['import']>>
+type DictionaryIndexInfo = Awaited<
+  ReturnType<Window['dictol']['dictionaries']['getIndexInfo']>
+>
 type DictionaryImportRequest = Parameters<Window['dictol']['dictionaries']['import']>[0]
 type ReorderDictionariesContext = { previousDictionaries?: DictionarySummary[] }
 type DictionaryIndexMigrationResult = Awaited<
@@ -32,6 +37,36 @@ export function useDictionaryInfo(
     },
     enabled: dictionaryId !== null,
     staleTime: 5 * 60_000
+  })
+}
+
+export function useDictionaryIndexInfo(
+  dictionaryId: string | null
+): UseQueryResult<DictionaryIndexInfo, Error> {
+  return useQuery({
+    queryKey: dictionaryIndexInfoQueryKey(dictionaryId),
+    queryFn: () => {
+      if (!dictionaryId) throw new Error('Dictionary id is required')
+      return window.dictol.dictionaries.getIndexInfo(dictionaryId)
+    },
+    enabled: dictionaryId !== null,
+    staleTime: 0,
+    gcTime: 0
+  })
+}
+
+export function useReindexDictionary(): UseMutationResult<
+  DictionaryIndexInfo,
+  Error,
+  string
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (dictionaryId) => window.dictol.dictionaries.reindex(dictionaryId),
+    onSuccess: (result, dictionaryId) => {
+      queryClient.setQueryData(dictionaryIndexInfoQueryKey(dictionaryId), result)
+    }
   })
 }
 

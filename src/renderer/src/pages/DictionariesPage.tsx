@@ -19,7 +19,6 @@ import {
   Trash2,
   Upload,
   Power,
-  RefreshCw,
   BookText
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -35,6 +34,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { DictionaryAvatar } from '@/components/DictionaryIcon'
 import { DictionaryInfoDialog } from '@/components/DictionaryInfoDialog'
+import { DictionaryIndexDialog } from '@/components/DictionaryIndexDialog'
+import { RenameDictionaryDialog } from '@/components/RenameDictionaryDialog'
 import { OnlineDictionariesList } from '@/components/OnlineDictionariesList'
 import {
   DropdownMenu,
@@ -49,10 +50,9 @@ import {
   useImportDictionary,
   useImportDictionariesFromFolder,
   useReorderDictionaries,
-  useUpdateDictionaryEnabled,
-  useUpdateDictionaryName
+  useUpdateDictionaryEnabled
 } from '@/hooks/use-dictionaries'
-import { formatFileSize, formatTime } from '@/lib/utils'
+import { formatFileSize } from '@/lib/utils'
 
 type DictionaryImportPreview = NonNullable<
   Awaited<ReturnType<Window['dictol']['dictionaries']['selectFile']>>
@@ -60,14 +60,12 @@ type DictionaryImportPreview = NonNullable<
 type DictionaryFolderImportPreview = NonNullable<
   Awaited<ReturnType<Window['dictol']['dictionaries']['selectFolder']>>
 >
-type DictionaryIndexInfo = Awaited<ReturnType<Window['dictol']['dictionaries']['getIndexInfo']>>
 export function DictionariesPage(): React.JSX.Element {
   const { data: dictionaries = [], isLoading, isError } = useDictionaries()
   const importDictionary = useImportDictionary()
   const importDictionariesFromFolder = useImportDictionariesFromFolder()
   const deleteDictionary = useDeleteDictionary()
   const reorderDictionaries = useReorderDictionaries()
-  const updateDictionaryName = useUpdateDictionaryName()
   const updateDictionaryEnabled = useUpdateDictionaryEnabled()
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [importDialogStep, setImportDialogStep] = useState<'select' | 'preview'>('select')
@@ -86,25 +84,17 @@ export function DictionariesPage(): React.JSX.Element {
   const [copyFolderDictionaryFiles, setCopyFolderDictionaryFiles] = useState(true)
   const [selectingImportFolder, setSelectingImportFolder] = useState(false)
   const [folderImportError, setFolderImportError] = useState<string | null>(null)
-  const [nameEditor, setNameEditor] = useState<{
-    id: string
-    originalName: string
-    value: string
-  } | null>(null)
+  // 修改词典名称
+  const [renameTarget, setRenameTarget] = useState<{ id: string; name: string } | null>(null)
   const [draggedDictionaryId, setDraggedDictionaryId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{
     id: string
     position: 'before' | 'after'
   } | null>(null)
-  const [openingDictionaryId, setOpeningDictionaryId] = useState<string | null>(null)
   const [openingCustomCssId, setOpeningCustomCssId] = useState<string | null>(null)
   const [dictionaryInfoId, setDictionaryInfoId] = useState<string | null>(null)
-  const [indexDialog, setIndexDialog] = useState<{ id: string; name: string } | null>(null)
-  const [indexInfo, setIndexInfo] = useState<DictionaryIndexInfo | null>(null)
-  const [indexInfoError, setIndexInfoError] = useState<string | null>(null)
-  const [isLoadingIndexInfo, setIsLoadingIndexInfo] = useState(false)
-  const [isReindexing, setIsReindexing] = useState(false)
-  const [isOpeningIndexDirectory, setIsOpeningIndexDirectory] = useState(false)
+  // 查看词典索引
+  const [indexTarget, setIndexTarget] = useState<{ id: string; name: string } | null>(null)
 
   const selectedFolderDictionaryCount = selectedFolderMdxPaths.size
 
@@ -117,7 +107,6 @@ export function DictionariesPage(): React.JSX.Element {
     dictionaryId: string,
     dictionaryName: string
   ): Promise<void> => {
-    setOpeningDictionaryId(dictionaryId)
     try {
       await window.dictol.dictionaries.openDirectory(dictionaryId)
     } catch (error) {
@@ -125,55 +114,11 @@ export function DictionariesPage(): React.JSX.Element {
       toast.error(`无法打开“${dictionaryName}”所在目录`, {
         description: error instanceof Error ? error.message : '请稍后重试。'
       })
-    } finally {
-      setOpeningDictionaryId(null)
     }
   }
 
   const openDictionaryInfo = (dictionaryId: string): void => {
     setDictionaryInfoId(dictionaryId)
-  }
-
-  const openIndexDialog = (dictionaryId: string, dictionaryName: string): void => {
-    setIndexDialog({ id: dictionaryId, name: dictionaryName })
-    setIndexInfo(null)
-    setIndexInfoError(null)
-    setIsLoadingIndexInfo(true)
-    void window.dictol.dictionaries
-      .getIndexInfo(dictionaryId)
-      .then(setIndexInfo)
-      .catch((error: unknown) => {
-        setIndexInfoError(error instanceof Error ? error.message : '无法读取索引信息。')
-      })
-      .finally(() => setIsLoadingIndexInfo(false))
-  }
-
-  const reindexDictionary = async (): Promise<void> => {
-    if (!indexDialog) return
-    setIsReindexing(true)
-    setIndexInfoError(null)
-    try {
-      setIndexInfo(await window.dictol.dictionaries.reindex(indexDialog.id))
-      toast.success(`“${indexDialog.name}”已重新索引`)
-    } catch (error) {
-      setIndexInfoError(error instanceof Error ? error.message : '重新索引失败。')
-    } finally {
-      setIsReindexing(false)
-    }
-  }
-
-  const openIndexDirectory = async (): Promise<void> => {
-    if (!indexDialog) return
-    setIsOpeningIndexDirectory(true)
-    try {
-      await window.dictol.dictionaries.openIndexDirectory(indexDialog.id)
-    } catch (error) {
-      toast.error('无法打开索引所在文件夹', {
-        description: error instanceof Error ? error.message : '请稍后重试。'
-      })
-    } finally {
-      setIsOpeningIndexDirectory(false)
-    }
   }
 
   const openCustomCssEditor = async (
@@ -445,11 +390,7 @@ export function DictionariesPage(): React.JSX.Element {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p className="truncate text-sm font-medium">{dictionary.name}</p>
-                          {dictionary.external && (
-                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                              外部文件
-                            </span>
-                          )}
+
                           <span
                             className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${status.className}`}
                           >
@@ -465,24 +406,25 @@ export function DictionariesPage(): React.JSX.Element {
                           )}
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {dictionary.recordCount
-                            ? `${formatRecordCount(dictionary.recordCount)} 个词条`
-                            : dictionary.status === 'importing'
-                              ? '正在建立索引'
-                              : '尚无词条统计'}
+                          <span className="shrink-0 rounded-full pr-3 py-0.5 text-xs text-muted-foreground">
+                            {dictionary.recordCount
+                              ? `${formatRecordCount(dictionary.recordCount)} 个词条`
+                              : dictionary.status === 'importing'
+                                ? '正在建立索引'
+                                : '尚无词条统计'}
+                          </span>
+                          {dictionary.external && (
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                              外部文件
+                            </span>
+                          )}
                         </p>
                       </div>
                       <Button
                         aria-label={`修改词典名称 ${dictionary.name}`}
                         className="shrink-0 text-muted-foreground"
-                        disabled={updateDictionaryName.isPending}
                         onClick={() => {
-                          updateDictionaryName.reset()
-                          setNameEditor({
-                            id: dictionary.id,
-                            originalName: dictionary.name,
-                            value: dictionary.name
-                          })
+                          setRenameTarget({ id: dictionary.id, name: dictionary.name })
                         }}
                         size="icon"
                         title="修改名称"
@@ -567,23 +509,20 @@ export function DictionariesPage(): React.JSX.Element {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-sm"
-                            onClick={() => openIndexDialog(dictionary.id, dictionary.name)}
+                            onClick={() =>
+                              setIndexTarget({ id: dictionary.id, name: dictionary.name })
+                            }
                           >
                             <Database className="size-3.5" />
                             查看索引
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-sm"
-                            disabled={openingDictionaryId === dictionary.id}
                             onClick={() => {
                               void openDictionaryDirectory(dictionary.id, dictionary.name)
                             }}
                           >
-                            {openingDictionaryId === dictionary.id ? (
-                              <LoaderCircle className="size-3.5 animate-spin" />
-                            ) : (
-                              <FolderOpen className="size-3.5" />
-                            )}
+                            <FolderOpen className="size-3.5" />
                             打开所在目录
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -1017,172 +956,19 @@ export function DictionariesPage(): React.JSX.Element {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={nameEditor !== null}
+      <RenameDictionaryDialog
+        dictionary={renameTarget}
         onOpenChange={(open) => {
-          if (!open && !updateDictionaryName.isPending) setNameEditor(null)
+          if (!open) setRenameTarget(null)
         }}
-      >
-        <DialogContent>
-          <form
-            className="grid gap-5"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!nameEditor) return
-              void updateDictionaryName
-                .mutateAsync({ dictionaryId: nameEditor.id, name: nameEditor.value })
-                .then(() => setNameEditor(null))
-                .catch(() => undefined)
-            }}
-          >
-            <DialogHeader>
-              <DialogTitle>修改词典名称</DialogTitle>
-              <DialogDescription>为「{nameEditor?.originalName}」输入新名称。</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-2">
-              <Input
-                autoFocus
-                id="dictionary-name"
-                maxLength={100}
-                onChange={(event) =>
-                  setNameEditor((current) =>
-                    current ? { ...current, value: event.target.value } : current
-                  )
-                }
-                placeholder={nameEditor?.originalName}
-                value={nameEditor?.value ?? ''}
-              />
-            </div>
-            {updateDictionaryName.isError && (
-              <p className="text-sm text-destructive">{updateDictionaryName.error.message}</p>
-            )}
-            <DialogFooter>
-              <Button
-                disabled={updateDictionaryName.isPending}
-                onClick={() => setNameEditor(null)}
-                type="button"
-                variant="outline"
-              >
-                取消
-              </Button>
-              <Button
-                disabled={!nameEditor?.value.trim() || updateDictionaryName.isPending}
-                type="submit"
-              >
-                {updateDictionaryName.isPending ? '正在保存…' : '保存名称'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      />
 
-      <Dialog
+      <DictionaryIndexDialog
+        dictionary={indexTarget}
         onOpenChange={(open) => {
-          if (!open) {
-            setIndexDialog(null)
-            setIndexInfo(null)
-            setIndexInfoError(null)
-          }
+          if (!open) setIndexTarget(null)
         }}
-        open={indexDialog !== null}
-      >
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>索引 · {indexDialog?.name ?? ''}</DialogTitle>
-            <DialogDescription>查看当前词典索引的位置和构建状态。</DialogDescription>
-          </DialogHeader>
-          {isLoadingIndexInfo ? (
-            <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-              <LoaderCircle className="size-4 animate-spin" />
-              正在读取索引信息…
-            </div>
-          ) : indexInfoError ? (
-            <p className="py-6 text-sm text-destructive" role="alert">
-              {indexInfoError}
-            </p>
-          ) : indexInfo ? (
-            <div className="space-y-4 text-sm">
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground">索引位置</p>
-                <div className="flex items-center gap-2">
-                  <p className="min-w-0 flex-1 break-all rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-xs">
-                    {indexInfo.indexPath}
-                  </p>
-                  <Button
-                    aria-label="打开索引所在文件夹"
-                    disabled={isOpeningIndexDirectory}
-                    onClick={() => void openIndexDirectory()}
-                    size="icon"
-                    title="打开所在文件夹"
-                    type="button"
-                    variant="outline"
-                  >
-                    {isOpeningIndexDirectory ? (
-                      <LoaderCircle className="animate-spin" />
-                    ) : (
-                      <FolderOpen />
-                    )}
-                  </Button>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-md border border-border bg-card px-3 py-2">
-                  <p className="text-xs text-muted-foreground">状态</p>
-                  <p className="mt-1 font-medium">
-                    {
-                      {
-                        building: '构建中',
-                        ready: '可用',
-                        error: '错误',
-                        needs_reindex: '需要重建',
-                        missing: '索引文件不存在'
-                      }[indexInfo.status]
-                    }
-                  </p>
-                </div>
-                <div className="rounded-md border border-border bg-card px-3 py-2">
-                  <p className="text-xs text-muted-foreground">词条数</p>
-                  <p className="mt-1 font-medium">
-                    {indexInfo.entryCount?.toLocaleString() ?? '—'}
-                  </p>
-                </div>
-                <div className="rounded-md border border-border bg-card px-3 py-2">
-                  <p className="text-xs text-muted-foreground">索引大小</p>
-                  <p className="mt-1 font-medium">
-                    {indexInfo.fileSize === null ? '—' : formatFileSize(indexInfo.fileSize)}
-                  </p>
-                </div>
-                <div className="rounded-md border border-border bg-card px-3 py-2">
-                  <p className="text-xs text-muted-foreground">构建时间</p>
-                  <p className="mt-1 font-medium">
-                    {indexInfo.builtAt ? formatTime(indexInfo.builtAt) : '—'}
-                  </p>
-                </div>
-              </div>
-              {indexInfo.status === 'missing' && (
-                <p className="text-sm text-destructive" role="alert">
-                  索引文件不存在，请点击“重新索引”恢复查词功能。
-                </p>
-              )}
-              {indexInfo.status === 'error' && (
-                <p className="text-sm text-destructive" role="alert">
-                  索引验证失败，文件可能已损坏或与词典源文件不匹配，请点击“重新索引”恢复查词功能。
-                </p>
-              )}
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button
-              disabled={isLoadingIndexInfo || isReindexing || indexInfo?.status === 'building'}
-              onClick={() => void reindexDictionary()}
-              type="button"
-            >
-              {isReindexing && <RefreshCw className="animate-spin" />}
-              重新索引
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      />
 
       <DictionaryInfoDialog
         dictionaryId={dictionaryInfoId}

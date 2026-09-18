@@ -180,7 +180,7 @@ export const SearchPanel = (): React.JSX.Element => {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--panel-background)]">
-      <div className="border-b border-border px-3.5 py-4">
+      <div className="border-b border-border p-2.5">
         <div className="relative">
           {isFetching ? (
             <LoaderCircle className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
