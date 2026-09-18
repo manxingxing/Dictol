@@ -116,7 +116,11 @@ function getMimeType(resourcePath: string): string {
       return 'audio/webm'
     case '.flac':
       return 'audio/flac'
+    case '.aac':
+      return 'audio/aac'
     case '.m4a':
+    case '.m4b':
+    case '.m4r':
     case '.mp4':
       return 'audio/mp4'
     case '.spx':

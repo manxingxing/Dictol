@@ -128,7 +128,8 @@
   const soundAudio = new Audio()
   // 与主进程 resource-protocol.ts getMimeType 的音频类型保持一致。
   // spx 保留仅为兜底兼容旧链接，Chromium 实际无法解码 Speex。
-  const dictionaryAudioPattern = /\.(?:mp3|wav|ogg|oga|opus|webm|weba|flac|mp4|m4a|spx)(?:[?#]|$)/i
+  const dictionaryAudioPattern =
+    /\.(?:mp3|wav|ogg|oga|opus|webm|weba|flac|aac|mp4|m4a|m4b|m4r|spx)(?:[?#]|$)/i
 
   const resolveDictionaryAudioHref = (anchor) => {
     const rawHref = anchor?.getAttribute('href')?.trim()
