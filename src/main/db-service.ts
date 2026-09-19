@@ -770,9 +770,9 @@ export class DBService {
     copyFiles = true,
     onReady?: (name: string, indexElapsedMs: number) => void
   ): Promise<ImportedDictionary> {
-    const prepared = await this.prepareDictionaryImport(mdxPath, sourceFiles, copyFiles)
-    this.enqueueDictionaryImport({ request: prepared.workerRequest, onReady })
-    return prepared.imported
+    const { imported, workerRequest } = await this.prepareDictionaryImport(mdxPath, sourceFiles, copyFiles)
+    this.enqueueDictionaryImport({ request: workerRequest, onReady })
+    return imported
   }
 
   async importDictionariesFromFolder(
@@ -850,9 +850,9 @@ export class DBService {
       for (const file of normalizedFiles) {
         const fileType = getImportFileType(file.relativePath)
         const targetPath = copyFiles ? join(targetDirectory, file.relativePath) : file.sourcePath
-        const sourceStats = await stat(file.sourcePath, { bigint: true })
         let fileId: number | null = null
         if (fileType) {
+          const sourceStats = await stat(file.sourcePath, { bigint: true })
           fileId = await this.fileRepo.create({
             dictionaryId,
             fileName: basename(file.relativePath),

@@ -235,11 +235,9 @@ export function DictionariesPage(): React.JSX.Element {
     await importDictionary.mutateAsync({
       mdxPath: importPreview.mdxPath,
       copyFiles,
-      selectedRelativePaths: copyFiles
-        ? importPreview.files
-            .filter((file) => selectedImportFiles.has(file.relativePath))
-            .map((file) => file.relativePath)
-        : []
+      selectedRelativePaths: importPreview.files
+        .filter((file) => selectedImportFiles.has(file.relativePath))
+        .map((file) => file.relativePath)
     })
     closeImportDialog()
   }
@@ -255,7 +253,7 @@ export function DictionariesPage(): React.JSX.Element {
     selectedImportFiles.has(file.relativePath)
   ).length
   const allOptionalImportFilesSelected =
-    optionalImportFiles.length > 0 && selectedOptionalImportFileCount === optionalImportFiles.length
+    optionalImportFiles.length == 0 || selectedOptionalImportFileCount === optionalImportFiles.length
 
   return (
     <section className="mx-auto flex max-w-3xl flex-col p-6 sm:p-8">
@@ -590,9 +588,9 @@ export function DictionariesPage(): React.JSX.Element {
           {importDialogStep === 'preview' && importPreview ? (
             <>
               <DialogHeader className="border-b border-border px-6 pb-5 pt-6 pr-14">
-                <DialogTitle>预览复制文件</DialogTitle>
+                <DialogTitle>预览词典文件</DialogTitle>
                 <DialogDescription>
-                  取消选择不需要复制的资源；MDX 主文件必须保留。
+                  取消选择不属于该词典的资源；MDX 主文件必须保留。
                 </DialogDescription>
               </DialogHeader>
               <div className="min-h-0 min-w-0 overflow-y-auto px-6 py-4">
@@ -705,7 +703,7 @@ export function DictionariesPage(): React.JSX.Element {
               <DialogHeader>
                 <DialogTitle>导入本地词典</DialogTitle>
                 <DialogDescription>
-                  选择一个 MDX 文件，Dictol 会查找同目录中的相关资源。
+                  选择一个 MDX 文件，Dictol 会查找同目录中的相关资源
                 </DialogDescription>
               </DialogHeader>
               <div className="grid min-w-0 gap-2">
@@ -743,14 +741,14 @@ export function DictionariesPage(): React.JSX.Element {
                   将词典文件复制到软件中
                 </label>
               )}
-              {importPreview && copyDictionaryFiles && (
+              {importPreview && (
                 <div className="flex min-w-0 items-center gap-3 overflow-hidden rounded-xl border border-primary/20 bg-primary/[0.035] p-3">
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <Files className="size-4" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">
-                      共 {selectedImportFileItems.length} 个文件将被复制
+                      已选择 {selectedImportFileItems.length} 个文件
                     </p>
                     <p
                       className="mt-0.5 truncate text-xs text-muted-foreground"

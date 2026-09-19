@@ -43,8 +43,8 @@ async function importDictionary(data: DictionaryImportWorkerRequest): Promise<vo
 
     for (const file of data.sourceFiles) {
       const filePath = await materializeFile(data, file)
-      const fileStats = await stat(filePath, { bigint: true })
       if (file.id !== null) {
+        const fileStats = await stat(filePath, { bigint: true })
         await dictionaryFileRepo.updateImportMetadata(file.id, {
           fileSize: toSafeNumber(fileStats.size, 'file size'),
           lastModified: toSafeNumber(fileStats.mtimeMs, 'last modified'),

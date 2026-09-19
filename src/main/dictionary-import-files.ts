@@ -219,20 +219,6 @@ export async function resolveDictionaryImportSelection(
   return selectedFiles
 }
 
-// 仅保留 mdx, mdd 文件
-export async function resolveExternalDictionaryFiles(
-  mdxPath: string
-): Promise<DictionaryImportSourceFile[]> {
-  const resourceFiles = await collectResourceFiles(dirname(mdxPath))
-
-  return [
-    { sourcePath: mdxPath, relativePath: basename(mdxPath) },
-    ...resourceFiles
-      .filter((file) => extname(file.relativePath).toLowerCase() === '.mdd')
-      .map(({ sourcePath, relativePath }) => ({ sourcePath, relativePath }))
-  ]
-}
-
 function validateDictionaryFolderLayout(
   plans: Array<Pick<DictionaryImportFolderPlan, 'mdxPath' | 'relativePath'>>
 ): void {

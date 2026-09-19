@@ -27,7 +27,6 @@ import { getDictionaryIndexRoot } from '../db/paths'
 import {
   createDictionaryImportPreview,
   createDictionaryFolderImportPreview,
-  resolveExternalDictionaryFiles,
   resolveDictionaryImportSelection
 } from '../dictionary-import-files'
 import { parseDictionaryEntryUrl } from '../dictionary-entry-url'
@@ -219,9 +218,7 @@ export class DictionaryController extends BaseController {
     if (!isDictionaryImportRequest(request)) {
       throw new Error('请选择有效的 MDX 文件')
     }
-    const sourceFiles = request.copyFiles
-      ? await resolveDictionaryImportSelection(request)
-      : await resolveExternalDictionaryFiles(request.mdxPath)
+    const sourceFiles = await resolveDictionaryImportSelection(request)
     return this.db.importDictionaryFromFile(
       request.mdxPath,
       sourceFiles,
@@ -387,7 +384,7 @@ function isDictionaryImportRequest(value: unknown): value is DictionaryImportReq
 
   const paths = request.selectedRelativePaths
   if (!Array.isArray(paths)) return false
-  if (request.copyFiles && paths.length === 0) return false
+  if (paths.length === 0) return false
   if (paths.length > 20_000) return false
 
   return paths.every((relativePath) => {
