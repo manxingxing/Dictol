@@ -185,7 +185,7 @@ export async function createDictionaryFolderImportPreview(
     dictionaries: plans.map((plan) => ({
       mdxPath: plan.mdxPath,
       relativePath: plan.relativePath,
-      companionFileCount: plan.sourceFiles.length - 1
+      resourceFileCount: plan.sourceFiles.length
     }))
   }
 }

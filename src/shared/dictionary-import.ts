@@ -25,7 +25,7 @@ export type DictionaryImportSourceFile = Pick<
 export type DictionaryFolderImportCandidate = {
   mdxPath: string
   relativePath: string
-  companionFileCount: number
+  resourceFileCount: number
 }
 
 export type DictionaryFolderImportPreview = {

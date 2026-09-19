@@ -902,7 +902,7 @@ export function DictionariesPage(): React.JSX.Element {
                           </span>
                         </label>
                         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                          {dictionary.companionFileCount} 个资源
+                          {dictionary.resourceFileCount} 个资源
                         </span>
                       </li>
                     ))}

@@ -73,7 +73,7 @@ declare global {
           dictionaries: {
             mdxPath: string
             relativePath: string
-            companionFileCount: number
+            resourceFileCount: number
           }[]
         } | null>
         getInfo: (dictionaryId: string) => Promise<{
