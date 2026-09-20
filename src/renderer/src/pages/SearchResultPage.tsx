@@ -94,11 +94,6 @@ export function SearchResultPage(): React.JSX.Element {
         <div
           aria-label="在线词典"
           className="online-dictionary-collapse group/online-dictionary-collapse shrink-0 mr-1"
-          style={
-            {
-              '--online-dictionary-expanded-width': `${onlineDictionaries.length * 32}px`
-            } as React.CSSProperties
-          }
         >
           <div className="online-dictionary-options flex items-center gap-1">
             {onlineDictionaries.map((dictionary, index) => (
