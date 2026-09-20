@@ -1010,6 +1010,11 @@ export class SelectionToolbarController extends BaseController {
   }
 
   private openWordInMain(word: string, dictionaryId?: string): void {
+    const selectionDictionaryGroupId = this.runtime.selectionDictionaryGroupId
+    if (this.runtime.dictionarySearchScope.get() !== selectionDictionaryGroupId) {
+      this.runtime.dictionarySearchScope.set(selectionDictionaryGroupId, 'search-panel')
+    }
+
     this.runtime.activateMainWindow()
     const mainWindow = this.runtime.mainWindow
 
@@ -1020,7 +1025,7 @@ export class SelectionToolbarController extends BaseController {
         mainWindow.webContents.send('app:search-request', {
           term: word,
           source: 'selection',
-          ...(dictionaryId ? { dictionaryId: dictionaryId }: {})
+          ...(dictionaryId ? { dictionaryId: dictionaryId } : {})
         })
       }
     }
