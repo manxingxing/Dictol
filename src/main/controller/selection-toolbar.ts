@@ -740,9 +740,7 @@ export class SelectionToolbarController extends BaseController {
           this.activeAiRequestId = undefined
         }
         if (version !== this.lookupVersion) return
-        if (event.type === 'task') {
-          return
-        } else if (event.type === 'delta') {
+        if (event.type === 'delta') {
           content += event.text
           this.updateExplanation({
             mode: 'ai',

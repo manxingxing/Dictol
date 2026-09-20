@@ -6,18 +6,10 @@ import type {
   AiSaveConfigRequest,
   AiStreamEvent
 } from '../shared/ai-ipc'
-import type { LanguageTaskClassification } from '../shared/language-task'
 import { AppConfigStore } from './app-config'
 import { AiCredentialStore } from './ai-credentials'
-import {
-  LanguageTaskClassifier,
-  OpenAiCompatibleLanguageTaskModel
-} from './language-task-classifier'
-import {
-  getFallbackLanguageTaskSystemPrompt,
-  getLanguageTaskSystemPrompt,
-  prepareLanguageTaskMessages
-} from './language-task-prompts'
+import { getLookupSystemPrompt, prepareLookupMessages } from './language-task-prompts'
+import { createAiCompletionBody } from './ai-model-adapter'
 
 const MAX_MESSAGES = 100
 const MAX_MESSAGE_LENGTH = 20_000
@@ -25,30 +17,14 @@ const REQUEST_TIMEOUT_MS = 120_000
 
 export type AiStreamHandler = (event: AiStreamEvent) => void
 export type AiPromptTarget = 'sidebar' | 'selection-toolbar' | 'translation'
-type AiLanguageTaskContext = NonNullable<AiChatRequest['languageTask']>
+type AiLookupContext = NonNullable<AiChatRequest['lookupContext']>
 
 export class AiLookupService {
   private readonly credentials: AiCredentialStore
-  private readonly languageTaskClassifier: LanguageTaskClassifier
   private readonly requests = new Map<string, AbortController>()
 
   constructor(private readonly appConfig: AppConfigStore) {
     this.credentials = new AiCredentialStore()
-    this.languageTaskClassifier = new LanguageTaskClassifier(
-      new OpenAiCompatibleLanguageTaskModel(() => {
-        const config = this.appConfig.load().aiLookup
-        if (!config.enabled) throw new Error('AI 查词尚未开启。')
-        return {
-          baseUrl: config.baseUrl,
-          model: config.model,
-          apiKey: this.credentials.getApiKey() || undefined
-        }
-      })
-    )
-  }
-
-  classifyLanguageTask(input: string): Promise<LanguageTaskClassification> {
-    return this.languageTaskClassifier.classify(input)
   }
 
   getPublicConfig(): AiLookupPublicConfig {
@@ -91,7 +67,7 @@ export class AiLookupService {
       sourceLanguage: AiTranslationLanguage
       targetLanguage: AiTranslationLanguage
     },
-    languageTask?: AiLanguageTaskContext,
+    lookupContext?: AiLookupContext,
     onEvent?: AiStreamHandler
   ): AsyncGenerator<AiStreamEvent, void> {
     const controller = new AbortController()
@@ -113,20 +89,10 @@ export class AiLookupService {
         systemPrompt = getTranslationSystemPrompt(translation)
         if (!systemPrompt) throw new Error('翻译语言设置无效。')
       } else {
-        if (!languageTask) throw new Error('语言任务上下文缺失。')
-        const classification = languageTask.task
-          ? ({ task: languageTask.task, source: 'local' } as const)
-          : await this.classifyLanguageTask(languageTask.sourceText)
+        if (!lookupContext) throw new Error('查词上下文缺失。')
         const followUp = bodyMessages.some((message) => message.role === 'assistant')
-        if (classification.task === 'unknown') {
-          systemPrompt = getFallbackLanguageTaskSystemPrompt(followUp)
-        } else {
-          const taskEvent: AiStreamEvent = { type: 'task', task: classification.task }
-          send(taskEvent)
-          yield taskEvent
-          systemPrompt = getLanguageTaskSystemPrompt(classification.task, followUp)
-        }
-        requestMessages = prepareLanguageTaskMessages(languageTask.sourceText, bodyMessages)
+        systemPrompt = getLookupSystemPrompt(followUp)
+        requestMessages = prepareLookupMessages(lookupContext.sourceText, bodyMessages)
       }
 
       const response = await fetch(`${config.baseUrl}/chat/completions`, {
@@ -135,13 +101,14 @@ export class AiLookupService {
           'Content-Type': 'application/json',
           ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
         },
-        body: JSON.stringify({
-          model: config.model,
-          stream: true,
-          thinking: { type: 'disabled' },
-          temperature: 0.3,
-          messages: [{ role: 'system', content: systemPrompt }, ...requestMessages]
-        }),
+        body: JSON.stringify(
+          createAiCompletionBody({
+            model: config.model,
+            stream: true,
+            purpose: 'lookup',
+            messages: [{ role: 'system', content: systemPrompt }, ...requestMessages]
+          })
+        ),
         signal: controller.signal
       })
 
@@ -209,9 +176,9 @@ export class AiLookupService {
       sourceLanguage: AiTranslationLanguage
       targetLanguage: AiTranslationLanguage
     },
-    languageTask?: AiLanguageTaskContext
+    lookupContext?: AiLookupContext
   ): void {
-    void this.consume(requestId, messages, promptTarget, translation, languageTask, onEvent)
+    void this.consume(requestId, messages, promptTarget, translation, lookupContext, onEvent)
   }
 
   cancel(requestId: string): void {
@@ -234,7 +201,7 @@ export class AiLookupService {
           targetLanguage: AiTranslationLanguage
         }
       | undefined,
-    languageTask: AiLanguageTaskContext | undefined,
+    lookupContext: AiLookupContext | undefined,
     onEvent: AiStreamHandler
   ): Promise<void> {
     for await (const event of this.stream(
@@ -242,7 +209,7 @@ export class AiLookupService {
       messages,
       promptTarget,
       translation,
-      languageTask,
+      lookupContext,
       onEvent
     )) {
       // The stream handler owns IPC delivery; consuming keeps the generator alive.
@@ -314,9 +281,13 @@ function parseStreamLine(line: string): AiStreamEvent | undefined {
     }
     if (typeof value.error?.message === 'string')
       return { type: 'error', message: value.error.message }
+    const finishReason = value.choices?.[0]?.finish_reason
+    if (finishReason === 'length' || finishReason === 'max_tokens') {
+      return { type: 'error', message: 'AI 输出达到长度上限，结果不完整，请重试。' }
+    }
     const content = value.choices?.[0]?.delta?.content
     if (typeof content === 'string' && content) return { type: 'delta', text: content }
-    if (value.choices?.[0]?.finish_reason) return { type: 'done' }
+    if (finishReason) return { type: 'done' }
   } catch {
     return undefined
   }

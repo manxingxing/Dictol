@@ -21,7 +21,6 @@ import { RightSidebarSizeToggle } from '@/components/RightSidebarSizeToggle'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/app-store'
-import type { LanguageTaskKind } from '../../../shared/language-task'
 
 type AiLookupThreadProps = {
   word: string
@@ -30,7 +29,6 @@ type AiLookupThreadProps = {
 type AiLookupEvent = Parameters<Parameters<typeof window.dictol.aiLookup.onEvent>[0]>[0]
 
 function createIpcChatModel(sourceText: string): ChatModelAdapter {
-  let activeTask: LanguageTaskKind | undefined
   return {
     async *run({ messages, abortSignal }) {
       abortSignal.throwIfAborted()
@@ -67,7 +65,6 @@ function createIpcChatModel(sourceText: string): ChatModelAdapter {
               return
             }
             if (event.requestId !== requestId) return
-            if (event.type === 'task') activeTask = event.task
             if (event.type === 'delta' && event.text) controller.enqueue(event.text)
             if (event.type === 'done') {
               unsubscribe()
@@ -85,7 +82,7 @@ function createIpcChatModel(sourceText: string): ChatModelAdapter {
             .startChat({
               messages: serializedMessages,
               promptTarget: 'sidebar',
-              languageTask: { sourceText, task: activeTask }
+              lookupContext: { sourceText }
             })
             .then((value) => {
               requestId = value

@@ -431,19 +431,15 @@ declare global {
             sourceLanguage: '中文' | 'English' | '日本語' | '한국어' | 'Français' | 'Deutsch'
             targetLanguage: '中文' | 'English' | '日本語' | '한국어' | 'Français' | 'Deutsch'
           }
-          languageTask?: {
+          lookupContext?: {
             sourceText: string
-            task?:
-              'english-lexical' | 'chinese-lexical' | 'english-to-chinese' | 'classical-to-modern'
           }
         }) => Promise<string | null>
         cancel: (requestId: string) => void
         onEvent: (
           callback: (event: {
             requestId: string
-            type: 'task' | 'delta' | 'done' | 'error'
-            task?:
-              'english-lexical' | 'chinese-lexical' | 'english-to-chinese' | 'classical-to-modern'
+            type: 'delta' | 'done' | 'error'
             text?: string
             message?: string
           }) => void

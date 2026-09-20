@@ -7,7 +7,6 @@ import {
   type AiLookupPublicConfig,
   type AiSaveConfigRequest
 } from '../../shared/ai-ipc'
-import { LANGUAGE_TASK_KINDS } from '../../shared/language-task'
 import { AppRuntime } from '../app-runtime'
 import { AiLookupService } from '../ai-service'
 import { BaseController } from './base-controller'
@@ -64,7 +63,7 @@ export class AiController extends BaseController {
         if (!sender.isDestroyed()) sender.send('ai-lookup:event', { requestId, ...streamEvent })
       },
       request.translation,
-      request.languageTask
+      request.lookupContext
     )
     return requestId
   }
@@ -101,17 +100,14 @@ function isChatRequest(value: unknown): value is AiChatRequest {
       AI_TRANSLATION_LANGUAGES.includes(request.translation.sourceLanguage) &&
       AI_TRANSLATION_LANGUAGES.includes(request.translation.targetLanguage) &&
       request.translation.sourceLanguage !== request.translation.targetLanguage &&
-      request.languageTask === undefined
+      request.lookupContext === undefined
     )
   }
-  if (request.translation !== undefined || !request.languageTask) return false
-  const sourceText = request.languageTask.sourceText
+  if (request.translation !== undefined || !request.lookupContext) return false
+  const sourceText = request.lookupContext.sourceText
   if (typeof sourceText !== 'string' || !sourceText.trim() || sourceText.length > 20_000)
     return false
-  return (
-    request.languageTask.task === undefined ||
-    LANGUAGE_TASK_KINDS.includes(request.languageTask.task)
-  )
+  return true
 }
 
 function isSaveConfigRequest(value: unknown): value is AiSaveConfigRequest {
