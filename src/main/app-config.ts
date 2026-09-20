@@ -4,10 +4,12 @@ import { dirname, join } from 'node:path'
 
 import { DEFAULT_TTS_VOICE } from '../shared/tts'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
+import type { DictionaryDisplay } from '../shared/dictionary-display'
 
 export type AppConfig = {
   aggregateLayout: 'vertical' | 'horizontal'
   dictionaryLayout: DictionaryLayout
+  dictionaryDisplay: DictionaryDisplay
   featureFlags: {
     lookupWordOnShortcut: boolean
     lookupWordOnSelection: boolean
@@ -34,6 +36,7 @@ export type AppConfig = {
 const DEFAULT_CONFIG: AppConfig = {
   aggregateLayout: 'vertical',
   dictionaryLayout: 'single',
+  dictionaryDisplay: 'icon',
   featureFlags: {
     lookupWordOnShortcut: true,
     lookupWordOnSelection: false
@@ -128,6 +131,7 @@ function parseConfig(value: unknown): AppConfig {
   const candidate = value as {
     aggregateLayout?: unknown
     dictionaryLayout?: unknown
+    dictionaryDisplay?: unknown
     featureFlags?: {
       lookupWordOnShortcut?: unknown
       lookupWordOnSelection?: unknown
@@ -147,6 +151,10 @@ function parseConfig(value: unknown): AppConfig {
     aggregateLayout: candidate.aggregateLayout === 'horizontal' ? 'horizontal' : 'vertical',
     dictionaryLayout:
       candidate.dictionaryLayout === 'aggregate' ? 'aggregate' : DEFAULT_CONFIG.dictionaryLayout,
+    dictionaryDisplay:
+      candidate.dictionaryDisplay === 'name' || candidate.dictionaryDisplay === 'icon-and-name'
+        ? candidate.dictionaryDisplay
+        : DEFAULT_CONFIG.dictionaryDisplay,
     featureFlags: {
       lookupWordOnShortcut:
         typeof candidate.featureFlags?.lookupWordOnShortcut === 'boolean'
@@ -196,6 +204,7 @@ function cloneConfig(config: AppConfig): AppConfig {
   return {
     aggregateLayout: config.aggregateLayout,
     dictionaryLayout: config.dictionaryLayout,
+    dictionaryDisplay: config.dictionaryDisplay,
     featureFlags: { ...config.featureFlags },
     shortcuts: { ...config.shortcuts },
     selection: {

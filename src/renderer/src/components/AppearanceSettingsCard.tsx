@@ -5,12 +5,16 @@ import { SettingsList, SettingsRow, SettingsSection } from '@/components/setting
 import { cn } from '@/lib/utils'
 import { type ChromeTone, useAppStore } from '@/stores/app-store'
 import type { DictionaryLayout } from '../../../shared/dictionary-layout'
+import type { DictionaryDisplay } from '../../../shared/dictionary-display'
 
 export function AppearanceSettingsCard(): React.JSX.Element {
   const chromeTone = useAppStore((state) => state.chromeTone)
   const setChromeTone = useAppStore((state) => state.setChromeTone)
+  const dictionaryDisplay = useAppStore((state) => state.dictionaryDisplay)
+  const setDictionaryDisplay = useAppStore((state) => state.setDictionaryDisplay)
   const [dictionaryLayout, setDictionaryLayout] = useState<DictionaryLayout | ''>('')
   const [isSavingDictionaryLayout, setIsSavingDictionaryLayout] = useState(false)
+  const [isSavingDictionaryDisplay, setIsSavingDictionaryDisplay] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -20,7 +24,23 @@ export function AppearanceSettingsCard(): React.JSX.Element {
     return () => {
       active = false
     }
-  }, [])
+  }, [setDictionaryDisplay])
+
+  const handleDictionaryDisplayChange = async (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ): Promise<void> => {
+    const display = event.target.value as DictionaryDisplay
+    setIsSavingDictionaryDisplay(true)
+    try {
+      const savedDisplay = await window.dictol.app.saveDictionaryDisplay(display)
+      if (savedDisplay) setDictionaryDisplay(savedDisplay)
+    } catch (error) {
+      console.error('Failed to save dictionary display', error)
+      window.alert('词典显示设置保存失败，请稍后重试。')
+    } finally {
+      setIsSavingDictionaryDisplay(false)
+    }
+  }
 
   const handleDictionaryLayoutChange = async (
     event: React.ChangeEvent<HTMLSelectElement>
@@ -43,26 +63,6 @@ export function AppearanceSettingsCard(): React.JSX.Element {
   return (
     <SettingsSection title="外观" description="选择应用框架的布局和色调">
       <SettingsList>
-        <SettingsRow
-          label="查词页面布局"
-          description="一页展示一个词典解释，或者在一页聚合多个词典解释"
-          control={
-            <select
-              aria-label="查词页面布局"
-              className="h-9 min-w-44 rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring"
-              disabled={!dictionaryLayout || isSavingDictionaryLayout}
-              onChange={(event) => void handleDictionaryLayoutChange(event)}
-              value={dictionaryLayout}
-            >
-              {dictionaryLayoutOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          }
-          className="items-start"
-        />
         <SettingsRow
           label="框架色调"
           description="浅色和深色模式仍然跟随系统"
@@ -106,6 +106,45 @@ export function AppearanceSettingsCard(): React.JSX.Element {
           }
           className="items-start"
         />
+        <SettingsRow
+          label="查词页面布局"
+          description="一页展示一个词典解释，或者在一页聚合多个词典解释"
+          control={
+            <select
+              aria-label="查词页面布局"
+              className="h-9 min-w-44 rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring"
+              disabled={!dictionaryLayout || isSavingDictionaryLayout}
+              onChange={(event) => void handleDictionaryLayoutChange(event)}
+              value={dictionaryLayout}
+            >
+              {dictionaryLayoutOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          }
+          className="items-start"
+        />
+        <SettingsRow
+          label="词典显示"
+          description="选择查词释义区上方的词典导航显示方式"
+          control={
+            <select
+              aria-label="词典显示"
+              className="h-9 min-w-44 rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring"
+              disabled={!dictionaryDisplay || isSavingDictionaryDisplay}
+              onChange={(event) => void handleDictionaryDisplayChange(event)}
+              value={dictionaryDisplay ?? ''}
+            >
+              {dictionaryDisplayOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          }
+        />
       </SettingsList>
     </SettingsSection>
   )
@@ -131,4 +170,13 @@ const dictionaryLayoutOptions: Array<{
 }> = [
   { value: 'single', label: '一页一个词典' },
   { value: 'aggregate', label: '一页多个词典' }
+]
+
+const dictionaryDisplayOptions: Array<{
+  value: DictionaryDisplay
+  label: string
+}> = [
+  { value: 'icon', label: '图标' },
+  { value: 'name', label: '名称' },
+  { value: 'icon-and-name', label: '图标和名称' }
 ]

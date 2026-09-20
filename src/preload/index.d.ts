@@ -2,6 +2,7 @@ import type { ToastPayload } from '../shared/notification'
 import type { TtsConfig, TtsSaveConfigRequest } from '../shared/tts'
 import type { MainWindowSearchRequest } from '../shared/search-request'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
+import type { DictionaryDisplay } from '../shared/dictionary-display'
 import type {
   CustomCssEditorBounds,
   CustomCssEditorSearchResult,
@@ -379,6 +380,8 @@ declare global {
         getDictionaryLayout: () => Promise<DictionaryLayout | null>
         getRunningDictionaryLayout: () => Promise<DictionaryLayout | null>
         saveDictionaryLayout: (layout: DictionaryLayout) => Promise<DictionaryLayout | null>
+        getDictionaryDisplay: () => Promise<DictionaryDisplay | null>
+        saveDictionaryDisplay: (display: DictionaryDisplay) => Promise<DictionaryDisplay | null>
         getResourceCacheSize: () => Promise<number>
         clearResourceCache: () => Promise<void>
         openResourceCacheDirectory: () => Promise<void>

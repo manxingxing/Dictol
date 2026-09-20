@@ -12,6 +12,7 @@ export function AppLayout(): React.JSX.Element {
   const navigate = useNavigate()
   const setSearchQuery = useAppStore((state) => state.setSearchQuery)
   const setDictionaryLayout = useAppStore((state) => state.setDictionaryLayout)
+  const setDictionaryDisplay = useAppStore((state) => state.setDictionaryDisplay)
 
   useWindowWidthThreshold()
   useChromeTone()
@@ -21,10 +22,13 @@ export function AppLayout(): React.JSX.Element {
     void window.dictol.app.getRunningDictionaryLayout().then((layout) => {
       if (active && layout) setDictionaryLayout(layout)
     })
+    void window.dictol.app.getDictionaryDisplay().then((display) => {
+      if (active && display) setDictionaryDisplay(display)
+    })
     return () => {
       active = false
     }
-  }, [setDictionaryLayout])
+  }, [setDictionaryDisplay, setDictionaryLayout])
 
   useEffect(() => {
     return window.dictol.wordCapture.onEvent((event) => {

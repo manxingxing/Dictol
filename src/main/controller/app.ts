@@ -9,6 +9,7 @@ import {
 } from 'electron'
 
 import type { DictionaryLayout } from '../../shared/dictionary-layout'
+import type { DictionaryDisplay } from '../../shared/dictionary-display'
 import { BaseController } from './base-controller'
 import { DICTIONARY_SESSION_PARTITION, EMBED_BROWSER_SESSION_PARTITION } from '../entry-assets'
 
@@ -45,6 +46,8 @@ export class AppController extends BaseController {
       return this.runtime.dictionaryLayout
     })
     ipcMain.handle('app:save-dictionary-layout', this.saveDictionaryLayout)
+    ipcMain.handle('app:get-dictionary-display', this.getDictionaryDisplay)
+    ipcMain.handle('app:save-dictionary-display', this.saveDictionaryDisplay)
     ipcMain.handle('app:get-resource-cache-size', this.getResourceCacheSize)
     ipcMain.handle('app:clear-resource-cache', this.clearResourceCache)
     ipcMain.handle('app:open-resource-cache-directory', this.openResourceCacheDirectory)
@@ -71,6 +74,25 @@ export class AppController extends BaseController {
     const current = this.runtime.appConfig.load()
     this.runtime.appConfig.save({ ...current, dictionaryLayout: layout })
     return layout
+  }
+
+  getDictionaryDisplay = (event: IpcMainInvokeEvent): DictionaryDisplay | null => {
+    if (!this.acceptsSender(event.sender)) return null
+    return this.runtime.appConfig.load().dictionaryDisplay
+  }
+
+  saveDictionaryDisplay = (
+    event: IpcMainInvokeEvent,
+    display: unknown
+  ): DictionaryDisplay | null => {
+    if (!this.acceptsSender(event.sender)) return null
+    if (display !== 'icon' && display !== 'name' && display !== 'icon-and-name') {
+      throw new Error('词典显示设置无效。')
+    }
+
+    const current = this.runtime.appConfig.load()
+    this.runtime.appConfig.save({ ...current, dictionaryDisplay: display })
+    return display
   }
 
   getResourceCacheSize = async (event: IpcMainInvokeEvent): Promise<number> => {

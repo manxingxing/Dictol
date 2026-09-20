@@ -250,7 +250,7 @@ body [data-sonner-toaster].toaster {
 }
 
 .dictionary-tab-trigger {
-  width: 2rem;
+  width: auto;
   height: 100%;
   flex: none;
   padding: 0;
@@ -289,18 +289,27 @@ body [data-sonner-toaster].toaster {
   transform: scale(1.18);
 }
 
-.dictionary-tab-trigger[data-state='active']::after {
+.dictionary-tab-indicator {
   content: '';
   position: absolute;
   bottom: -1px;
-  left: 0;
+  left: 50%;
   z-index: 2;
   width: 16px;
   height: 2px;
-  transform: translateX(calc((2rem - 16px) / 2));
+  transform: translateX(-50%);
   border-radius: 9999px;
   background: var(--primary);
   pointer-events: none;
+}
+
+.dictionary-tab-trigger[data-state='inactive'] .dictionary-tab-indicator {
+  display: none;
+}
+
+.dictionary-tab-trigger .dictionary-source-label .dictionary-source-icon {
+  transform: none;
+  transition: none;
 }
 
 .appearance-tone-preview {

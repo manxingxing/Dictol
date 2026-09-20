@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { DictionaryLayout } from '../../../shared/dictionary-layout'
+import type { DictionaryDisplay } from '../../../shared/dictionary-display'
 
 export const COMPACT_MODE_WIDTH_THRESHOLD = 768
 export const RIGHT_SIDEBAR_DEFAULT_SIZE = '25'
@@ -14,6 +15,8 @@ type ResizablePanelSize = number | string | undefined
 interface AppState {
   dictionaryLayout: DictionaryLayout | null
   setDictionaryLayout: (layout: DictionaryLayout) => void
+  dictionaryDisplay: DictionaryDisplay | null
+  setDictionaryDisplay: (display: DictionaryDisplay) => void
   chromeTone: ChromeTone
   setChromeTone: (tone: ChromeTone) => void
   compactModeEnabled: boolean
@@ -54,6 +57,8 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       dictionaryLayout: null,
       setDictionaryLayout: (dictionaryLayout) => set({ dictionaryLayout }),
+      dictionaryDisplay: null,
+      setDictionaryDisplay: (dictionaryDisplay) => set({ dictionaryDisplay }),
       chromeTone: 'neutral',
       setChromeTone: (chromeTone) => set({ chromeTone }),
       compactModeEnabled: false,
@@ -113,7 +118,8 @@ export const useAppStore = create<AppState>()(
       merge: (persistedState, currentState) => ({
         ...currentState,
         ...(persistedState as Partial<AppState>),
-        dictionaryLayout: null
+        dictionaryLayout: null,
+        dictionaryDisplay: null
       })
     }
   )

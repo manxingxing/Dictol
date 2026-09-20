@@ -19,7 +19,7 @@ export function SearchResultToolbar({
           viewportClassName="[&>div]:h-full"
         >
           {children}
-          <ScrollBar orientation="horizontal" />
+          <ScrollBar orientation="horizontal" className="h-2" />
         </ScrollArea>
       ) : (
         <div className="min-w-0 flex-1" />

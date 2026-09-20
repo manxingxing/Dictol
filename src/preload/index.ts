@@ -17,6 +17,7 @@ import type { MainWindowSearchRequest } from '../shared/search-request'
 import type { ToastPayload } from '../shared/notification'
 import type { TtsConfig, TtsSaveConfigRequest } from '../shared/tts'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
+import type { DictionaryDisplay } from '../shared/dictionary-display'
 import type {
   DictionarySearchScopeChange,
   DictionarySearchScopeSource
@@ -360,6 +361,10 @@ const api = Object.freeze({
       ipcRenderer.invoke('app:get-dictionary-layout'),
     saveDictionaryLayout: (layout: DictionaryLayout): Promise<DictionaryLayout | null> =>
       ipcRenderer.invoke('app:save-dictionary-layout', layout),
+    getDictionaryDisplay: (): Promise<DictionaryDisplay | null> =>
+      ipcRenderer.invoke('app:get-dictionary-display'),
+    saveDictionaryDisplay: (display: DictionaryDisplay): Promise<DictionaryDisplay | null> =>
+      ipcRenderer.invoke('app:save-dictionary-display', display),
     getResourceCacheSize: (): Promise<number> => ipcRenderer.invoke('app:get-resource-cache-size'),
     clearResourceCache: (): Promise<void> => ipcRenderer.invoke('app:clear-resource-cache'),
     openResourceCacheDirectory: (): Promise<void> =>
