@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld(
       ipcRenderer.send('selection-explanation:select-dictionary', dictionaryId),
     close: (): void => ipcRenderer.send('selection-explanation:close'),
     openInMain: (): void => ipcRenderer.send('selection-explanation:open-in-main'),
+    readAloud: (text: string, voice?: string): Promise<Uint8Array | null> =>
+      ipcRenderer.invoke('entry:read-aloud', text, voice),
     isStarred: (word: string): Promise<boolean> =>
       ipcRenderer.invoke('selection-explanation:is-starred', word),
     toggleStar: (word: string): Promise<void> =>

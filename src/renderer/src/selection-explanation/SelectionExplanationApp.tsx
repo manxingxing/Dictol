@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { ExternalLink, LoaderCircle, Star, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ExternalLink, LoaderCircle, Star, Volume2, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
@@ -21,6 +21,7 @@ declare global {
       selectDictionary: (dictionaryId: string) => void
       close: () => void
       openInMain: () => void
+      readAloud: (text: string, voice?: string) => Promise<Uint8Array | null>
       isStarred: (word: string) => Promise<boolean>
       toggleStar: (word: string) => Promise<void>
     }
@@ -40,6 +41,13 @@ export function SelectionExplanationApp(): React.JSX.Element {
   const [payload, setPayload] = useState(initialPayload)
   const [starStatus, setStarStatus] = useState<{ key: string; starred: boolean } | undefined>()
   const [togglingStar, setTogglingStar] = useState(false)
+  const [pronunciationStatus, setPronunciationStatus] = useState<{
+    word: string
+    state: 'loading' | 'playing'
+  } | null>(null)
+  const pronunciationContextRef = useRef<AudioContext | null>(null)
+  const pronunciationSourceRef = useRef<AudioBufferSourceNode | null>(null)
+  const pronunciationRequestRef = useRef(0)
 
   const wordKey = payload.word.trim()
   const starStatusReady = Boolean(wordKey) && starStatus?.key === wordKey
@@ -47,8 +55,31 @@ export function SelectionExplanationApp(): React.JSX.Element {
   const showStar = payload.mode === 'dictionary' && (payload.state === 'content' || starStatusReady)
   const dictionaries = payload.mode === 'dictionary' ? (payload.dictionaries ?? []) : []
   const hasDictionarySwitcher = dictionaries.length > 1
+  const pronunciationState =
+    pronunciationStatus?.word === wordKey ? pronunciationStatus.state : 'idle'
 
   useEffect(() => window.dictolSelectionExplanation.onUpdate(setPayload), [])
+  useEffect(() => {
+    pronunciationRequestRef.current += 1
+    pronunciationSourceRef.current?.stop()
+    pronunciationSourceRef.current = null
+    void pronunciationContextRef.current?.close()
+    pronunciationContextRef.current = null
+  }, [payload.word])
+  useEffect(
+    () => () => {
+      pronunciationRequestRef.current += 1
+      try {
+        pronunciationSourceRef.current?.stop()
+      } catch {
+        // The source may already have ended.
+      }
+      pronunciationSourceRef.current = null
+      void pronunciationContextRef.current?.close()
+      pronunciationContextRef.current = null
+    },
+    []
+  )
   useEffect(() => {
     if (
       payload.mode !== 'dictionary' ||
@@ -97,6 +128,65 @@ export function SelectionExplanationApp(): React.JSX.Element {
     }
   }
 
+  const playPronunciation = async (): Promise<void> => {
+    if (!wordKey) return
+    if (pronunciationState !== 'idle') {
+      pronunciationRequestRef.current += 1
+      try {
+        pronunciationSourceRef.current?.stop()
+      } catch {
+        // The source may already have ended.
+      }
+      pronunciationSourceRef.current = null
+      void pronunciationContextRef.current?.close()
+      pronunciationContextRef.current = null
+      setPronunciationStatus(null)
+      return
+    }
+
+    const requestId = pronunciationRequestRef.current + 1
+    pronunciationRequestRef.current = requestId
+    setPronunciationStatus({ word: wordKey, state: 'loading' })
+    // Resume synchronously from the click handler so Chromium keeps the user
+    // activation while Edge TTS is fetching the audio bytes.
+    const audioContext = new AudioContext()
+    pronunciationContextRef.current = audioContext
+    void audioContext.resume()
+    try {
+      const audioData = await window.dictolSelectionExplanation.readAloud(wordKey)
+      if (requestId !== pronunciationRequestRef.current || !audioData?.byteLength) return
+
+      const audioBuffer = new Uint8Array(audioData.byteLength)
+      audioBuffer.set(audioData)
+      const decodedAudio = await audioContext.decodeAudioData(audioBuffer.buffer)
+      if (requestId !== pronunciationRequestRef.current) return
+
+      const source = audioContext.createBufferSource()
+      source.buffer = decodedAudio
+      source.connect(audioContext.destination)
+      pronunciationSourceRef.current = source
+      source.onended = () => {
+        if (requestId !== pronunciationRequestRef.current) return
+        pronunciationSourceRef.current = null
+        pronunciationContextRef.current = null
+        void audioContext.close()
+        setPronunciationStatus(null)
+      }
+      source.start()
+      if (requestId === pronunciationRequestRef.current) {
+        setPronunciationStatus({ word: wordKey, state: 'playing' })
+      }
+    } catch (error) {
+      if (requestId === pronunciationRequestRef.current) {
+        console.error('Failed to play pronunciation', error)
+        pronunciationSourceRef.current = null
+        pronunciationContextRef.current = null
+        void audioContext.close()
+        setPronunciationStatus(null)
+      }
+    }
+  }
+
   return (
     <div className="flex h-screen flex-col overflow-hidden rounded-xl border border-border bg-background text-foreground shadow-xl">
       <header
@@ -115,6 +205,22 @@ export function SelectionExplanationApp(): React.JSX.Element {
         </div>
         {payload.mode === 'dictionary' && (
           <>
+            <Button
+              aria-label={pronunciationState === 'playing' ? '停止发音' : '发音'}
+              className="no-drag size-7 shrink-0"
+              disabled={payload.state !== 'content' || !wordKey}
+              onClick={() => void playPronunciation()}
+              size="icon"
+              title={pronunciationState === 'playing' ? '停止发音' : '发音'}
+              type="button"
+              variant="ghost"
+            >
+              {pronunciationState === 'loading' ? (
+                <LoaderCircle className="animate-spin" />
+              ) : (
+                <Volume2 />
+              )}
+            </Button>
             {showStar && (
               <Button
                 aria-label={isStarred ? '取消标星' : '加入默认生词本'}

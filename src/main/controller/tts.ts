@@ -96,8 +96,15 @@ export class TtsController extends BaseController {
 
   private acceptsMainSender(sender: WebContents): boolean {
     const mainWindow = this.runtime.mainWindow
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents.id === sender.id) {
+      return true
+    }
+
+    const explanationWindow = this.runtime.windowManager.selectionExplanationWindow
     return Boolean(
-      mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents.id === sender.id
+      explanationWindow &&
+      !explanationWindow.isDestroyed() &&
+      explanationWindow.webContents.id === sender.id
     )
   }
 }

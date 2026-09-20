@@ -204,7 +204,6 @@ export function StorageSettingsCard(): React.JSX.Element {
               disabled={activeClear.isPending}
               onClick={confirmClear}
               type="button"
-              variant="destructive"
             >
               {activeClear.isPending && <LoaderCircle className="animate-spin" />}
               清除缓存
