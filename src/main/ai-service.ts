@@ -105,7 +105,7 @@ export class AiLookupService {
           createAiCompletionBody({
             model: config.model,
             stream: true,
-            purpose: 'lookup',
+            purpose: promptTarget === 'translation' ? 'translation' : 'lookup',
             messages: [{ role: 'system', content: systemPrompt }, ...requestMessages]
           })
         ),
@@ -131,14 +131,14 @@ export class AiLookupService {
           for (const line of lines) {
             const event = parseStreamLine(line)
             if (!event) continue
-            completed = event.type === 'done'
+            completed = event.type === 'done' || event.type === 'error'
             send(event)
             yield event
           }
           if (done) {
             const finalEvent = parseStreamLine(buffer)
             if (finalEvent) {
-              completed = finalEvent.type === 'done'
+              completed = finalEvent.type === 'done' || finalEvent.type === 'error'
               send(finalEvent)
               yield finalEvent
             }

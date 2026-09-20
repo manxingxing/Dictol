@@ -35,7 +35,7 @@ export function DictionaryTabIcon({ name, iconUrl }: DictionaryIconProps): React
   }
 
   return (
-    <span className="dictionary-source-label inline-flex max-w-44 items-center gap-1.5 rounded-lg border border-border bg-muted/45 px-2.5 py-1 text-xs font-medium text-muted-foreground group-data-[state=active]:border-primary/35 group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary">
+    <span className="dictionary-source-label inline-flex max-w-44 items-center gap-1.5 rounded-lg border border-border bg-muted/45 px-2.5 py-1.5 text-xs font-medium text-muted-foreground group-data-[state=active]:border-primary/35 group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary">
       {display === 'icon-and-name' && (
         <span className="dictionary-source-icon flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-full bg-background text-[8px] font-semibold">
           {icon}

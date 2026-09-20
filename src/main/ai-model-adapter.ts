@@ -1,4 +1,4 @@
-export type AiCompletionPurpose = 'lookup' | 'classification'
+export type AiCompletionPurpose = 'lookup' | 'translation'
 
 export type AiCompletionRequest = {
   model: string
@@ -19,7 +19,9 @@ export function createAiCompletionBody(request: AiCompletionRequest): Record<str
     stream: request.stream,
     messages: request.messages
   }
-  if (request.purpose === 'classification') body.max_tokens = 64
+  const maxTokens = request.purpose === 'lookup' ? 1024 : 4096
+  if (isOpenAiReasoningModel(model)) body.max_completion_tokens = maxTokens
+  else body.max_tokens = maxTokens
 
   if (isDeepSeekModel(model)) {
     // DeepSeek's thinking mode does not accept temperature. Explicitly use
@@ -39,7 +41,7 @@ export function createAiCompletionBody(request: AiCompletionRequest): Record<str
     return body
   }
 
-  body.temperature = request.purpose === 'classification' ? 0 : 0.3
+  body.temperature = 0.3
   return body
 }
 
