@@ -897,7 +897,7 @@ export const WordbookWords = (): React.JSX.Element => {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <CardTitle>生词列表</CardTitle>
-              <CardDescription>管理生词本的单词，支持星级评分与导出。</CardDescription>
+              <CardDescription>管理生词本的单词、星级评分</CardDescription>
             </div>
             <div className="min-w-40 flex-1 sm:max-w-48">
               <Input

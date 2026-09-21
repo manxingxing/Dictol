@@ -199,7 +199,7 @@ export const HistoryPage = (): React.JSX.Element => {
                   <TableRow className="bg-card hover:bg-muted/40" key={row.id}>
                     {row.getVisibleCells().map((cell) => (
                       <TableCell
-                        className={cn('px-4 py-4', getColumnClassName(cell.column.id, false))}
+                        className={cn('px-4 py-2', getColumnClassName(cell.column.id, false))}
                         key={cell.id}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}

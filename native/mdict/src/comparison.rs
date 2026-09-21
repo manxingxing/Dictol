@@ -149,12 +149,13 @@ impl KeyComparison {
     }
 }
 
-/// 判断字符是否属于 MDict `StripKey` 约定的移除集合。
+/// 判断字符是否不属于 MDict `StripKey` sort key。
+///
+/// The reference Rust implementation keeps ASCII letters, ASCII digits and
+/// non-ASCII characters, and drops every other ASCII character. This is only
+/// used for comparison; the original key text remains unchanged.
 pub(crate) fn is_stripped(character: char) -> bool {
-    matches!(
-        character,
-        '(' | ')' | '.' | ',' | '-' | '&' | '、' | ' ' | '\'' | '/' | '\\' | '@' | '_' | '$' | '!'
-    )
+    character.is_ascii() && !character.is_ascii_alphanumeric()
 }
 
 /// DIDX 中表示 v3 原始 key 语义的规范化标志。
@@ -242,5 +243,8 @@ mod tests {
             strip_key: true,
         };
         assert_eq!(comparison.normalize("Hello, World!"), "helloworld");
+        assert_eq!(comparison.normalize("\"Jack and Jill\""), "jackandjill");
+        assert_eq!(comparison.normalize("jack-and-jill"), "jackandjill");
+        assert_eq!(comparison.normalize("中文“词”"), "中文“词”");
     }
 }
