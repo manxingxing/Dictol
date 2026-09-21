@@ -95,9 +95,6 @@ export function AiLookupSettingsCard(): React.JSX.Element {
                     <div className="mb-5 flex items-start justify-between gap-4">
                       <div>
                         <p className="text-sm font-medium">模型服务</p>
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                          词语解释、翻译和文言文任务使用应用内置 Prompt。
-                        </p>
                       </div>
                       <span className="shrink-0 rounded-full border border-primary/20 bg-primary/[0.06] px-2.5 py-1 text-xs font-medium text-primary">
                         OpenAI-compatible

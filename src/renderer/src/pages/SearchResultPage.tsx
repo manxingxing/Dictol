@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
+import { BookOpenText } from 'lucide-react'
 import { AiLookupButton } from '@/components/AiLookupButton'
 import { OnlineDictionaryButton } from '@/components/OnlineDictionaryButton'
 import { StarButton } from '@/components/StarButton'
@@ -52,8 +53,9 @@ export function SearchResultPage(): React.JSX.Element {
   }, [group, isPlaceholderData, location.pathname, recordQueryHistory])
   if (!normalizedTerm) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        选择一个词条查看详情
+      <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
+        <BookOpenText aria-hidden="true" className="size-15 stroke-[1.5] text-muted-foreground/55" />
+        <p className="text-xl font-semibold text-muted-foreground/75 tracking-tight">开始查词</p>
       </div>
     )
   }

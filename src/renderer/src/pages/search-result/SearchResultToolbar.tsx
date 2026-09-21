@@ -55,6 +55,7 @@ export function SearchResultToolbar({
     >
       {children ? (
         <ScrollArea
+          horizontalWheel
           className="h-full min-w-0 flex-1 after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:z-10 after:w-3 after:bg-linear-to-r after:from-transparent after:to-[var(--dictionary-toolbar-background)] after:content-['']"
           showVerticalScrollbar={false}
           viewportClassName="[&>div]:h-full"
@@ -62,7 +63,7 @@ export function SearchResultToolbar({
           <div ref={navigationRef} className="flex h-full w-max items-center">
             {children}
           </div>
-          <ScrollBar orientation="horizontal" className="h-2" />
+          <ScrollBar orientation="horizontal" className="h-0" />
         </ScrollArea>
       ) : (
         <div className="min-w-0 flex-1" />

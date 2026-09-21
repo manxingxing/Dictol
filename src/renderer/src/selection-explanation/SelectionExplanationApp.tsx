@@ -273,7 +273,11 @@ export function SelectionExplanationApp(): React.JSX.Element {
             className="relative flex w-full shrink-0 items-center overflow-visible"
             style={{ height: SELECTION_EXPLANATION_DICTIONARY_TAB_BAR_HEIGHT }}
           >
-            <ScrollArea className="h-full w-full" viewportClassName="[&>div]:h-full">
+            <ScrollArea
+              horizontalWheel
+              className="h-full w-full"
+              viewportClassName="[&>div]:h-full"
+            >
               <div className="flex h-full w-max items-center gap-1.5 px-2">
                 {dictionaries.map((dictionary) => {
                   const isActive = dictionary.dictionaryId === payload.activeDictionaryId
