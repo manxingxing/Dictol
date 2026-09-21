@@ -3,6 +3,8 @@ import { extname, resolve, sep } from 'node:path'
 
 import { getAppRunTime } from './app-runtime'
 
+const MDD_FILE_CACHE_THRESHOLD = 10n * 1024n
+
 export type LoadedDictionaryResource = {
   bytes: Buffer
   mimeType: string
@@ -36,18 +38,8 @@ export async function loadDictionaryResource(
     return { bytes: local, mimeType, source: 'local' }
   }
 
-  const cached = await runtime.resourceCache.read(dictionaryId, resourcePath, mimeType)
-  if (cached) {
-    console.debug('[DictionaryResource] cache hit', {
-      dictionaryId,
-      resourcePath,
-      byteLength: cached.length
-    })
-    return { bytes: cached, mimeType, source: 'cache' }
-  }
-
-  const extracted = await runtime.mdictResourceManager.loadResource(dictionaryId, resourcePath)
-  if (!extracted) {
+  const location = await runtime.mdictResourceManager.findResource(dictionaryId, resourcePath)
+  if (!location) {
     console.debug('[DictionaryResource] lookup miss', {
       dictionaryId,
       resourcePath
@@ -55,16 +47,32 @@ export async function loadDictionaryResource(
     return null
   }
 
+  const useFileCache = location.recordEnd - location.recordStart > MDD_FILE_CACHE_THRESHOLD
+  if (useFileCache) {
+    const cached = await runtime.resourceCache.read(dictionaryId, resourcePath, mimeType)
+    if (cached) {
+      console.debug('[DictionaryResource] cache hit', {
+        dictionaryId,
+        resourcePath,
+        byteLength: cached.length
+      })
+      return { bytes: cached, mimeType, source: 'cache' }
+    }
+  }
+
+  const extracted = await runtime.mdictResourceManager.readResource(dictionaryId, location)
   console.debug('[DictionaryResource] MDD hit', {
     dictionaryId,
     resourcePath,
     byteLength: extracted.length
   })
 
-  try {
-    await runtime.resourceCache.write(dictionaryId, resourcePath, mimeType, extracted)
-  } catch (error) {
-    console.warn('Failed to cache dictionary resource', error)
+  if (useFileCache) {
+    try {
+      await runtime.resourceCache.write(dictionaryId, resourcePath, mimeType, extracted)
+    } catch (error) {
+      console.warn('Failed to cache dictionary resource', error)
+    }
   }
   return { bytes: extracted, mimeType, source: 'mdd' }
 }

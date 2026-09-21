@@ -1,4 +1,9 @@
-import { MddList, Mdx, type DictionaryMetadata } from '@dictol/mdict-native'
+import {
+  MddList,
+  Mdx,
+  type DictionaryMetadata,
+  type MddListDictionaryEntry
+} from '@dictol/mdict-native'
 
 export type MdictRecordLocator = {
   recordStartOffset: number
@@ -49,6 +54,21 @@ export class MdictResourceFiles {
       if (resource) return resource.data
     }
     return null
+  }
+
+  async findResource(resourcePath: string): Promise<MddListDictionaryEntry | null> {
+    if (!this.mddList) return null
+
+    for (const candidate of resourceCandidates(resourcePath)) {
+      const resource = await this.mddList.findKey(candidate)
+      if (resource) return resource
+    }
+    return null
+  }
+
+  readResource(location: MddListDictionaryEntry): Promise<Buffer> {
+    if (!this.mddList) throw new Error('词典没有 MDD 资源文件')
+    return this.mddList.readRecord(location.volume, location.recordStart, location.recordEnd)
   }
 
   close(): boolean {

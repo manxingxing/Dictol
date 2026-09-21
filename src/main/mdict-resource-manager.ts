@@ -1,4 +1,9 @@
-import { MddList, Mdx, type DictionaryMetadata } from '@dictol/mdict-native'
+import {
+  MddList,
+  Mdx,
+  type DictionaryMetadata,
+  type MddListDictionaryEntry
+} from '@dictol/mdict-native'
 import { dirname } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 
@@ -100,9 +105,17 @@ export class MdictResourceManager {
     return resource.prefixEntryWords(prefix)
   }
 
-  async loadResource(dictionaryId: number, resourcePath: string): Promise<Buffer | null> {
+  async findResource(
+    dictionaryId: number,
+    resourcePath: string
+  ): Promise<MddListDictionaryEntry | null> {
     const resource = await this.acquire(dictionaryId)
-    return resource.loadResource(resourcePath)
+    return resource.findResource(resourcePath)
+  }
+
+  async readResource(dictionaryId: number, location: MddListDictionaryEntry): Promise<Buffer> {
+    const resource = await this.acquire(dictionaryId)
+    return resource.readResource(location)
   }
 
   async getResourceDirectory(dictionaryId: number): Promise<string> {

@@ -12,7 +12,6 @@ export class ResourceCache {
 
   async read(dictionaryId: number, resourcePath: string, mimeType: string): Promise<Buffer | null> {
     const cachePath = this.getCachePath(dictionaryId, resourcePath, mimeType)
-    if (!cachePath) return null
 
     try {
       return await readFile(cachePath)
@@ -29,7 +28,6 @@ export class ResourceCache {
     bytes: Buffer
   ): Promise<void> {
     const cachePath = this.getCachePath(dictionaryId, resourcePath, mimeType)
-    if (!cachePath) return
 
     await mkdir(dirname(cachePath), { recursive: true })
     try {
@@ -58,19 +56,14 @@ export class ResourceCache {
     await rm(this.rootDirectory, { recursive: true, force: true })
   }
 
-  private getCachePath(
-    dictionaryId: number,
-    resourcePath: string,
-    mimeType: string
-  ): string | null {
+  private getCachePath(dictionaryId: number, resourcePath: string, mimeType: string): string {
     const category = mimeType.startsWith('image/')
       ? 'images'
       : mimeType.startsWith('audio/')
         ? 'audio'
         : mimeType.startsWith('font/')
           ? 'fonts'
-          : null
-    if (!category) return null
+          : 'other'
 
     const digest = createHash('sha256').update(`${dictionaryId}\0${resourcePath}`).digest('hex')
     const shard = digest.slice(0, 6)
