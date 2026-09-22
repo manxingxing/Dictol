@@ -40,13 +40,15 @@ export function createEntryDocument(
   const globalStyle = `<link id="dictol-entry-style" rel="stylesheet" href="${ENTRY_GLOBAL_STYLE_URL}">`
   const withStyles = withHead.replace(/<\/head>/i, `${globalStyle}${customStyle}</head>`)
   const entryScripts = [
-    `<script src="${ENTRY_BASE_URL}"></script>`,
-    options.includeContextMenu === false ? '' : `<script src="${ENTRY_CONTEXT_MENU_URL}"></script>`,
-    options.includeActiveDictionary ? `<script src="${ENTRY_AGGREGATION_LAYOUT_URL}"></script>` : ''
+    `<script defer src="${ENTRY_BASE_URL}"></script>`,
+    options.includeContextMenu === false
+      ? ''
+      : `<script defer src="${ENTRY_CONTEXT_MENU_URL}"></script>`,
+    options.includeActiveDictionary
+      ? `<script defer src="${ENTRY_AGGREGATION_LAYOUT_URL}"></script>`
+      : ''
   ].join('')
-  return /<\/body>/i.test(withStyles)
-    ? withStyles.replace(/<\/body>/i, `${entryScripts}</body>`)
-    : `${withStyles}${entryScripts}`
+  return withStyles.replace(/<\/head>/i, `${entryScripts}</head>`)
 }
 
 function escapeStyleContent(value: string): string {

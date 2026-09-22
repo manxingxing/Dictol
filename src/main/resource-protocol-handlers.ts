@@ -170,7 +170,7 @@ export class DictionaryResourceProtocolHandlers {
       const entryAsset = ENTRY_ASSETS.get(request.url)
       if (entryAsset) {
         const bytes = await loadEntryAssetSource(entryAsset.fileName)
-        return bytesResponse(request, bytes, entryAsset.mimeType, 'no-cache')
+        return bytesResponse(request, bytes, entryAsset.mimeType, STATIC_RESOURCE_CACHE_CONTROL)
       }
 
       const entry = parseDictionaryEntryUrl(request.url)
@@ -379,7 +379,12 @@ export class DictionaryResourceProtocolHandlers {
 
     if (scopeCss && resource.mimeType.startsWith('text/css')) {
       const css = rewriteDictionaryCss(resource.bytes.toString('utf8'), dictionaryId)
-      return stringResponse(request, css, resource.mimeType)
+      return bytesResponse(
+        request,
+        Buffer.from(css, 'utf8'),
+        resource.mimeType,
+        STATIC_RESOURCE_CACHE_CONTROL
+      )
     }
 
     return bytesResponse(request, resource.bytes, resource.mimeType, STATIC_RESOURCE_CACHE_CONTROL)

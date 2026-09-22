@@ -90,6 +90,17 @@ function rewriteDictionaryHtml(
     }
     const href = findHtmlAttribute(node, 'href')
     const src = findHtmlAttribute(node, 'src')
+    if (tagName === 'img' && !findHtmlAttribute(node, 'loading')) {
+      node.attrs.push({ name: 'loading', value: 'lazy' })
+    }
+    if (
+      tagName === 'audio' &&
+      !findHtmlAttribute(node, 'autoplay') &&
+      !findHtmlAttribute(node, 'preload') &&
+      !findHtmlAttribute(node, 'controls')
+    ) {
+      node.attrs.push({ name: 'preload', value: 'none' })
+    }
     if ((tagName === 'a' || tagName === 'area') && href) {
       href.value = rewriteDictionaryHref(href.value, dictionaryId)
     } else if (src && RESOURCE_SOURCE_TAGS.has(tagName)) {

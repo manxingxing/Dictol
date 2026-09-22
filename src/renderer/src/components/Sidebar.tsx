@@ -45,6 +45,7 @@ export function Sidebar(): React.JSX.Element {
       <nav className={cn(displayInCompactMode ? 'space-y-2' : 'space-y-2.5')} aria-label="主导航">
         {items.map(({ label, path, icon: Icon }) => (
           <NavLink
+            draggable={false}
             key={path}
             to={path === '/search' ? (lastQueryPath ?? path) : path}
             className="block"
@@ -71,7 +72,7 @@ export function Sidebar(): React.JSX.Element {
       </nav>
 
       <div className={cn('mt-auto', displayInCompactMode ? 'space-y-2' : 'space-y-2.5')}>
-        <NavLink to="/dictionaries" className="block">
+        <NavLink draggable={false} to="/dictionaries" className="block">
           {({ isActive }) => (
             <Button
               aria-label="词典库"
@@ -90,7 +91,7 @@ export function Sidebar(): React.JSX.Element {
             </Button>
           )}
         </NavLink>
-        <NavLink to="/settings" className="block">
+        <NavLink draggable={false} to="/settings" className="block">
           {({ isActive }) => (
             <Button
               aria-label="设置"
