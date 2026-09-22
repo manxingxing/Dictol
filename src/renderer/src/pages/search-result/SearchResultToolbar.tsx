@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
-import { TooltipProvider } from '@/components/ui/tooltip'
 
 export function SearchResultToolbar({
   children,
@@ -50,37 +49,35 @@ export function SearchResultToolbar({
   }, [children, actions])
 
   return (
-    <TooltipProvider>
-      <div
-        ref={toolbarRef}
-        className="relative flex h-14 shrink-0 items-center overflow-visible border-b border-border bg-[var(--dictionary-toolbar-background)] px-3"
-      >
-        {children ? (
-          <ScrollArea
-            horizontalWheel
-            className="h-full min-w-0 flex-1 after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:z-10 after:w-3 after:bg-linear-to-r after:from-transparent after:to-[var(--dictionary-toolbar-background)] after:content-['']"
-            showVerticalScrollbar={false}
-            viewportClassName="[&>div]:h-full"
-          >
-            <div ref={navigationRef} className="flex h-full w-max items-center">
-              {children}
-            </div>
-            <ScrollBar orientation="horizontal" className="h-0" />
-          </ScrollArea>
-        ) : (
-          <div className="min-w-0 flex-1" />
-        )}
-        {actions}
-        {loading && (
-          <div
-            aria-label="词条内容正在加载"
-            className="pointer-events-none absolute inset-x-0 bottom-[-1px] h-0.5 overflow-hidden"
-            role="progressbar"
-          >
-            <div className="native-view-loading-indicator h-full bg-primary" />
+    <div
+      ref={toolbarRef}
+      className="relative flex h-14 shrink-0 items-center overflow-visible border-b border-border bg-[var(--dictionary-toolbar-background)] px-3"
+    >
+      {children ? (
+        <ScrollArea
+          horizontalWheel
+          className="h-full min-w-0 flex-1 after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:z-10 after:w-3 after:bg-linear-to-r after:from-transparent after:to-[var(--dictionary-toolbar-background)] after:content-['']"
+          showVerticalScrollbar={false}
+          viewportClassName="[&>div]:h-full"
+        >
+          <div ref={navigationRef} className="flex h-full w-max items-center">
+            {children}
           </div>
-        )}
-      </div>
-    </TooltipProvider>
+          <ScrollBar orientation="horizontal" className="h-0" />
+        </ScrollArea>
+      ) : (
+        <div className="min-w-0 flex-1" />
+      )}
+      {actions}
+      {loading && (
+        <div
+          aria-label="词条内容正在加载"
+          className="pointer-events-none absolute inset-x-0 bottom-[-1px] h-0.5 overflow-hidden"
+          role="progressbar"
+        >
+          <div className="native-view-loading-indicator h-full bg-primary" />
+        </div>
+      )}
+    </div>
   )
 }

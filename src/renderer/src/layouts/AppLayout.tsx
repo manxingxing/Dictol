@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 
 import { WindowTitleBar } from '@/components/WindowTitleBar'
 import { Sidebar } from '@/components/Sidebar'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { useWindowWidthThreshold } from '@/hooks/use-window-width-threshold'
 import { useChromeTone } from '@/hooks/use-chrome-tone'
 import { useAppStore } from '@/stores/app-store'
@@ -63,16 +64,18 @@ export function AppLayout(): React.JSX.Element {
   }, [navigate, setSearchQuery])
 
   return (
-    <div className="relative flex h-screen min-h-0 flex-col text-foreground">
-      <WindowTitleBar />
+    <TooltipProvider>
+      <div className="relative flex h-screen min-h-0 flex-col text-foreground">
+        <WindowTitleBar />
 
-      <div className="flex min-h-0 flex-1 flex-row overflow-hidden">
-        <Sidebar />
+        <div className="flex min-h-0 flex-1 flex-row overflow-hidden">
+          <Sidebar />
 
-        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto border-t bg-background">
-          <Outlet />
-        </main>
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto border-t bg-background">
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   )
 }

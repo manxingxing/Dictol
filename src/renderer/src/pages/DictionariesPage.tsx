@@ -412,7 +412,10 @@ export function DictionariesPage(): React.JSX.Element {
                                 : '尚无词条统计'}
                           </span>
                           {dictionary.external && (
-                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                            <span
+                              className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                              title={dictionary.dictPath ?? undefined}
+                            >
                               外部文件
                             </span>
                           )}
@@ -969,8 +972,8 @@ export function DictionariesPage(): React.JSX.Element {
       />
 
       <DictionaryInfoDialog
-        dictionaryId={dictionaryInfoId}
-        dictionaryName={dictionaries.find((dictionary) => dictionary.id === dictionaryInfoId)?.name}
+        dictionary={dictionaries.find((dictionary) => dictionary.id === dictionaryInfoId) ?? null}
+        onOpenDirectory={openDictionaryDirectory}
         onOpenChange={(open) => {
           if (!open) setDictionaryInfoId(null)
         }}
