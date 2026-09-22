@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { DictionaryTabIcon } from '@/components/DictionaryIcon'
+import { useAppStore } from '@/stores/app-store'
 import { SearchResultToolbar } from './SearchResultToolbar'
 import {
   useDictionaryResultView,
@@ -26,6 +27,7 @@ export function AggregateDictionaryResult({
   if (result.term !== term) setResult({ term, failed: false })
   const tabRef = useRef<HTMLButtonElement>(null)
   const { contentRef, loading } = useDictionaryResultView()
+  const dictionaryDisplay = useAppStore((state) => state.dictionaryDisplay) ?? 'icon'
   useDictionaryWordNavigation()
   const selectedId =
     result.term === term && dictionaries.some((item) => item.dictionaryId === result.dictionaryId)
@@ -92,10 +94,14 @@ export function AggregateDictionaryResult({
               }}
               role="tab"
               tabIndex={0}
-              title={item.dictionaryName}
               type="button"
             >
-              <DictionaryTabIcon iconUrl={item.dictionaryIconUrl} name={item.dictionaryName} />
+              <DictionaryTabIcon
+                display={dictionaryDisplay}
+                iconUrl={item.dictionaryIconUrl}
+                name={item.dictionaryName}
+                showTooltip
+              />
             </button>
           ))}
         </div>

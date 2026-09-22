@@ -301,6 +301,7 @@ export function SelectionExplanationApp(): React.JSX.Element {
                       variant="ghost"
                     >
                       <DictionaryTabIcon
+                        display="icon"
                         iconUrl={dictionary.dictionaryIconUrl}
                         name={dictionary.dictionaryName}
                       />

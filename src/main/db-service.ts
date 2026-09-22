@@ -51,6 +51,7 @@ export type DictionarySummary = {
   description: string | null
   customCss: string
   iconUrl: string | null
+  dictPath: string | null
   recordCount: string | null
   status: DictionaryStatus
   external: boolean
@@ -443,6 +444,7 @@ export class DBService {
       description: row.description,
       customCss: row.customCss,
       iconUrl: iconUrls[index],
+      dictPath: row.dictPath,
       recordCount: row.recordCount?.toString() ?? null,
       status: row.status,
       external: row.external,

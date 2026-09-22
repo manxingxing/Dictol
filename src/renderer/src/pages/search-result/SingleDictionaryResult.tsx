@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DictionaryTabIcon } from '@/components/DictionaryIcon'
+import { useAppStore } from '@/stores/app-store'
 import { SearchResultToolbar } from './SearchResultToolbar'
 import {
   useDictionaryResultView,
@@ -21,6 +22,7 @@ export function SingleDictionaryResult({
   const requestedId = searchParams.get('dictionaryId')
   const active = dictionaries.find((item) => item.dictionaryId === requestedId) ?? dictionaries[0]!
   const dictionaryId = active.dictionaryId
+  const dictionaryDisplay = useAppStore((state) => state.dictionaryDisplay) ?? 'icon'
   const [result, setResult] = useState({ term, dictionaryId, failed: false })
   if (result.term !== term || result.dictionaryId !== dictionaryId) {
     setResult({ term, dictionaryId, failed: false })
@@ -74,10 +76,14 @@ export function SingleDictionaryResult({
               key={item.dictionaryId}
               ref={item.dictionaryId === dictionaryId ? tabRef : undefined}
               tabIndex={0}
-              title={item.dictionaryName}
               value={item.dictionaryId}
             >
-              <DictionaryTabIcon iconUrl={item.dictionaryIconUrl} name={item.dictionaryName} />
+              <DictionaryTabIcon
+                display={dictionaryDisplay}
+                iconUrl={item.dictionaryIconUrl}
+                name={item.dictionaryName}
+                showTooltip
+              />
             </TabsTrigger>
           ))}
         </TabsList>

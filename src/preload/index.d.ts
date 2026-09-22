@@ -42,6 +42,7 @@ declare global {
             recordCount: string | null
             status: 'pending' | 'importing' | 'ready' | 'error'
             external: boolean
+            dictPath: string | null
             enabled: boolean
             createdAt: string
             updatedAt: string

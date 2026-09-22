@@ -43,6 +43,7 @@ type DictionarySummary = Omit<ReadyDictionary, 'status' | 'indexStatus'> & {
   status: 'pending' | 'importing' | 'ready' | 'error'
   customCss: string
   external: boolean
+  dictPath: string | null
   enabled: boolean
 }
 

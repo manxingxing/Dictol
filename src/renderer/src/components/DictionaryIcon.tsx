@@ -1,13 +1,23 @@
 import { useState } from 'react'
-import { useAppStore } from '@/stores/app-store'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import type { DictionaryDisplay } from '../../../shared/dictionary-display'
 
 type DictionaryIconProps = {
   name: string
   iconUrl: string | null | undefined
 }
 
-export function DictionaryTabIcon({ name, iconUrl }: DictionaryIconProps): React.JSX.Element {
-  const display = useAppStore((state) => state.dictionaryDisplay) ?? 'icon'
+type DictionaryTabIconProps = DictionaryIconProps & {
+  display?: DictionaryDisplay
+  showTooltip?: boolean
+}
+
+export function DictionaryTabIcon({
+  name,
+  iconUrl,
+  display = 'icon',
+  showTooltip = false
+}: DictionaryTabIconProps): React.JSX.Element {
   const [failedIconUrl, setFailedIconUrl] = useState<string | null>(null)
   const hasIcon = Boolean(iconUrl && failedIconUrl !== iconUrl)
   const initial = Array.from(name.trim())[0] ?? '?'
@@ -24,13 +34,32 @@ export function DictionaryTabIcon({ name, iconUrl }: DictionaryIconProps): React
   )
 
   if (display === 'icon') {
-    return (
+    const iconContent = (
       <>
         <span className="dictionary-source-icon flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-background bg-background text-[11px] font-semibold text-muted-foreground group-data-[state=active]:text-primary">
           {icon}
         </span>
         <span aria-hidden="true" className="dictionary-tab-indicator" />
       </>
+    )
+
+    if (!showTooltip) return iconContent
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center">{iconContent}</span>
+        </TooltipTrigger>
+        <TooltipContent
+          align="start"
+          alignOffset={15}
+          avoidCollisions={true}
+          side="top"
+          sideOffset={6}
+        >
+          {name}
+        </TooltipContent>
+      </Tooltip>
     )
   }
 
