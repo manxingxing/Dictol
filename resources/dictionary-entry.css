@@ -51,7 +51,9 @@ body#dictol-aggregate {
   }
 }
 
-img, video, iframe {
+img,
+video,
+iframe {
   max-width: calc(95vw - 40px);
 }
 
@@ -70,17 +72,6 @@ img, video, iframe {
   cursor: pointer;
   text-align: left;
   appearance: none;
-}
-
-body#dictol-aggregate[data-layout='vertical'] .dictol-dictionary-title {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: light-dark(#fff, #212121) !important;
-}
-
-html:has(body#dictol-aggregate[data-layout='vertical']) {
-  scroll-padding-top: 37px;
 }
 
 .dictol-dictionary-title-name {
