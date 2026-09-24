@@ -127,14 +127,16 @@ export class SelectionToolbarController extends BaseController {
       void this.showExplanation(word)
       return
     }
-
+    // 在应用内部选择文本，不触发toolbar
     if (capture.source !== 'selection' || BrowserWindow.getFocusedWindow()) return
+
     this.currentCapture = capture
     this.pendingToolbarCapture = capture
     this.anchor = toDisplayAnchor(capture)
     this.hideExplanation()
 
     const window = this.initializeToolbarWindow()
+    // 根据AI是否启用，决定是否显示“AI解释”按钮，并计算toolbar尺寸
     const toolbarSize = this.syncToolbarSize(window, this.runtime.appConfig.load().aiLookup.enabled)
     this.positionToolbar(window, toolbarSize.height)
     if (this.toolbarLoaded) this.showPendingToolbar(window)
@@ -142,11 +144,6 @@ export class SelectionToolbarController extends BaseController {
   }
 
   private readonly handleGlobalMouseDown: MouseDownListener = (event): void => {
-    console.log('[selection-popup] global mouse-down', {
-      toolbarVisible: this.toolbarVisible,
-      explanationVisible: this.currentExplanationWindow?.isVisible() ?? false,
-      ignoredForNativeMenu: Boolean(this.nativeMenu)
-    })
     if (this.nativeMenu) return
 
     const point = toDisplayPoint(event)
@@ -154,18 +151,10 @@ export class SelectionToolbarController extends BaseController {
   }
 
   private readonly handleGlobalKeyDown: KeyDownListener = (): void => {
-    console.log('[selection-popup] global key-down', {
-      toolbarVisible: this.toolbarVisible,
-      explanationVisible: this.currentExplanationWindow?.isVisible() ?? false
-    })
     this.hideToolbar()
   }
 
   private readonly handleMouseWheel: MouseWheelListener = (): void => {
-    console.log('[selection-popup] global mouse-wheel', {
-      toolbarVisible: this.toolbarVisible,
-      explanationVisible: this.currentExplanationWindow?.isVisible() ?? false
-    })
     // Keep the explanation document scrollable. Only the short-lived selection
     // toolbar is dismissed by a global scroll gesture.
     this.hideToolbar()
@@ -396,11 +385,13 @@ export class SelectionToolbarController extends BaseController {
   private initializeToolbarWindow(): BrowserWindow {
     const window = this.runtime.windowManager.createSelectionToolbarWindow()
     if (this.toolbarWebContentsId === window.webContents.id) return window
-    this.toolbarWebContentsId = window.webContents.id
-    this.toolbarLoaded = false
 
+    this.toolbarWebContentsId = window.webContents.id
+
+    this.toolbarLoaded = false
     window.webContents.on('did-finish-load', () => {
       this.toolbarLoaded = true
+      // 页面加载后才能向页面传递信息
       this.showPendingToolbar(window)
     })
     window.on('hide', this.handleToolbarHidden)
@@ -455,6 +446,7 @@ export class SelectionToolbarController extends BaseController {
     this.scheduleToolbarAutoHide()
   }
 
+  // 计算toolbar window的大小
   private syncToolbarSize(
     window: BrowserWindow,
     aiEnabled: boolean
@@ -482,6 +474,7 @@ export class SelectionToolbarController extends BaseController {
     this.inactivityTimer = undefined
   }
 
+  // 任意按键，滚轮会关闭toolbar
   private subscribeToolbarDismissEvents(): void {
     if (this.toolbarDismissSubscriptions.length > 0) return
     const selectionHook = this.runtime.selectionHookService
@@ -505,6 +498,7 @@ export class SelectionToolbarController extends BaseController {
     this.syncGlobalMouseDownSubscription()
   }
 
+  // 在toolbar，弹窗外的点击事件会关闭toolbar
   private readonly syncGlobalMouseDownSubscription = (): void => {
     const shouldListen = Boolean(this.toolbarVisible || this.currentExplanationWindow?.isVisible())
     if (shouldListen && !this.globalMouseDownUnsubscribe) {
