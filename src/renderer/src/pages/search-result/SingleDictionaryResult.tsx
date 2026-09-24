@@ -12,6 +12,7 @@ import {
 
 export function SingleDictionaryResult({
   term,
+  anchor,
   dictionaries,
   isFetching,
   isPlaceholderData,
@@ -46,7 +47,7 @@ export function SingleDictionaryResult({
   useEffect(() => {
     if (isPlaceholderData) return
     let activeRequest = true
-    void window.dictol.dictionaryView.show({ dictionaryId, term }).catch(() => {
+    void window.dictol.dictionaryView.show({ dictionaryId, term, anchor }).catch(() => {
       if (!activeRequest) return
       window.dictol.dictionaryView.hide()
       setResult({ dictionaryId, term, failed: true })
@@ -54,7 +55,7 @@ export function SingleDictionaryResult({
     return () => {
       activeRequest = false
     }
-  }, [dictionaryId, groupId, isPlaceholderData, term])
+  }, [anchor, dictionaryId, groupId, isPlaceholderData, term])
 
   const failed = result.failed
   return (

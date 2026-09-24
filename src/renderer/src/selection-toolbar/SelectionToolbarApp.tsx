@@ -83,9 +83,9 @@ export function SelectionToolbarApp(): React.JSX.Element {
         <Separator className="selection-action-separator" orientation="vertical" />
         <Button
           className="selection-action selection-action-primary"
+          disabled={!payload.word || payload.word.length > 200}
           onClick={() => window.dictolSelectionToolbar.explain()}
           size="sm"
-          title={payload.word ? `解释“${payload.word}”` : '解释'}
           type="button"
           variant="ghost"
         >
@@ -97,7 +97,6 @@ export function SelectionToolbarApp(): React.JSX.Element {
             className="selection-action selection-action-primary"
             onClick={() => window.dictolSelectionToolbar.aiExplain()}
             size="sm"
-            title={payload.word ? `使用 AI 解释“${payload.word}”` : 'AI 解释'}
             type="button"
             variant="ghost"
           >
@@ -109,7 +108,6 @@ export function SelectionToolbarApp(): React.JSX.Element {
           className="selection-action"
           onClick={() => window.dictolSelectionToolbar.copy()}
           size="sm"
-          title={payload.word ? `复制“${payload.word}”` : '复制'}
           type="button"
           variant="ghost"
         >
@@ -120,7 +118,6 @@ export function SelectionToolbarApp(): React.JSX.Element {
           className="selection-action"
           onClick={() => window.dictolSelectionToolbar.google()}
           size="sm"
-          title={payload.word ? `使用 Google 搜索“${payload.word}”` : 'Google 搜索'}
           type="button"
           variant="ghost"
         >
@@ -134,7 +131,6 @@ export function SelectionToolbarApp(): React.JSX.Element {
           disabled={!payload.canExclude}
           onClick={() => window.dictolSelectionToolbar.openMenu()}
           size="icon"
-          title="更多划词操作"
           type="button"
           variant="ghost"
         >

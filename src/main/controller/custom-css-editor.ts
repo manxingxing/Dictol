@@ -18,8 +18,10 @@ import {
   parseDictionaryEntryNavigation,
   parseDictionaryEntryUrl
 } from '../dictionary-entry-url'
+import { resolveEntryLinkWithAnchor } from '../resolve-entry-link'
 import { resolveRendererUrl } from '../output-path'
 import { BaseController } from './base-controller'
+import type { DictionaryLookupRequest } from '../../shared/dictionary-navigation'
 
 const MAX_CUSTOM_CSS_LENGTH = 200_000
 
@@ -29,6 +31,7 @@ export class CustomCssEditorController extends BaseController {
   private currentPreviewCss = ''
   private previewCssTask: Promise<void> = Promise.resolve()
   private configuredPreviewId: number | undefined
+  private previewNavigationVersion = 0
   private previewTheme: CustomCssEditorTheme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
   private previewThemeTask: Promise<void> = Promise.resolve()
   private previewReady = false
@@ -47,8 +50,13 @@ export class CustomCssEditorController extends BaseController {
   openCSSEditor = async (event: IpcMainInvokeEvent, dictionaryId: string): Promise<void> => {
     if (!this.acceptsMainSender(event.sender) || typeof dictionaryId !== 'string') return
 
+    const version = ++this.previewNavigationVersion
     const dictionary = await this.db.getDictionary(dictionaryId)
+    if (version !== this.previewNavigationVersion) return
     if (!dictionary || dictionary.status !== 'ready') throw new Error('词典尚未准备完成')
+
+    await this.previewCssTask
+    if (version !== this.previewNavigationVersion) return
 
     this.state = {
       dictionaryId,
@@ -56,7 +64,6 @@ export class CustomCssEditorController extends BaseController {
       customCss: dictionary.customCss,
       entryWord: ''
     }
-    await this.previewCssTask
     this.currentPreviewCss = dictionary.customCss
     this.previewCssKey = undefined
     this.previewReady = false
@@ -92,19 +99,29 @@ export class CustomCssEditorController extends BaseController {
     if (typeof term !== 'string' || !term.trim()) {
       return { ok: false, message: '请输入词条' }
     }
+    const version = ++this.previewNavigationVersion
     const match = await this.db.lookupDictionaryEntry(state.dictionaryId, term)
+    if (version !== this.previewNavigationVersion || this.state !== state) {
+      return { ok: false, message: '', cancelled: true }
+    }
     if (!match) return { ok: false, message: '当前词典中未找到该词条' }
 
+    const nextState = await this.loadPreviewEntry(state, match.word, false, undefined, version)
+    if (version !== this.previewNavigationVersion) {
+      return { ok: false, message: '', cancelled: true }
+    }
     return {
       ok: true,
-      state: await this.loadPreviewEntry(state, match.word)
+      state: nextState
     }
   }
 
   private async loadPreviewEntry(
     state: CustomCssEditorState,
     entryWord: string,
-    notifyRenderer = false
+    notifyRenderer = false,
+    anchor?: string,
+    navigationVersion?: number
   ): Promise<CustomCssEditorState> {
     const preview = this.runtime.windowManager.customCssEditorPreviewView
     if (!preview || preview.isDestroyed) throw new Error('词条预览尚未加载')
@@ -112,11 +129,23 @@ export class CustomCssEditorController extends BaseController {
     this.setPreviewReady(false)
     preview.hide()
     await this.previewCssTask
+    if (
+      navigationVersion !== undefined &&
+      navigationVersion !== this.previewNavigationVersion
+    ) {
+      return this.state ?? state
+    }
     this.previewCssKey = undefined
     await preview.loadURL(
-      createDictionaryEntryUrl(state.dictionaryId, entryWord, { preview: true })
+      createDictionaryEntryUrl(state.dictionaryId, entryWord, { preview: true, anchor })
     )
     await this.previewCssTask
+    if (
+      navigationVersion !== undefined &&
+      navigationVersion !== this.previewNavigationVersion
+    ) {
+      return this.state ?? state
+    }
     await this.applyPreviewTheme(preview, this.previewTheme).catch((error: unknown) => {
       console.error('Failed to initialize custom CSS preview theme', { error })
     })
@@ -158,7 +187,7 @@ export class CustomCssEditorController extends BaseController {
     this.currentPreviewCss = css
     const preview = this.runtime.windowManager.customCssEditorPreviewView
     if (!preview || preview.isDestroyed || !this.previewReady) return
-    void this.replacePreviewCss(preview, css)
+    void this.replacePreviewCss(preview)
   }
 
   save = async (event: IpcMainInvokeEvent, css: unknown): Promise<void> => {
@@ -215,28 +244,21 @@ export class CustomCssEditorController extends BaseController {
     view.webContents.on('will-navigate', (event) => {
       if (event.url.startsWith('dictol-entry://')) return
       event.preventDefault()
-      const navigation = parseDictionaryEntryNavigation(view.getURL(), event.url)
-      if (navigation) void this.navigatePreviewEntry(navigation.word)
+
+      const navigation = parseDictionaryEntryNavigation(event.url)
+      if (navigation) void this.navigatePreviewEntry(navigation)
     })
     view.webContents.on('did-finish-load', () => {
       if (view.isDestroyed || !view.getURL()) return
       void this.applyPreviewTheme(view, this.previewTheme).catch((error: unknown) => {
         console.error('Failed to restore custom CSS preview theme after preview reload', { error })
       })
-      void this.replacePreviewCss(view, this.currentPreviewCss)
+      void this.replacePreviewCss(view)
     })
     view.webContents.on('devtools-closed', () => {
       if (view.isDestroyed || !view.getURL()) return
       void this.applyPreviewTheme(view, this.previewTheme).catch((error: unknown) => {
         console.error('Failed to restore custom CSS preview theme', { error })
-      })
-    })
-    view.webContents.on('devtools-opened', () => {
-      if (view.isDestroyed || !view.getURL()) return
-      void this.applyPreviewTheme(view, this.previewTheme).catch((error: unknown) => {
-        console.error('Failed to preserve custom CSS preview theme after opening DevTools', {
-          error
-        })
       })
     })
   }
@@ -254,16 +276,38 @@ export class CustomCssEditorController extends BaseController {
     window.webContents.send('custom-css-editor:state', state)
   }
 
-  private async navigatePreviewEntry(word: string): Promise<void> {
-    const normalizedWord = word.trim()
+  private async navigatePreviewEntry(navigation: DictionaryLookupRequest): Promise<void> {
+    const normalizedWord = navigation.word.trim()
     const state = this.state
-    if (!state || !normalizedWord || normalizedWord.length > 200) return
+    if (
+      !state ||
+      navigation.sourceDictionaryId !== state.dictionaryId ||
+      !normalizedWord
+    ) {
+      return
+    }
+    const version = ++this.previewNavigationVersion
 
     try {
-      const match = await this.db.lookupDictionaryEntry(state.dictionaryId, normalizedWord)
+      const resolution = await resolveEntryLinkWithAnchor(navigation, (dictionaryId, term) =>
+        this.db.lookupDictionaryEntry(dictionaryId, term)
+      )
+      if (version !== this.previewNavigationVersion) return
+      if (resolution.didLookup && !resolution.match) return
+      const match =
+        resolution.match ??
+        (await this.db.lookupDictionaryEntry(state.dictionaryId, normalizedWord))
       if (!match) return
-      await this.loadPreviewEntry(state, match.word, true)
+      if (version !== this.previewNavigationVersion) return
+      await this.loadPreviewEntry(
+        state,
+        match.word,
+        true,
+        resolution.request.anchor,
+        version
+      )
     } catch (error) {
+      if (version !== this.previewNavigationVersion) return
       console.error('Failed to navigate custom CSS preview entry', {
         word: normalizedWord,
         error
@@ -271,33 +315,9 @@ export class CustomCssEditorController extends BaseController {
     }
   }
 
-  private async applyDevToolsTheme(theme: CustomCssEditorTheme): Promise<void> {
-    const contents =
-      this.runtime.windowManager.customCssEditorPreviewView?.webContents.devToolsWebContents
-    if (!contents || contents.isDestroyed()) return
-    // DevTools uses "default" for its light UI theme. This is a Chromium frontend
-    // setting; Electron does not expose a per-DevTools theme API.
-    const uiTheme = theme === 'dark' ? 'dark' : 'default'
-    await contents
-      .executeJavaScript(
-        `
-      import('./core/common/common.js').then(({ Settings }) => {
-        const settings = Settings.Settings.instance();
-        settings.moduleSetting('ui-theme').set(${JSON.stringify(uiTheme)});
-        settings.moduleSetting('emulated-css-media-feature-prefers-color-scheme').set(${JSON.stringify(theme)});
-      })
-    `
-      )
-      .catch((error: unknown) => {
-        console.error('Failed to set custom CSS DevTools UI theme', { error })
-      })
-  }
-
   private async replacePreviewCss(
-    preview: NonNullable<typeof this.runtime.windowManager.customCssEditorPreviewView>,
-    css: string
+    preview: NonNullable<typeof this.runtime.windowManager.customCssEditorPreviewView>
   ): Promise<void> {
-    this.currentPreviewCss = css
     const task = this.previewCssTask.then(async () => {
       if (preview.isDestroyed || !preview.getURL()) {
         this.previewCssKey = undefined
@@ -323,12 +343,8 @@ export class CustomCssEditorController extends BaseController {
   ): Promise<void> {
     preview.setBackgroundColor(theme === 'dark' ? '#212121' : '#ffffff')
     const task = this.previewThemeTask.then(async () => {
-      // DevTools owns media emulation while open and reapplies its own settings.
-      // Use that owner instead of competing with another debugger connection.
-      if (preview.webContents.isDevToolsOpened()) {
-        await this.applyDevToolsTheme(theme)
-        return
-      }
+      // DevTools owns media emulation while open. Restore the preview theme after it closes.
+      if (preview.webContents.isDevToolsOpened()) return
       const devtools = preview.webContents.debugger
       if (!devtools.isAttached()) devtools.attach('1.3')
       await devtools.sendCommand('Emulation.setEmulatedMedia', {

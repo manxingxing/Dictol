@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAppStore } from '@/stores/app-store'
 import type { DictionaryEntryGroup } from '@/hooks/use-dictionary-entries'
+import { DICTIONARY_ENTRY_ANCHOR_PARAM } from '../../../../shared/dictionary-navigation'
 
 export type DictionaryResultProps = {
   term: string
+  anchor?: string
   dictionaries: NonNullable<DictionaryEntryGroup>['dictionaries']
   isFetching: boolean
   isPlaceholderData: boolean
@@ -50,21 +51,20 @@ export function useDictionaryResultView(): {
 // entry://, 'lookup button in context menu'
 export function useDictionaryWordNavigation(dictionaryId?: string): void {
   const navigate = useNavigate()
-  const setSearchQuery = useAppStore((state) => state.setSearchQuery)
   useEffect(() =>
-      window.dictol.dictionaryView.onLookupWord(({ word: value, sourceDictionaryId }) => {
+      window.dictol.dictionaryView.onLookupWord(({ word: value, sourceDictionaryId, anchor }) => {
         const word = value.trim()
         if (!word) return
-        setSearchQuery(word)
         const params = new URLSearchParams()
         const targetId = sourceDictionaryId ?? dictionaryId
         if (targetId) {
           params.set('dictionaryId', targetId)
           params.set('focusDictionaryId', targetId)
         }
+        if (anchor) params.set(DICTIONARY_ENTRY_ANCHOR_PARAM, anchor)
         const query = params.toString() ? `?${params}` : ''
         void navigate(`/search/${encodeURIComponent(word)}${query}`)
       }),
-    [dictionaryId, navigate, setSearchQuery]
+    [dictionaryId, navigate]
   )
 }

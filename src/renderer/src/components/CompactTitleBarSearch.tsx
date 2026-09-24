@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle, Search } from 'lucide-react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useMatch, useNavigate, useSearchParams } from 'react-router-dom'
 import useDebounce from 'react-use/lib/useDebounce'
 
 import { useDictionarySearch, useDictionarySearchGroups } from '@/hooks/use-dictionary-entries'
@@ -34,6 +34,7 @@ const POPOVER_SCOPE_MENU_SURFACE_HEIGHT = 14
 
 export const CompactTitleBarSearch = (): React.JSX.Element => {
   const navigate = useNavigate()
+  const term = useMatch('/search/:term')?.params.term
   const [searchParams] = useSearchParams()
   const query = useAppStore((state) => state.searchQuery)
   const setQuery = useAppStore((state) => state.setSearchQuery)
@@ -50,6 +51,10 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
     areDictionariesLoading ||
     !readyDictionaries?.length ||
     readyDictionaries.some(({ indexStatus }) => indexStatus !== 'ready')
+
+  useEffect(() => {
+    if (term !== undefined) setQuery(term)
+  }, [term, setQuery])
 
   useDebounce(() => setDebouncedQuery(query.trim()), 120, [query])
 

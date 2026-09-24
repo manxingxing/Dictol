@@ -1,5 +1,5 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { NavLink, useNavigate, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { NavLink, useMatch, useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, Funnel, Globe2, LoaderCircle, Search, X } from 'lucide-react'
 import useDebounce from 'react-use/lib/useDebounce'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,7 @@ import { DICTIONARY_SEARCH_ERROR_MESSAGE } from '../../../shared/dictionary-sear
 
 export const SearchPanel = (): React.JSX.Element => {
   const navigate = useNavigate()
+  const term = useMatch('/search/:term')?.params.term
   const [searchParams] = useSearchParams()
   const searchQuery = useAppStore((state) => state.searchQuery)
   const setSearchQuery = useAppStore((state) => state.setSearchQuery)
@@ -33,6 +34,10 @@ export const SearchPanel = (): React.JSX.Element => {
   const setEmbedBrowserUrl = useAppStore((state) => state.setEmbedBrowserUrl)
   const setRightSidebarSize = useAppStore((state) => state.setRightSidebarSize)
   const displayInCompactMode = useAppStore(selectCompactMode)
+
+  useEffect(() => {
+    if (term !== undefined) setSearchQuery(term)
+  }, [term, setSearchQuery])
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const focusSearchInput = useCallback((): boolean => {

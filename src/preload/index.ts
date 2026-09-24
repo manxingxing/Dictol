@@ -517,7 +517,7 @@ const api = Object.freeze({
     }
   }),
   dictionaryView: Object.freeze({
-    show: (target: { dictionaryId: string; term: string }): Promise<void> =>
+    show: (target: { dictionaryId: string; term: string; anchor?: string }): Promise<void> =>
       ipcRenderer.invoke('dictionary-view:show', target),
     showAggregate: (target: DictionaryAggregateRequest): Promise<void> =>
       ipcRenderer.invoke('dictionary-view:show-aggregate', target),

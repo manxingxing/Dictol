@@ -14,6 +14,7 @@ import {
   parseNativeDictionaryResourcePath
 } from './dictionary-entry-url'
 import { createEntryDocument } from './entry-document'
+import { processEntryContent } from './html-rewritter'
 import {
   DICTIONARY_SESSION_PARTITION,
   DICTOL_ASSET_SCHEME,
@@ -263,7 +264,7 @@ export class DictionaryResourceProtocolHandlers {
     }
   }
 
-  private sortByKeyPosition(a, b) {
+  private sortByKeyPosition<T extends { keyOrdinal: bigint }>(a: T, b: T): number {
     if (a.keyOrdinal > b.keyOrdinal) return 1
     if (a.keyOrdinal < b.keyOrdinal) return -1
     return 0
@@ -295,9 +296,10 @@ export class DictionaryResourceProtocolHandlers {
     }
 
     const isPreview = new URL(request.url).searchParams.get('preview') === '1'
+    const entryContent = processEntryContent(entry.html, Number(entry.dictionaryId))
     const response = stringResponse(
       request,
-      createEntryDocument(entry.html, entry.dictionaryId, dictionary.customCss, {
+      createEntryDocument(entryContent, entry.dictionaryId, dictionary.customCss, {
         includeContextMenu: !isPreview,
         includeCustomCss: !isPreview
       }),

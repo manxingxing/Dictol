@@ -13,6 +13,7 @@ import {
   createDictionaryEntryUrl,
   parseDictionaryEntryNavigation
 } from '../dictionary-entry-url'
+import { resolveEntryLinkWithAnchor } from '../resolve-entry-link'
 import { resolveRendererUrl } from '../output-path'
 import type {
   DictionaryAggregateRequest,
@@ -24,6 +25,7 @@ import { dismissSearchPopover } from './search-popover'
 export class DictionaryViewController extends BaseController {
   private static readonly maxAiExplanationTextLength = 10_000
   private loadVersion = 0
+  private navigationVersion = 0
   private configuredViewId: number | undefined
   private desiredUrl: string | undefined
   private loadedUrl: string | undefined
@@ -53,12 +55,20 @@ export class DictionaryViewController extends BaseController {
 
   show = async (
     event: IpcMainInvokeEvent,
-    target: { dictionaryId: string; term: string }
+    target: { dictionaryId: string; term: string; anchor?: string }
   ): Promise<void> => {
     if (!this.acceptsHostSender(event.sender.id)) return
-    if (!target || typeof target.dictionaryId !== 'string' || typeof target.term !== 'string')
+    if (
+      !target ||
+      typeof target.dictionaryId !== 'string' ||
+      typeof target.term !== 'string' ||
+      (target.anchor !== undefined && typeof target.anchor !== 'string')
+    )
       return
-    await this.showEntry(createDictionaryEntryUrl(target.dictionaryId, target.term))
+    this.navigationVersion += 1
+    await this.showEntry(
+      createDictionaryEntryUrl(target.dictionaryId, target.term, { anchor: target.anchor })
+    )
   }
 
   showAggregate = async (
@@ -69,7 +79,8 @@ export class DictionaryViewController extends BaseController {
       !this.acceptsHostSender(event.sender.id) ||
       !target ||
       typeof target.term !== 'string' ||
-      (target.dictionaryId !== undefined && typeof target.dictionaryId !== 'string')
+      (target.dictionaryId !== undefined && typeof target.dictionaryId !== 'string') ||
+      (target.anchor !== undefined && typeof target.anchor !== 'string')
     ) {
       return
     }
@@ -77,8 +88,10 @@ export class DictionaryViewController extends BaseController {
     const normalizedTerm = target.term.trim()
     if (!normalizedTerm || normalizedTerm.length > 200) return
 
+    this.navigationVersion += 1
     const url = createDictionaryAggregateUrl(normalizedTerm, {
-      dictionaryId: target.dictionaryId
+      dictionaryId: target.dictionaryId,
+      anchor: target.anchor
     })
     this.desiredUrl = url
     const version = ++this.loadVersion
@@ -109,6 +122,7 @@ export class DictionaryViewController extends BaseController {
 
   hide = (event: IpcMainEvent): void => {
     if (!this.acceptsHostSender(event.sender.id)) return
+    this.navigationVersion += 1
     this.hideView()
   }
 
@@ -283,8 +297,15 @@ export class DictionaryViewController extends BaseController {
     view.webContents.on('will-navigate', (event) => {
       if (event.url.startsWith('dictol-entry://')) return
       event.preventDefault()
-      const navigation = parseDictionaryEntryNavigation(view.getURL(), event.url)
-      if (navigation) this.sendLookup(navigation)
+      const navigation = parseDictionaryEntryNavigation(event.url)
+      if (navigation) {
+        const version = ++this.navigationVersion
+        void resolveEntryLinkWithAnchor(navigation, (dictionaryId, term) =>
+          this.db.lookupDictionaryEntry(dictionaryId, term)
+        ).then(({ request }) => {
+          if (version === this.navigationVersion) this.sendLookup(request)
+        })
+      }
     })
     view.webContents.on('found-in-page', (_event, result) => {
       this.findBarView?.send('find-bar:find-result', result)
@@ -312,7 +333,8 @@ export class DictionaryViewController extends BaseController {
     if (!normalizedWord) return
     this.activeView.sendToMainWindow('dictionary-view:lookup-word', {
       word: normalizedWord,
-      ...(request.sourceDictionaryId ? { sourceDictionaryId: request.sourceDictionaryId } : {})
+      ...(request.sourceDictionaryId ? { sourceDictionaryId: request.sourceDictionaryId } : {}),
+      ...(request.anchor ? { anchor: request.anchor } : {})
     })
   }
 
@@ -397,6 +419,7 @@ export class DictionaryViewController extends BaseController {
     }
     if (this.configuredViewId !== view.webContents.id) {
       this.loadVersion += 1
+      this.navigationVersion += 1
       this.desiredUrl = undefined
       this.loadedUrl = undefined
       this.pendingUrl = undefined

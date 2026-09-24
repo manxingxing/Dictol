@@ -1,7 +1,17 @@
 import postcss from 'postcss'
 import selectorParser from 'postcss-selector-parser'
 import valueParser from 'postcss-value-parser'
-import { parse, serialize, type DefaultTreeAdapterTypes } from 'parse5'
+import { parse, serialize } from 'parse5'
+import {
+  addLazyLoadingToImage,
+  deferAudioDownload,
+  findChildNode,
+  findChildNodes,
+  getAttr,
+  isHtmlElement,
+  rewriteEntryHref,
+  walkHtmlNode
+} from './html-rewritter'
 
 export type ConcatenatedEntry = {
   dictionaryId: number
@@ -81,6 +91,7 @@ function rewriteDictionaryHtml(
     if (!isHtmlElement(node)) return
 
     const tagName = node.tagName.toLowerCase()
+    // 重写 inline style标签
     if (tagName === 'style') {
       for (const child of node.childNodes) {
         if ('value' in child && child.nodeName === '#text') {
@@ -88,75 +99,41 @@ function rewriteDictionaryHtml(
         }
       }
     }
-    const href = findHtmlAttribute(node, 'href')
-    const src = findHtmlAttribute(node, 'src')
-    if (tagName === 'img' && !findHtmlAttribute(node, 'loading')) {
-      node.attrs.push({ name: 'loading', value: 'lazy' })
-    }
-    if (
-      tagName === 'audio' &&
-      !findHtmlAttribute(node, 'autoplay') &&
-      !findHtmlAttribute(node, 'preload') &&
-      !findHtmlAttribute(node, 'controls')
-    ) {
-      node.attrs.push({ name: 'preload', value: 'none' })
-    }
+    const href = getAttr(node, 'href')
+    const src = getAttr(node, 'src')
+
+    if (tagName === 'img') addLazyLoadingToImage(node)
+    if (tagName === 'audio') deferAudioDownload(node)
     if ((tagName === 'a' || tagName === 'area') && href) {
       href.value = rewriteDictionaryHref(href.value, dictionaryId)
     } else if (src && RESOURCE_SOURCE_TAGS.has(tagName)) {
       src.value = rewriteResourceHref(src.value, dictionaryId)
     } else if (href && tagName === 'link') {
+      // 外联 css
       href.value = rewriteResourceHref(href.value, dictionaryId)
     }
   })
+
+  // 拆开html，只要 head, body 的内容，而不要html,head,body标签
   // parse5 supplies html/head/body even for fragments. Serialize their contents
   // in document order so scripts retain their order relative to styles and markup.
-  const htmlElement = document.childNodes.find(
-    (node): node is DefaultTreeAdapterTypes.Element =>
-      isHtmlElement(node) && node.tagName === 'html'
-  )!
-  const documentParts = htmlElement.childNodes.filter(
-    (node): node is DefaultTreeAdapterTypes.Element =>
-      isHtmlElement(node) && (node.tagName === 'head' || node.tagName === 'body')
-  )
+  const htmlElement = findChildNode(document, ['html'])!
+  const documentParts = findChildNodes(htmlElement, ['head', 'body'])
   const body = documentParts.find((node) => node.tagName === 'body')
   return {
     html: documentParts.map((node) => serialize(node)).join(''),
-    htmlClass: findHtmlAttribute(htmlElement, 'class')?.value ?? '',
-    bodyClass: body ? (findHtmlAttribute(body, 'class')?.value ?? '') : ''
+    htmlClass: getAttr(htmlElement, 'class')?.value ?? '',
+    bodyClass: body ? (getAttr(body, 'class')?.value ?? '') : ''
   }
 }
 
 const RESOURCE_SOURCE_TAGS = new Set(['audio', 'iframe', 'img', 'script', 'source', 'video'])
 
-function walkHtmlNode(
-  node: DefaultTreeAdapterTypes.Node,
-  visit: (node: DefaultTreeAdapterTypes.Node) => void
-): void {
-  visit(node)
-  if (!('childNodes' in node)) return
-  node.childNodes.forEach((child) => walkHtmlNode(child, visit))
-}
-
-function isHtmlElement(
-  node: DefaultTreeAdapterTypes.Node
-): node is DefaultTreeAdapterTypes.Element {
-  return 'tagName' in node && Array.isArray(node.attrs)
-}
-
-function findHtmlAttribute(
-  element: DefaultTreeAdapterTypes.Element,
-  name: string
-): DefaultTreeAdapterTypes.Element['attrs'][number] | undefined {
-  return element.attrs.find((attribute) => attribute.name.toLowerCase() === name)
-}
-
 function rewriteDictionaryHref(href: string, dictionaryId: number): string {
-  if (/^entry:\/\//i.test(href)) {
-    const hashIndex = href.indexOf('#')
-    const target = hashIndex < 0 ? href : href.slice(0, hashIndex)
-    return `${target}#dictionary-${dictionaryId}`
-  }
+  // entry 词条跳转
+  if (/^entry:\/\//i.test(href)) return rewriteEntryHref(href, dictionaryId)
+
+  // 发音按钮
   if (/^(?:sound|audio|file):\/\//i.test(href)) {
     const url = new URL(href)
     const resourcePath = url.hostname ? `/${url.hostname}${url.pathname}` : url.pathname

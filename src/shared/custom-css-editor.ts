@@ -8,7 +8,8 @@ export type CustomCssEditorState = {
 }
 
 export type CustomCssEditorSearchResult =
-  { ok: true; state: CustomCssEditorState } | { ok: false; message: string }
+  | { ok: true; state: CustomCssEditorState }
+  | { ok: false; message: string; cancelled?: boolean }
 
 export type CustomCssEditorBounds = {
   x: number

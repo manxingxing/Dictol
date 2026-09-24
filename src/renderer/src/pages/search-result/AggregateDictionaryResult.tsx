@@ -11,6 +11,7 @@ import {
 
 export function AggregateDictionaryResult({
   term,
+  anchor,
   dictionaries,
   isFetching,
   isPlaceholderData,
@@ -58,6 +59,7 @@ export function AggregateDictionaryResult({
     void window.dictol.dictionaryView
       .showAggregate({
         term,
+        anchor,
         ...(isAutoNavRef.current ? { dictionaryId: focusDictionaryId } : {})
       })
       .catch(() => {
@@ -70,7 +72,7 @@ export function AggregateDictionaryResult({
     return () => {
       activeRequest = false
     }
-  }, [focusDictionaryId, groupId, isPlaceholderData, term])
+  }, [anchor, focusDictionaryId, groupId, isPlaceholderData, term])
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">

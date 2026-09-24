@@ -561,8 +561,8 @@ declare global {
         ) => () => void
       }
       dictionaryView: {
-        show: (target: { dictionaryId: string; term: string }) => Promise<void>
-        showAggregate: (target: { term: string; dictionaryId?: string }) => Promise<void>
+        show: (target: { dictionaryId: string; term: string; anchor?: string }) => Promise<void>
+        showAggregate: (target: { term: string; dictionaryId?: string; anchor?: string }) => Promise<void>
         scrollToDictionary: (dictionaryId: string) => void
         hide: () => void
         showFindBar: () => void
@@ -570,7 +570,7 @@ declare global {
         onLoadingChanged: (callback: (isLoading: boolean) => void) => () => void
         onActiveDictionaryChanged: (callback: (dictionaryId: string) => void) => () => void
         onLookupWord: (
-          callback: (request: { word: string; sourceDictionaryId?: string }) => void
+          callback: (request: { word: string; sourceDictionaryId?: string; anchor?: string }) => void
         ) => () => void
         onExplainWithAi: (callback: (text: string) => void) => () => void
       }

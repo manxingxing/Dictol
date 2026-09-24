@@ -29,6 +29,7 @@ import type {
 } from '../selection-hook-service'
 import type { WebContentsViewManager } from '../web-contents-view-manager'
 import { createDictionaryEntryUrl, parseDictionaryEntryNavigation } from '../dictionary-entry-url'
+import { resolveEntryLinkWithAnchor } from '../resolve-entry-link'
 import { resolveRendererUrl } from '../output-path'
 import { hideSelectionWindow, showSelectionWindowInactive } from '../selection-window-behavior'
 import { BaseController } from './base-controller'
@@ -583,12 +584,25 @@ export class SelectionToolbarController extends BaseController {
     view.webContents.on('will-navigate', (event) => {
       if (event.url.startsWith('dictol-entry://')) return
       event.preventDefault()
-      const navigation = parseDictionaryEntryNavigation(view.getURL(), event.url)
-      if (navigation) void this.showExplanation(navigation.word, navigation.sourceDictionaryId)
+      const navigation = parseDictionaryEntryNavigation(event.url)
+      if (navigation) {
+        const version = ++this.lookupVersion
+        void resolveEntryLinkWithAnchor(navigation, (dictionaryId, term) =>
+          this.db.lookupDictionaryEntry(dictionaryId, term)
+        ).then(({ request }) => {
+          if (version === this.lookupVersion) {
+            this.showExplanation(request.word, request.sourceDictionaryId, request.anchor)
+          }
+        })
+      }
     })
   }
 
-  private async showExplanation(word: string, sourceDictionaryId?: string): Promise<void> {
+  private async showExplanation(
+    word: string,
+    sourceDictionaryId?: string,
+    anchor?: string
+  ): Promise<void> {
     const normalizedWord = word.trim()
     if (!normalizedWord || normalizedWord.length > MAX_SELECTION_LENGTH) return
 
@@ -677,7 +691,8 @@ export class SelectionToolbarController extends BaseController {
         normalizedWord,
         version,
         dictionaries,
-        true
+        true,
+        anchor
       )
     } catch (error) {
       if (version !== this.lookupVersion || isNavigationAborted(error)) return
@@ -835,10 +850,11 @@ export class SelectionToolbarController extends BaseController {
     word: string,
     version: number,
     dictionaries: SelectionExplanationDictionary[],
-    recordQuery: boolean
+    recordQuery: boolean,
+    anchor?: string
   ): Promise<void> {
     const view = this.explanationView
-    const url = createDictionaryEntryUrl(dictionaryId, word)
+    const url = createDictionaryEntryUrl(dictionaryId, word, { anchor })
     let shown = false
     const showLoadedEntry = (): void => {
       if (shown || version !== this.lookupVersion || view.webContents.getURL() !== url) return

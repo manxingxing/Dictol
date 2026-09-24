@@ -110,7 +110,7 @@ export default function CustomCssEditorApp(): React.JSX.Element {
     try {
       const result = await window.dictolCustomCssEditor.searchEntry(searchTerm)
       if (!result.ok) {
-        setError(result.message)
+        if (!result.cancelled) setError(result.message)
         return
       }
       setState(result.state)

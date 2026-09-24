@@ -24,7 +24,7 @@ export type NativeDictionaryResourceLocation = DictionaryResourceLocation
 export function createDictionaryEntryUrl(
   dictionaryId: string | number,
   term: string,
-  options: { preview?: boolean } = {}
+  options: { preview?: boolean; anchor?: string } = {}
 ): string {
   const numericDictionaryId = parsePositiveSafeInteger(String(dictionaryId))
   if (numericDictionaryId === null) throw new Error('Invalid dictionary ID')
@@ -36,12 +36,13 @@ export function createDictionaryEntryUrl(
   )
   url.searchParams.set('term', normalizedTerm)
   if (options.preview) url.searchParams.set('preview', '1')
+  if (options.anchor) url.hash = options.anchor
   return url.href
 }
 
 export function createDictionaryAggregateUrl(
   term: string,
-  options: { dictionaryId?: string | number } = {}
+  options: { dictionaryId?: string | number; anchor?: string } = {}
 ): string {
   const normalizedTerm = term.trim()
   if (!normalizedTerm || normalizedTerm.length > 200) throw new Error('Invalid aggregate term')
@@ -53,6 +54,7 @@ export function createDictionaryAggregateUrl(
     if (dictionaryId === null) throw new Error('Invalid dictionary ID')
     url.searchParams.set('dictionaryId', String(dictionaryId))
   }
+  if (options.anchor) url.hash = options.anchor
   return url.href
 }
 
@@ -132,37 +134,24 @@ export function parseDictionaryAggregateUrl(value: string): DictionaryAggregateL
   return dictionaryId === null ? null : { term, dictionaryId }
 }
 
-export function parseDictionaryEntryNavigation(
-  currentDocumentUrl: string,
-  targetUrl: string
-): DictionaryLookupRequest | null {
-  if (!/^entry:\/\//i.test(targetUrl)) return null
+export function parseDictionaryEntryNavigation(targetUrl: string): DictionaryLookupRequest | null {
+  const url = parseUrl(targetUrl)
+  if (!url || url.protocol !== 'entry:') return null
 
-  const hashIndex = targetUrl.indexOf('#')
-  const targetWithoutHash = hashIndex < 0 ? targetUrl : targetUrl.slice(0, hashIndex)
-  const encodedWord = targetWithoutHash.replace(/^entry:\/\/\/?/i, '')
+  const match = /^dictionary-(\d+)$/.exec(url.hostname)
+  const dictionaryId = match ? parsePositiveSafeInteger(match[1]) : null
+  const encodedWord = url.pathname.replace(/^\//, '') + url.search + url.hash
+  if (dictionaryId === null || !encodedWord) return null
+
   let word: string
   try {
     word = decodeURIComponent(encodedWord)
   } catch {
-    word = encodedWord
+    return null
   }
-  word = word.trim()
   if (!word) return null
 
-  console.log(`currentDocumentUrl=${currentDocumentUrl}`)
-  console.log(`targetUrl=${targetUrl}`)
-
-  const currentDictionaryId = parseDictionaryEntryUrl(currentDocumentUrl)?.dictionaryId
-  const linkedDictionaryId =
-    hashIndex < 0 ? null : parseEntrySourceDictionaryId(targetUrl.slice(hashIndex + 1))
-  const sourceDictionaryId = currentDictionaryId ?? linkedDictionaryId
-  console.log(`sourceDictionaryId=${sourceDictionaryId}`)
-
-  return {
-    word,
-    ...(sourceDictionaryId === null ? {} : { sourceDictionaryId: String(sourceDictionaryId) })
-  }
+  return { word, sourceDictionaryId: String(dictionaryId) }
 }
 
 export function parseDictionaryEntryResourceUrl(value: string): DictionaryResourceLocation | null {
@@ -217,11 +206,6 @@ function parsePositiveSafeInteger(value: string): number | null {
   if (!/^[1-9]\d*$/.test(value)) return null
   const parsed = Number(value)
   return Number.isSafeInteger(parsed) ? parsed : null
-}
-
-function parseEntrySourceDictionaryId(hash: string): number | null {
-  const match = /^(?:dictol-)?dictionary-(\d+)$/i.exec(hash)
-  return match ? parsePositiveSafeInteger(match[1]) : null
 }
 
 function isReservedLookupPath(pathname: string): boolean {

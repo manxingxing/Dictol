@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useLocation, useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { BookOpenText } from 'lucide-react'
 import { AiLookupButton } from '@/components/AiLookupButton'
 import { OnlineDictionaryButton } from '@/components/OnlineDictionaryButton'
@@ -12,14 +12,16 @@ import { useAppStore } from '@/stores/app-store'
 import { useAiLookupConfig } from '@/hooks/use-ai-lookup'
 import { useOnlineDictionaries } from '@/hooks/use-online-dictionaries'
 import { DICTIONARY_SEARCH_ERROR_MESSAGE } from '../../../shared/dictionary-search-error'
+import { DICTIONARY_ENTRY_ANCHOR_PARAM } from '../../../shared/dictionary-navigation'
 import { SingleDictionaryResult } from './search-result/SingleDictionaryResult'
 import { AggregateDictionaryResult } from './search-result/AggregateDictionaryResult'
 import { SearchResultToolbar } from './search-result/SearchResultToolbar'
 
 export function SearchResultPage(): React.JSX.Element {
-  const location = useLocation()
   const { term } = useParams()
+  const [searchParams] = useSearchParams()
   const normalizedTerm = term?.trim()
+  const anchor = searchParams.get(DICTIONARY_ENTRY_ANCHOR_PARAM) ?? undefined
   const { data: groups } = useDictionarySearchGroups()
   const searchScopes = useMemo(
     () => [{ id: null, name: '全部', dictionaryCount: null }, ...(groups ?? [])],
@@ -132,6 +134,7 @@ export function SearchResultPage(): React.JSX.Element {
   const resultTerm = group.word
   const props = {
     term: resultTerm,
+    anchor,
     dictionaries: group.dictionaries,
     isFetching,
     isPlaceholderData,
