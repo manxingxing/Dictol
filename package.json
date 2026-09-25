@@ -20,6 +20,8 @@
     "native:build": "node scripts/build-native.mjs",
     "native:build:win-x64": "node scripts/build-native.mjs --target x86_64-pc-windows-msvc",
     "native:sign:win-x64": "node scripts/sign-windows-native.mjs",
+    "windows:sign-artifacts": "node scripts/sign-windows-artifacts.mjs",
+    "win:signing:check": "node scripts/check-windows-signing.mjs",
     "native:test": "npm --prefix native/mdict-node test",
     "db:generate": "drizzle-kit generate",
     "ecdict:build": "node scripts/build-ecdict.mjs",
@@ -30,9 +32,9 @@
     "mdict:benchmark": "node scripts/compare-mdict-parsers.mjs",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run native:build:win-x64 && npm run adblock:build:win-x64 && npm run native:sign:win-x64 && npm run typecheck && electron-vite build && electron-builder --win --x64 && npm run adblock:build",
-    "build:mac": "npm run native:build && npm run adblock:build -- --target x86_64-apple-darwin && electron-vite build && electron-builder --mac",
-    "build:mac-arm64": "DICTOL_NATIVE_TARGET=aarch64-apple-darwin npm run native:build && npm run adblock:build -- --target aarch64-apple-darwin && electron-vite build && electron-builder --mac --arm64",
+    "build:win": "node scripts/build-win.mjs",
+    "build:mac": "node scripts/build-mac.mjs x64",
+    "build:mac-arm64": "node scripts/build-mac.mjs arm64",
     "build:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {

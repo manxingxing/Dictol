@@ -103,10 +103,18 @@ win:
     - '!node_modules/selection-hook/prebuilds/darwin*/**'
     - '!node_modules/selection-hook/prebuilds/linux*/**'
     - '!node_modules/selection-hook/prebuilds/win32-arm64/**'
-  target: ["nsis"]
+  target: ['nsis']
   signtoolOptions:
     certificateFile: build/codesign.pfx
-    certificatePassword: "123456"
+    certificatePassword: '${env.WIN_CSC_PASSWORD}'
+    # electron-builder's PKCS#12 reader cannot parse this legacy self-signed
+    # certificate reliably; keep the publisher identity explicit while the
+    # signing tool still receives the PFX and password below.
+    publisherName: Toddalia
+  # electron-builder's bundled legacy osslsigncode cannot read this PFX on the
+  # current macOS host. The build orchestrator signs the finished PE files
+  # with the locally installed osslsigncode instead.
+  signExecutable: false
 nsis:
   artifactName: ${name}-${version}-${arch}-setup.${ext}
   shortcutName: ${productName}
@@ -117,6 +125,11 @@ nsis:
 mac:
   icon: build/icon.icns
   artifactName: ${name}-${version}-${arch}-mac.${ext}
+  # Do not let electron-builder fall back to an ad-hoc signature when no
+  # Developer ID certificate is available. The distributed app is intentionally
+  # unsigned so Gatekeeper treats it as an unidentified developer app rather
+  # than an app with an invalid code signature.
+  identity: null
   entitlementsInherit: build/entitlements.mac.plist
   notarize: false
   electronLanguages:
@@ -165,9 +178,8 @@ mac:
     # ExcelJS runs from lib/ in the main process; its browser distribution is
     # not used by Dictol.
     - '!node_modules/exceljs/dist/**'
-    # Keep macOS native modules only; the opposite macOS architecture is tiny
-    # and is retained so the same app resources remain usable when inspected
-    # or repackaged on either Intel or Apple Silicon.
+    # Include both macOS native variants while staging; the afterPack hook
+    # removes the opposite architecture and validates the packaged modules.
     - '!node_modules/@dictol/mdict-native/*.win32-*.node'
     - node_modules/@dictol/mdict-native/*.darwin-*.node
     - '!node_modules/better-sqlite3/{deps,src}/**'
@@ -194,3 +206,4 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
+afterPack: scripts/strip-macos-signatures.mjs
