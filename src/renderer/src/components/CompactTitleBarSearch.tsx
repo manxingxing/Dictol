@@ -56,7 +56,7 @@ export const CompactTitleBarSearch = (): React.JSX.Element => {
     if (term !== undefined) setQuery(term)
   }, [term, setQuery])
 
-  useDebounce(() => setDebouncedQuery(query.trim()), 120, [query])
+  useDebounce(() => setDebouncedQuery(query.trim()), 50, [query])
 
   const { data: history = [] } = useQueryHistory()
   const { data: groups } = useDictionarySearchGroups()

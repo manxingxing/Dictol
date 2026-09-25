@@ -520,9 +520,11 @@ impl DidxIndex {
         hits.truncate(normalize_limit(limit));
         Ok(hits)
     }
-    /// Prefix match: one physical representative per normalized term.
+    /// Prefix match: rank at most 5 * limit matching normalized terms (1000 without a limit).
+    /// Returns one physical representative per normalized term.
     pub fn prefix(&self, query: &str, limit: Option<usize>) -> Result<Vec<IndexMatch>> {
         check_query(query)?;
+        let scan_limit = limit.map_or(1000, |limit| limit.saturating_mul(5));
         let limit = normalize_limit(limit);
         let original = query.trim();
         let query = normalize(original);
@@ -530,45 +532,61 @@ impl DidxIndex {
             return Ok(Vec::new());
         }
         let mut best = BinaryHeap::new();
+        let mut scanned = 0;
         'blocks: for index in self.start_block(&query)..self.blocks.len() {
             let mut block = self.block(index)?;
-            let mut term_index = 0;
             while let Some(term) = block.next()? {
-                let current = term_index;
-                term_index += 1;
                 if term.key < query {
                     continue;
                 }
                 if !term.key.starts_with(&query) {
                     break 'blocks;
                 }
-                let mut hits = Vec::new();
-                self.append(&term, usize::MAX, &mut hits)?;
-                let hit = hits.into_iter().min_by_key(|hit| {
-                    (rank(original, &hit.key_text), hit.key_ordinal)
-                }).unwrap();
-                best.push((rank(original, &hit.key_text), hit.key_text.chars().count(),
-                    term.key, hit.key_text, hit.key_ordinal, index, current));
+                let mut postings = Cursor::new(term.postings, &self.path);
+                let mut representative = None;
+                for _ in 0..term.count {
+                    let (ordinal, locator, display) = self.read_posting_fields(&term, &mut postings)?;
+                    let kind = rank(original, &display);
+                    if representative
+                        .as_ref()
+                        .is_none_or(|(best_kind, best_ordinal, _, _)| {
+                            (kind, ordinal) < (*best_kind, *best_ordinal)
+                        })
+                    {
+                        representative = Some((kind, ordinal, display, locator));
+                    }
+                }
+                let (kind, ordinal, display, locator) = representative.unwrap();
+                // Keep the locator borrowed from the mmap until the final Top-K is known.
+                best.push((
+                    kind,
+                    display.chars().count(),
+                    term.key,
+                    display,
+                    ordinal,
+                    locator,
+                ));
                 if best.len() > limit {
                     best.pop();
                 }
-            }
-        }
-        let mut output = Vec::new();
-        for (kind, _, _, _, ordinal, index, term_index) in best.into_sorted_vec() {
-            let mut block = self.block(index)?;
-            for i in 0..=term_index {
-                let term = block.next()?.unwrap();
-                if i == term_index {
-                    let mut hits = Vec::new();
-                    self.append(&term, usize::MAX, &mut hits)?;
-                    let mut hit = hits.into_iter().find(|hit| hit.key_ordinal == ordinal).unwrap();
-                    hit.match_kind = kind;
-                    output.push(hit);
+                scanned += 1;
+                if scanned >= scan_limit {
+                    break 'blocks;
                 }
             }
         }
-        Ok(output)
+        Ok(best
+            .into_sorted_vec()
+            .into_iter()
+            .map(|(kind, _, normalized_key, key_text, key_ordinal, locator)| IndexMatch {
+                key_text,
+                normalized_key,
+                key_ordinal,
+                locator: locator.to_vec(),
+                match_kind: kind,
+                distance: None,
+            })
+            .collect())
     }
     fn search(&self, query: &str, limit: Option<usize>, prefix: bool) -> Result<Vec<IndexMatch>> {
         check_query(query)?;
@@ -813,6 +831,21 @@ impl DidxIndex {
         Ok(())
     }
     fn read_posting(&self, term: &Term<'_>, cursor: &mut Cursor<'_>) -> Result<IndexMatch> {
+        let (ordinal, locator, display) = self.read_posting_fields(term, cursor)?;
+        Ok(IndexMatch {
+            key_text: display,
+            normalized_key: term.key.clone(),
+            key_ordinal: ordinal,
+            locator: locator.to_vec(),
+            match_kind: MatchKind::Exact,
+            distance: None,
+        })
+    }
+    fn read_posting_fields<'a>(
+        &self,
+        term: &Term<'_>,
+        cursor: &mut Cursor<'a>,
+    ) -> Result<(u64, &'a [u8], String)> {
         let ordinal = cursor
             .varint()?
             .checked_add(term.base_ordinal)
@@ -822,7 +855,7 @@ impl DidxIndex {
         if !(1..=4096).contains(&locator_size) {
             return Err(cursor.error("DIDX invalid locator length"));
         }
-        let locator = cursor.take(locator_size)?.to_vec();
+        let locator = cursor.take(locator_size)?;
         let display_size = cursor.size()?;
         if display_size > 65_537 {
             return Err(cursor.error("DIDX display too long"));
@@ -837,14 +870,7 @@ impl DidxIndex {
             }
             String::from_utf8(display).map_err(|_| cursor.error("DIDX invalid display UTF-8"))?
         };
-        Ok(IndexMatch {
-            key_text: display,
-            normalized_key: term.key.clone(),
-            key_ordinal: ordinal,
-            locator,
-            match_kind: MatchKind::Exact,
-            distance: None,
-        })
+        Ok((ordinal, locator, display))
     }
     /// Fully check blocks, per-record spellings, normalization and locator counts.
     pub fn validate(&self) -> Result<()> {
@@ -1296,19 +1322,105 @@ mod tests {
     }
 
     #[test]
-    fn block_queries_match_independent_oracles() {
+    fn prefix_ranks_only_the_bounded_matching_range() {
+        let mut keys = vec!["0".to_string()];
+        keys.extend((0..4).map(|i| format!("aa{i}long")));
+        keys.extend(["abx".to_string(), "ac".to_string()]);
+        let (_dir, path) = fixture(&keys);
+        let index = DidxIndex::open(path).unwrap();
+        let words = |limit| {
+            index
+                .prefix("a", Some(limit))
+                .unwrap()
+                .into_iter()
+                .map(|hit| hit.key_text)
+                .collect::<Vec<_>>()
+        };
+        assert!(words(0).is_empty());
+        assert_eq!(words(1), ["abx"]);
+        assert_eq!(words(2), ["ac", "abx"]);
+        assert_eq!(index.exact("ac", None).unwrap()[0].key_text, "ac");
+    }
+
+    #[test]
+    fn prefix_without_limit_scans_one_thousand_terms_and_returns_fifty() {
+        let mut keys: Vec<_> = (0..999).map(|i| format!("aa{i:04}long")).collect();
+        keys.extend(["aby".to_string(), "az".to_string()]);
+        let (_dir, path) = fixture(&keys);
+        let index = DidxIndex::open(path).unwrap();
+        let hits = index.prefix("a", None).unwrap();
+        assert_eq!(hits.len(), 50);
+        assert_eq!(hits[0].key_text, "aby");
+        assert!(!hits.iter().any(|hit| hit.key_text == "az"));
+        assert_eq!(index.prefix("a", Some(201)).unwrap()[0].key_text, "az");
+    }
+
+    #[test]
+    fn prefix_preserves_representative_ranking_and_locators() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("prefix.didx");
+        struct Source {
+            entries: Vec<IndexEntry>,
+        }
+        impl IndexSource for Source {
+            fn fingerprint(&self) -> Result<u64> {
+                Ok(42)
+            }
+            fn entries(&self) -> Result<Box<dyn Iterator<Item = Result<IndexEntry>> + '_>> {
+                Ok(Box::new(self.entries.iter().cloned().map(Ok)))
+            }
+        }
+        let words = [
+            "ca-fe", "CAFE", "cafe", "café", "cafe", "cafes", "cafeteria", "caff",
+        ];
+        let source = Source {
+            entries: words
+                .iter()
+                .enumerate()
+                .map(|(i, word)| IndexEntry {
+                    key_text: (*word).into(),
+                    locator: vec![0xff, i as u8, 0, 0x80],
+                })
+                .collect(),
+        };
+        DidxIndex::build(&source, &path).unwrap();
+        let index = DidxIndex::open(path).unwrap();
+        for (query, representative, ordinal, kind) in [
+            ("ca", "ca-fe", 0, MatchKind::Prefix),
+            ("cafe", "cafe", 2, MatchKind::Exact),
+            ("Cafe", "CAFE", 1, MatchKind::CaseInsensitive),
+            ("café", "café", 3, MatchKind::Exact),
+            ("ca fe", "ca-fe", 0, MatchKind::Loose),
+        ] {
+            let hits = index.prefix(query, Some(50)).unwrap();
+            let hit = hits
+                .iter()
+                .find(|hit| hit.normalized_key == "cafe")
+                .unwrap();
+            assert_eq!(hit.key_text, representative);
+            assert_eq!(hit.key_ordinal, ordinal as u64);
+            assert_eq!(hit.match_kind, kind);
+            assert_eq!(hit.locator, source.entries[ordinal].locator);
+            assert_eq!(hit.distance, None);
+        }
+        let hits = index.prefix("ca", Some(50)).unwrap();
+        assert_eq!(
+            hits.iter().map(|hit| hit.key_text.as_str()).collect::<Vec<_>>(),
+            ["caff", "ca-fe", "cafes", "cafeteria"]
+        );
+    }
+
+    #[test]
+    fn bounded_prefix_matches_independent_oracle() {
         let keys = words();
         let (_dir, path) = fixture(&keys);
         let index = DidxIndex::open(path).unwrap();
-        index.validate().unwrap();
-        for key in keys.iter().filter(|k| !k.is_empty()) {
-            assert_eq!(index.exact(key, None).unwrap()[0].key_text, *key);
-        }
         for query in ["a", "é", "中", "abé", "b中", "x", "aaaaaa"] {
             for limit in [0, 1, 7, 100] {
                 let mut expected: Vec<_> = keys
                     .iter()
                     .filter(|k| k.starts_with(&normalize(query)))
+                    .take(5 * limit)
                     .cloned()
                     .collect();
                 expected.sort_by_key(|key| (rank(query, key), key.chars().count(), key.clone()));
@@ -1320,6 +1432,21 @@ mod tests {
                     .map(|m| m.key_text)
                     .collect();
                 assert_eq!(got, expected, "prefix {query}");
+            }
+        }
+    }
+
+    #[test]
+    fn block_queries_match_independent_oracles() {
+        let keys = words();
+        let (_dir, path) = fixture(&keys);
+        let index = DidxIndex::open(path).unwrap();
+        index.validate().unwrap();
+        for key in keys.iter().filter(|k| !k.is_empty()) {
+            assert_eq!(index.exact(key, None).unwrap()[0].key_text, *key);
+        }
+        for query in ["a", "é", "中", "abé", "b中", "x", "aaaaaa"] {
+            for limit in [0, 1, 7, 100] {
                 for maximum in 0..=4 {
                     let normalized_query = normalize(query);
                     let mut expected: Vec<_> = keys

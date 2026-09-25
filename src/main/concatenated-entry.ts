@@ -107,10 +107,10 @@ function rewriteDictionaryHtml(
     if ((tagName === 'a' || tagName === 'area') && href) {
       href.value = rewriteDictionaryHref(href.value, dictionaryId)
     } else if (src && RESOURCE_SOURCE_TAGS.has(tagName)) {
-      src.value = rewriteResourceHref(src.value, dictionaryId)
+      src.value = rewriteResourceHref(src.value.replace(/^[\s"]+|[\s"]+$/g, ''), dictionaryId)
     } else if (href && tagName === 'link') {
       // 外联 css
-      href.value = rewriteResourceHref(href.value, dictionaryId)
+      href.value = rewriteResourceHref(href.value.replace(/^[\s"]+|[\s"]+$/g, ''), dictionaryId)
     }
   })
 

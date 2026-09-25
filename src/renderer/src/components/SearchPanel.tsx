@@ -50,7 +50,7 @@ export const SearchPanel = (): React.JSX.Element => {
   useSearchShortCut(focusSearchInput)
 
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery)
-  useDebounce(() => setDebouncedQuery(searchQuery.trim()), 100, [searchQuery])
+  useDebounce(() => setDebouncedQuery(searchQuery.trim()), 50, [searchQuery])
 
   const { data: groups } = useDictionarySearchGroups()
   const searchScopes = useMemo(
