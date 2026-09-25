@@ -142,6 +142,8 @@ function getMimeType(resourcePath: string): string {
       return 'font/ttf'
     case '.otf':
       return 'font/otf'
+    case '.ini':
+      return 'text/javascript'
     default:
       return 'application/octet-stream'
   }
