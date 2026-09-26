@@ -188,15 +188,15 @@ export const SearchPanel = (): React.JSX.Element => {
       <div className="border-b border-border p-2.5">
         <div className="relative">
           {isFetching ? (
-            <LoaderCircle className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            <LoaderCircle className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
           ) : (
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           )}
           <Input
             ref={searchInputRef}
             aria-label="搜索单词"
             autoFocus={!displayInCompactMode}
-            className="h-9 border-[var(--border-strong)] bg-card px-9 pr-20 shadow-none"
+            className="h-9 border-[var(--border-strong)] bg-card px-7 pr-12 shadow-none"
             onChange={(event) => setSearchQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -225,7 +225,7 @@ export const SearchPanel = (): React.JSX.Element => {
           {searchQuery.length > 0 && (
             <Button
               aria-label="清空搜索"
-              className="absolute right-9 top-1/2 size-7 -translate-y-1/2 rounded-md text-muted-foreground hover:text-foreground"
+              className="absolute right-6 top-1/2 size-6 -translate-y-1/2 rounded-md text-muted-foreground hover:text-foreground"
               onClick={() => {
                 setSearchQuery('')
                 searchInputRef.current?.focus()
@@ -242,7 +242,7 @@ export const SearchPanel = (): React.JSX.Element => {
             <DropdownMenuTrigger asChild>
               <Button
                 aria-label={groupId ? `已选择词典组：${selectedScope.name}` : '筛选词典组'}
-                className={`absolute right-1.5 top-1/2 size-7 -translate-y-1/2 rounded-md text-muted-foreground hover:text-foreground ${
+                className={`absolute right-1 top-1/2 size-6 -translate-y-1/2 rounded-md text-muted-foreground hover:text-foreground ${
                   groupId ? 'bg-primary/10 text-primary hover:bg-primary/15' : ''
                 }`}
                 size="icon"
