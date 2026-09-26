@@ -12,9 +12,11 @@ import {
 import {
   ArrowUpDown,
   BookMarked,
+  Check,
   ChevronDown,
   Download,
   LoaderCircle,
+  Plus,
   Search,
   Trash2,
   Upload
@@ -41,7 +43,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DataTable } from '@/components/data-table'
 import { DataTablePagination } from '@/components/data-table-pagination'
 
@@ -59,7 +60,7 @@ import {
   useDeleteWords,
   type WordbookWordItem
 } from '@/hooks/use-wordbooks'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 
 import { useAppStore } from '@/stores/app-store'
 
@@ -102,7 +103,7 @@ const compactSortOptions: Array<{ id: CompactSortColumn; label: string }> = [
   { id: 'createdAt', label: '添加时间' }
 ]
 
-function useElementWidth(): [(node: HTMLDivElement | null) => void, number | null] {
+function useContainerWidth(): [(node: HTMLDivElement | null) => void, number | null] {
   const [element, setElement] = useState<HTMLDivElement | null>(null)
   const [width, setWidth] = useState<number | null>(null)
 
@@ -301,6 +302,10 @@ function WordbookCompactList({
 // ---------------------------------------------------------------------------
 
 export const WordbookWords = (): React.JSX.Element => {
+  const { onCreateWordbook, wordbookStatus } = useOutletContext<{
+    onCreateWordbook: () => void
+    wordbookStatus: ReactNode
+  }>()
   const { wordbookId } = useParams<{ wordbookId?: string }>()
 
   // ---------- pagination & filter ----------
@@ -361,8 +366,8 @@ export const WordbookWords = (): React.JSX.Element => {
   // ---------- table state ----------
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [sorting, setSorting] = useState<SortingState>([])
-  const [wordsContainerRef, wordsContainerWidth] = useElementWidth()
-  const isCompactList = wordsContainerWidth !== null && wordsContainerWidth < 720
+  const [wordsContainerRef, wordsContainerWidth] = useContainerWidth()
+  const isCompactList = wordsContainerWidth !== null && wordsContainerWidth < 640
   const isCondensedTable = wordsContainerWidth !== null && wordsContainerWidth < 960
 
   const columnVisibility = useMemo<VisibilityState>(
@@ -656,63 +661,12 @@ export const WordbookWords = (): React.JSX.Element => {
     <div className="flex min-h-0 flex-1 flex-col">
       {/* ======== Header ======== */}
       <div className="flex flex-wrap items-end justify-between gap-4 pb-6">
-        <div>
+        <div className="min-w-0">
           <p className="mb-2 text-sm font-medium text-primary">生词管理</p>
           <h1 className="text-xl font-semibold tracking-tight">{activeWordbookName}</h1>
         </div>
-        <div className="flex justify-between">
-          <div className="flex items-center gap-2">
-            {/* 批量移动 */}
-            {selectedWordIds.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button disabled={moveWords.isPending} type="button" variant="outline">
-                    {moveWords.isPending && <LoaderCircle className="animate-spin" />}
-                    移动
-                    <ChevronDown />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>移动到</DropdownMenuLabel>
-                  {wordbooks.map((wb) => (
-                    <DropdownMenuItem
-                      disabled={table
-                        .getSelectedRowModel()
-                        .rows.every((row) => row.original.wordbookId === wb.id)}
-                      key={wb.id}
-                      onSelect={() =>
-                        moveWords.mutate(
-                          {
-                            wordIds: selectedWordIds,
-                            destinationWordbookId: wb.id
-                          },
-                          { onSuccess: () => setRowSelection({}) }
-                        )
-                      }
-                    >
-                      {wb.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            {/* 批量删除 */}
-            {selectedWordIds.length > 0 && (
-              <Button
-                disabled={deleteWords.isPending}
-                onClick={() =>
-                  deleteWords.mutate(
-                    table.getSelectedRowModel().rows.map((r) => r.original.word),
-                    { onSuccess: () => setRowSelection({}) }
-                  )
-                }
-                type="button"
-                variant="outline"
-              >
-                {deleteWords.isPending ? <LoaderCircle className="animate-spin" /> : <Trash2 />}
-                删除
-              </Button>
-            )}
+        <div className="min-w-0 max-w-full">
+          <div className="flex flex-wrap items-center gap-2">
             {/* 导入 */}
             <Dialog
               onOpenChange={(open) => {
@@ -889,17 +843,55 @@ export const WordbookWords = (): React.JSX.Element => {
               </DialogContent>
             </Dialog>
           </div>
+          <div className="lg:hidden">{wordbookStatus}</div>
         </div>
       </div>
 
-      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <CardHeader className="shrink-0 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <CardTitle>生词列表</CardTitle>
-              <CardDescription>管理生词本的单词、星级评分</CardDescription>
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <header className="shrink-0 border-b border-border pb-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="lg:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    aria-label="切换生词本"
+                    className="h-8 max-w-48"
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <span className="truncate">{activeWordbookName}</span>
+                    <ChevronDown />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuLabel>选择生词本</DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={() => navigate('/wordbooks')}>
+                    <span className="flex size-4 items-center justify-center">
+                      {!wordbookId && <Check className="size-4" />}
+                    </span>
+                    全部
+                  </DropdownMenuItem>
+                  {wordbooks.map((wordbook) => (
+                    <DropdownMenuItem
+                      key={wordbook.id}
+                      onSelect={() => navigate(`/wordbooks/${wordbook.id}`)}
+                    >
+                      <span className="flex size-4 items-center justify-center">
+                        {wordbookId === wordbook.id && <Check className="size-4" />}
+                      </span>
+                      {wordbook.name}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={onCreateWordbook}>
+                    <Plus className="size-4" />
+                    新建生词本
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <div className="min-w-40 flex-1 sm:max-w-48">
+            <div className="min-w-40 max-w-64 flex-1">
               <Input
                 className="h-8 w-full bg-transparent"
                 onChange={(e) => setKeyword(e.target.value)}
@@ -907,9 +899,61 @@ export const WordbookWords = (): React.JSX.Element => {
                 value={keyword}
               />
             </div>
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    disabled={selectedWordIds.length === 0 || moveWords.isPending}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                  >
+                    {moveWords.isPending && <LoaderCircle className="animate-spin" />}
+                    移动
+                    <ChevronDown />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {/* <DropdownMenuLabel>移动到</DropdownMenuLabel> */}
+                  {wordbooks.map((wb) => (
+                    <DropdownMenuItem
+                      disabled={table
+                        .getSelectedRowModel()
+                        .rows.every((row) => row.original.wordbookId === wb.id)}
+                      key={wb.id}
+                      onSelect={() =>
+                        moveWords.mutate(
+                          {
+                            wordIds: selectedWordIds,
+                            destinationWordbookId: wb.id
+                          },
+                          { onSuccess: () => setRowSelection({}) }
+                        )
+                      }
+                    >
+                      {wb.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                disabled={selectedWordIds.length === 0 || deleteWords.isPending}
+                onClick={() =>
+                  deleteWords.mutate(
+                    table.getSelectedRowModel().rows.map((r) => r.original.word),
+                    { onSuccess: () => setRowSelection({}) }
+                  )
+                }
+                type="button"
+                variant="outline"
+                size="sm"
+              >
+                {deleteWords.isPending ? <LoaderCircle className="animate-spin" /> : <Trash2 />}
+              </Button>
+            </div>
           </div>
-        </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col pt-0">
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col pt-3">
           <div className="flex min-h-0 flex-1 flex-col" ref={wordsContainerRef}>
             {isCompactList ? (
               <WordbookCompactList
@@ -944,8 +988,8 @@ export const WordbookWords = (): React.JSX.Element => {
               />
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
   )
 }

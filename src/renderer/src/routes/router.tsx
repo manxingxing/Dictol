@@ -2,7 +2,9 @@ import { createHashRouter, Navigate } from 'react-router-dom'
 
 import { AppErrorFallback } from '@/components/AppErrorBoundary'
 import { AppLayout } from '@/layouts/AppLayout'
+import { OnlineDictionariesList } from '@/components/OnlineDictionariesList'
 import { DictionariesPage } from '@/pages/DictionariesPage'
+import { DictionaryManagementLayout } from '@/pages/DictionaryManagementLayout'
 import { DictionaryGroupsPage } from '@/pages/DictionaryGroupsPage'
 import { HistoryPage } from '@/pages/HistoryPage'
 import { SearchPage } from '@/pages/SearchPage'
@@ -30,7 +32,14 @@ export const router = createHashRouter([
       {
         path: 'dictionaries',
         children: [
-          { index: true, element: <DictionariesPage /> },
+          { index: true, element: <Navigate to="/dictionaries/local" replace /> },
+          {
+            element: <DictionaryManagementLayout />,
+            children: [
+              { path: 'local', element: <DictionariesPage /> },
+              { path: 'online', element: <OnlineDictionariesList /> }
+            ]
+          },
           { path: 'groups', element: <DictionaryGroupsPage /> },
           { path: 'groups/:groupId', element: <DictionaryGroupsPage /> }
         ]

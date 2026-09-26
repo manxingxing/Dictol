@@ -20,7 +20,7 @@
 :root {
   color-scheme: light;
   /* Neutral light: a nearly-white grayscale application frame. */
-  --background: #fdfdfb;
+  --background: #ffffff;
   --foreground: #252525;
   --card: #ffffff;
   --card-foreground: #252525;
@@ -34,9 +34,9 @@
   --input: #cbcbc7;
   --ring: #6d987e;
   --sidebar-background: #f5f5f2;
-  --window-chrome-background: var(--sidebar-background);
-  --window-chrome-backdrop-filter: none;
-  --window-vibrancy-opacity: 42%;
+  --window-chrome-background: color-mix(in srgb, var(--sidebar-background) 84%, transparent);
+  --window-chrome-backdrop-filter: blur(18px) saturate(135%);
+  --window-vibrancy-opacity: 48%;
   --panel-background: #faf9f6;
   --surface-hover: #eeeeea;
   --surface-pressed: #e5e6e1;
@@ -66,7 +66,7 @@
   --border-strong: #c6c9bf;
   --input: #c6c9bf;
   --sidebar-background: #e8ebdf;
-  --window-chrome-background: color-mix(in srgb, var(--sidebar-background) 78%, transparent);
+  --window-chrome-background: color-mix(in srgb, var(--sidebar-background) 84%, transparent);
   --window-chrome-backdrop-filter: blur(18px) saturate(135%);
   --panel-background: color-mix(in oklab, var(--sidebar-background) 35%, transparent);
   --surface-hover: #ecefe5;
@@ -99,8 +99,9 @@
     --input: #4a4a4a;
     --ring: #8db89a;
     --sidebar-background: #191919;
-    --window-chrome-background: #373838;
-    --window-vibrancy-opacity: 48%;
+    --window-chrome-background: color-mix(in srgb, var(--sidebar-background) 88%, transparent);
+    --window-chrome-backdrop-filter: blur(18px) saturate(130%);
+    --window-vibrancy-opacity: 54%;
     --panel-background: #262626;
     --surface-hover: #303030;
     --surface-pressed: #3a3a3a;
@@ -130,7 +131,7 @@
     --border-strong: #454a45;
     --input: #454a45;
     --sidebar-background: #181a18;
-    --window-chrome-background: color-mix(in srgb, var(--sidebar-background) 82%, transparent);
+    --window-chrome-background: color-mix(in srgb, var(--sidebar-background) 88%, transparent);
     --window-chrome-backdrop-filter: blur(18px) saturate(130%);
     --panel-background: color-mix(in oklab, var(--sidebar-background) 35%, transparent);
     --surface-hover: #282a28;

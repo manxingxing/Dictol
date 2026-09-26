@@ -63,7 +63,7 @@ export class WindowManager {
             trafficLightPosition: { x: 16, y: 16 },
             transparent: true,
             vibrancy: 'sidebar' as const,
-            visualEffectState: 'active' as const
+            visualEffectState: 'followWindow' as const
           }
         : process.platform === 'win32'
           ? {

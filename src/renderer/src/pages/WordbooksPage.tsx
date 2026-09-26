@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/dialog'
 
 import { Input } from '@/components/ui/input'
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,9 +51,6 @@ export function WordbooksPage(): React.JSX.Element {
     isLoading: isWordbooksLoading,
     isError: isWordbooksError
   } = useWordbooks()
-
-  const wordTotalCount = wordbooks.reduce((sum, wb) => sum + wb.wordCount, 0)
-
   const createWordbook = useCreateWordbook()
   const renameWordbook = useRenameWordbook()
   const deleteWordbook = useDeleteWordbook()
@@ -91,7 +87,7 @@ export function WordbooksPage(): React.JSX.Element {
 
   return (
     <section className="flex lg:h-full min-h-0 flex-1 flex-col bg-background lg:flex-row">
-      <aside className="flex min-h-0 w-full shrink-0 flex-col border-b border-border bg-sidebar/35 p-2 lg:p-3 lg:h-full lg:w-56 lg:border-b-0 lg:border-r">
+      <aside className="hidden min-h-0 w-54 shrink-0 flex-col border-r border-border bg-sidebar/35 p-3 lg:flex lg:h-full">
         <div className="hidden lg:flex mb-2 items-center justify-between px-1 lg:mb-3">
           <h1 className="text-sm font-semibold lg:block">生词本</h1>
           <Dialog onOpenChange={setCreateDialogOpen} open={createDialogOpen}>
@@ -145,25 +141,12 @@ export function WordbooksPage(): React.JSX.Element {
 
         <div className="hidden min-h-0 flex-1 flex-col lg:flex">
           <WordbookNavigation
-            compact={false}
             onDelete={openDeleteDialog}
             onRename={openRenameDialog}
-            wordTotalCount={wordTotalCount}
             wordbooks={wordbooks}
           />
           <WordbookStatus isError={isWordbooksError} isLoading={isWordbooksLoading} />
         </div>
-        <ScrollArea className="min-h-0 flex-1 lg:hidden" viewportClassName="px-0.5 [&>div]:!block">
-          <WordbookNavigation
-            compact
-            onCreate={() => setCreateDialogOpen(true)}
-            wordTotalCount={wordTotalCount}
-            wordbooks={wordbooks}
-          />
-          <ScrollBar orientation="horizontal" />
-          <WordbookStatus isError={isWordbooksError} isLoading={isWordbooksLoading} />
-        </ScrollArea>
-
         {/* ---------- rename dialog ---------- */}
         <Dialog
           onOpenChange={(open) => {
@@ -272,41 +255,40 @@ export function WordbooksPage(): React.JSX.Element {
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-6 sm:p-8">
-        <Outlet />
+        <Outlet
+          context={{
+            onCreateWordbook: () => setCreateDialogOpen(true),
+            wordbookStatus: (
+              <WordbookStatus isError={isWordbooksError} isLoading={isWordbooksLoading} />
+            )
+          }}
+        />
       </div>
     </section>
   )
 }
 
 type WordbookNavigationProps = {
-  compact: boolean
-  onCreate?: () => void
   onDelete?: (wordbook: WordbookSummary) => void
   onRename?: (wordbook: WordbookSummary) => void
-  wordTotalCount: number
   wordbooks: WordbookSummary[]
 }
 
 function WordbookNavigation({
-  compact,
-  onCreate,
   onDelete,
   onRename,
-  wordTotalCount,
   wordbooks
 }: WordbookNavigationProps): React.JSX.Element {
+  const wordTotalCount = wordbooks.reduce((sum, wordbook) => sum + wordbook.wordCount, 0)
+
   return (
-    <nav
-      aria-label="生词本列表"
-      className={compact ? 'flex gap-2' : 'flex flex-col gap-1'}
-    >
+    <nav aria-label="生词本列表" className="flex flex-col gap-1">
       <NavLink
         to="/wordbooks"
         end
         className={({ isActive }) =>
           cn(
-            'flex h-9 items-center gap-2 px-3 text-left text-sm transition-colors',
-            compact ? 'w-auto max-w-full shrink-0 rounded-full' : 'w-full rounded-lg',
+            'flex h-8 w-full items-center gap-1.5 rounded-lg px-2 text-left text-sm transition-colors',
             isActive
               ? 'bg-primary/10 font-medium text-primary'
               : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -314,7 +296,7 @@ function WordbookNavigation({
         }
       >
         <List className="size-4 shrink-0" />
-        <span className={compact ? '' : 'flex-1'}>全部</span>
+        <span className={'flex-1'}>全部</span>
         <span className="text-xs tabular-nums">{wordTotalCount}</span>
       </NavLink>
 
@@ -324,8 +306,7 @@ function WordbookNavigation({
             to={`/wordbooks/${wordbook.id}`}
             className={({ isActive }) =>
               cn(
-                'flex h-9 items-center gap-2 px-3 text-left text-sm transition-colors',
-                compact ? 'w-auto max-w-full shrink-0 rounded-full' : 'w-full rounded-lg',
+                'flex h-8 w-full items-center gap-1.5 rounded-lg px-2 text-left text-sm transition-colors',
                 isActive
                   ? 'bg-primary/10 font-medium text-primary'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -337,18 +318,15 @@ function WordbookNavigation({
             ) : (
               <FolderPlus className="size-4 shrink-0" />
             )}
-            <span className={cn('truncate', compact ? 'max-w-48' : 'flex-1')}>{wordbook.name}</span>
+            <span className="flex-1 truncate">{wordbook.name}</span>
             <span
-              className={cn(
-                'text-xs tabular-nums',
-                !compact && !wordbook.isDefault && 'group-hover:hidden'
-              )}
+              className={cn('text-xs tabular-nums', !wordbook.isDefault && 'group-hover:hidden')}
             >
               {wordbook.wordCount}
             </span>
           </NavLink>
 
-          {!compact && !wordbook.isDefault && (
+          {!wordbook.isDefault && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -377,18 +355,6 @@ function WordbookNavigation({
           )}
         </div>
       ))}
-
-      {compact && (
-        <Button
-          className="h-9 shrink-0 rounded-full border border-dashed px-3 text-muted-foreground"
-          onClick={() => onCreate?.()}
-          type="button"
-          variant="ghost"
-        >
-          <Plus />
-          新建生词本
-        </Button>
-      )}
     </nav>
   )
 }

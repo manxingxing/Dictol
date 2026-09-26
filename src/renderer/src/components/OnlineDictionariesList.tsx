@@ -56,14 +56,11 @@ export function OnlineDictionariesList(): React.JSX.Element {
   }
 
   return (
-    <section className="pt-6">
-      <div className="mb-3 flex items-start justify-between gap-5">
-        <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold leading-5">在线词典</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            配置常用网站，在查词结果旁并排查看在线词典内容。
-          </p>
-        </div>
+    <section>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-xs leading-5 text-muted-foreground">
+          配置常用网站，在查词结果旁并排查看在线词典内容。
+        </p>
         <Button
           aria-label="添加在线词典"
           className="shrink-0"
@@ -71,7 +68,6 @@ export function OnlineDictionariesList(): React.JSX.Element {
           size="sm"
           title="添加在线词典"
           type="button"
-          variant="outline"
         >
           <Plus />
           添加在线词典
@@ -87,9 +83,7 @@ export function OnlineDictionariesList(): React.JSX.Element {
           </p>
         )}
         {!onlineLoading && !onlineError && onlineDictionaries.length === 0 && (
-          <p className="bg-card px-4 py-5 text-sm text-muted-foreground">
-            还没有配置在线词典。
-          </p>
+          <p className="bg-card px-4 py-5 text-sm text-muted-foreground">还没有配置在线词典。</p>
         )}
         {!onlineLoading && !onlineError && onlineDictionaries.length > 0 && (
           <ul className="divide-y divide-border">
@@ -116,8 +110,7 @@ export function OnlineDictionariesList(): React.JSX.Element {
                     const bounds = event.currentTarget.getBoundingClientRect()
                     setOnlineDropTarget({
                       id: dictionary.id,
-                      position:
-                        event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after'
+                      position: event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after'
                     })
                   }}
                   onDrop={(event) => {
@@ -164,7 +157,7 @@ export function OnlineDictionariesList(): React.JSX.Element {
                     aria-label={`删除在线词典 ${dictionary.name}`}
                     className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     disabled={removeOnlineDictionary.isPending}
-                    onClick={ () => handleRemoveDictionary(dictionary) }
+                    onClick={() => handleRemoveDictionary(dictionary)}
                     size="icon"
                     title="删除在线词典"
                     type="button"

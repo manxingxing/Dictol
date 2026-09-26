@@ -42,7 +42,7 @@ export function Sidebar(): React.JSX.Element {
         </div>
       </div>
 
-      <nav className={cn(displayInCompactMode ? 'space-y-2' : 'space-y-2.5')} aria-label="主导航">
+      <nav className="space-y-2.5" aria-label="主导航">
         {items.map(({ label, path, icon: Icon }) => (
           <NavLink
             draggable={false}
@@ -54,8 +54,8 @@ export function Sidebar(): React.JSX.Element {
               <Button
                 aria-label={label}
                 className={cn(
-                  'h-auto w-full flex-col px-0',
-                  displayInCompactMode ? 'gap-0 py-2' : 'gap-1 py-1.5',
+                  'h-auto flex-col px-0',
+                  displayInCompactMode ? 'mx-auto flex w-9 gap-0 py-[10px]' : 'w-full gap-1 py-1.5',
                   isActive
                     ? 'bg-primary/8 font-medium text-primary ring-1 ring-inset ring-primary/20 hover:bg-primary/12'
                     : 'text-muted-foreground'
@@ -71,14 +71,14 @@ export function Sidebar(): React.JSX.Element {
         ))}
       </nav>
 
-      <div className={cn('mt-auto', displayInCompactMode ? 'space-y-2' : 'space-y-2.5')}>
+      <div className="mt-auto space-y-2.5">
         <NavLink draggable={false} to="/dictionaries" className="block">
           {({ isActive }) => (
             <Button
               aria-label="词典库"
               className={cn(
-                'h-auto w-full flex-col px-0',
-                displayInCompactMode ? 'gap-0 py-2' : 'gap-1 py-1.5',
+                'h-auto flex-col px-0',
+                displayInCompactMode ? 'mx-auto flex w-9 gap-0 py-[10px]' : 'w-full gap-1 py-1.5',
                 isActive
                   ? 'bg-primary/12 font-medium text-primary ring-1 ring-inset ring-primary/20'
                   : 'text-muted-foreground'
@@ -96,8 +96,8 @@ export function Sidebar(): React.JSX.Element {
             <Button
               aria-label="设置"
               className={cn(
-                'h-auto w-full flex-col px-0',
-                displayInCompactMode ? 'gap-0 py-2' : 'gap-1 py-1.5',
+                'h-auto flex-col px-0',
+                displayInCompactMode ? 'mx-auto flex w-9 gap-0 py-[10px]' : 'w-full gap-1 py-1.5',
                 isActive
                   ? 'bg-primary/12 font-medium text-primary ring-1 ring-inset ring-primary/20'
                   : 'text-muted-foreground'
