@@ -14,7 +14,6 @@ import type {
   DictionaryImportRequest
 } from '../../shared/dictionary-import'
 import type { DictionaryInfo } from '../../shared/dictionary-info'
-import type { DictionaryIndexMigrationResult } from '../../shared/dictionary-index-migration'
 import type {
   DictionaryIndexInfo,
   DictionaryGroupSummary,
@@ -22,7 +21,7 @@ import type {
   ImportedDictionary,
   ReadyDictionary
 } from '../db-service'
-import { DidxImportService, mapWithConcurrency } from '../didx-import-service'
+import { DidxImportService } from '../didx-import-service'
 import { getDictionaryIndexRoot } from '../db/paths'
 import {
   createDictionaryImportPreview,
@@ -31,12 +30,9 @@ import {
 } from '../dictionary-import-files'
 import { parseDictionaryEntryUrl } from '../dictionary-entry-url'
 import { resolveRendererUrl } from '../output-path'
-import { dismissSearchPopover } from './search-popover'
 import { BaseController } from './base-controller'
 
 export class DictionaryController extends BaseController {
-  private migrationTask: Promise<DictionaryIndexMigrationResult> | undefined
-
   override mount(): void {
     ipcMain.handle('dictionaries:list-ready', this.listReady)
     ipcMain.handle('dictionaries:list', this.listDictionaries)
@@ -46,7 +42,6 @@ export class DictionaryController extends BaseController {
     ipcMain.handle('dictionaries:get-index-info', this.getIndexInfo)
     ipcMain.handle('dictionaries:open-index-directory', this.openIndexDirectory)
     ipcMain.handle('dictionaries:reindex', this.reindex)
-    ipcMain.handle('dictionaries:migrate-indexes', this.migrateIndexes)
     ipcMain.handle('dictionaries:import', this.importDictionary)
     ipcMain.handle('dictionaries:import-folder', this.importDictionaryFolder)
     ipcMain.handle('dictionaries:delete', this.deleteDictionary)
@@ -147,68 +142,6 @@ export class DictionaryController extends BaseController {
     const service = new DidxImportService(this.runtime.db, getDictionaryIndexRoot(), 1)
     await this.runtime.dictionaryIndexManager.change(numericId, () => service.rebuild(numericId))
     return this.db.getDictionaryIndexInfo(dictionaryId)
-  }
-
-  migrateIndexes = async (): Promise<DictionaryIndexMigrationResult> => {
-    if (this.migrationTask) return this.migrationTask
-
-    const task = this.runIndexMigration()
-    this.migrationTask = task
-    try {
-      return await task
-    } finally {
-      if (this.migrationTask === task) this.migrationTask = undefined
-    }
-  }
-
-  private async runIndexMigration(): Promise<DictionaryIndexMigrationResult> {
-    const targets = (await this.db.listReadyDictionaries()).filter(
-      ({ indexStatus }) => indexStatus !== 'ready'
-    )
-    dismissSearchPopover(this.runtime)
-
-    if (!this.runtime.db) throw new Error('数据库尚未初始化')
-    const service = new DidxImportService(this.runtime.db, getDictionaryIndexRoot(), 2)
-    const outcomes = await mapWithConcurrency(targets, 2, async (target) => {
-      const dictionaryId = Number(target.id)
-      try {
-        await this.runtime.dictionaryIndexManager.change(dictionaryId, () =>
-          service.rebuild(dictionaryId)
-        )
-        return { target, error: null }
-      } catch (error) {
-        return {
-          target,
-          error: error instanceof Error ? error.message : String(error)
-        }
-      }
-    })
-
-    // Finish every index before spending time removing legacy lookup rows.
-    for (const { target, error } of outcomes) {
-      if (error !== null) continue
-      try {
-        await this.db.deleteLegacyDictionaryEntries(Number(target.id))
-      } catch (cleanupError) {
-        console.warn('Failed to remove migrated legacy dictionary entries', {
-          dictionaryId: target.id,
-          error: cleanupError
-        })
-      }
-    }
-
-    return {
-      succeededDictionaryIds: outcomes
-        .filter(({ error }) => error === null)
-        .map(({ target }) => target.id),
-      failed: outcomes
-        .filter((outcome): outcome is typeof outcome & { error: string } => outcome.error !== null)
-        .map(({ target, error }) => ({
-          dictionaryId: target.id,
-          dictionaryName: target.name,
-          error
-        }))
-    }
   }
 
   importDictionary = async (

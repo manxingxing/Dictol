@@ -22,9 +22,6 @@ type DictionaryIndexInfo = Awaited<
 >
 type DictionaryImportRequest = Parameters<Window['dictol']['dictionaries']['import']>[0]
 type ReorderDictionariesContext = { previousDictionaries?: DictionarySummary[] }
-type DictionaryIndexMigrationResult = Awaited<
-  ReturnType<Window['dictol']['dictionaries']['migrateIndexes']>
->
 
 export function useDictionaryInfo(
   dictionaryId: string | null
@@ -86,21 +83,6 @@ export function useReadyDictionaries(): UseQueryResult<ReadyDictionary[], Error>
       return dictionaries
     },
     staleTime: 30_000
-  })
-}
-
-export function useMigrateDictionaryIndexes(): UseMutationResult<
-  DictionaryIndexMigrationResult,
-  Error,
-  void
-> {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: () => window.dictol.dictionaries.migrateIndexes(),
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: readyDictionariesQueryKey })
-    }
   })
 }
 

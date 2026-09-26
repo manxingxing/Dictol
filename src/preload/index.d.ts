@@ -111,14 +111,6 @@ declare global {
           fileSize: number | null
           builtAt: string | null
         }>
-        migrateIndexes: () => Promise<{
-          succeededDictionaryIds: string[]
-          failed: {
-            dictionaryId: string
-            dictionaryName: string
-            error: string
-          }[]
-        }>
         import: (request: {
           mdxPath: string
           copyFiles: boolean

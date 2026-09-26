@@ -3,9 +3,9 @@ import type { DidxIndex } from '@dictol/mdict-native'
 import { randomUUID } from 'node:crypto'
 import { copyFile, readFile, readdir, rename, rm, stat, unlink } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { setTimeout as delay, setImmediate as yieldToEventLoop } from 'node:timers/promises'
+import { setTimeout as delay } from 'node:timers/promises'
 import { Worker } from 'node:worker_threads'
-import { asc, eq, inArray } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 
 import type {
   DictionaryImportSourceFile,
@@ -23,7 +23,7 @@ import {
   type DictionaryGroupWithMembers,
   type SearchDictionaryGroup
 } from './db/repository/dictionary-group-repository'
-import { dictionary, dictionaryEntry, dictionaryIndex, type Dictionary } from './db/schema'
+import { dictionary, dictionaryIndex, type Dictionary } from './db/schema'
 import {
   resolveDictionaryImportFolder,
   selectDictionaryImportPlans
@@ -556,41 +556,6 @@ export class DBService {
       createdAt: row.dictionary.createdAt,
       updatedAt: row.dictionary.updatedAt
     }))
-  }
-
-  async deleteLegacyDictionaryEntries(dictionaryId: number): Promise<void> {
-    const startedAt = performance.now()
-    let deletedRows = 0
-    let maximumBatchMs = 0
-    try {
-      while (true) {
-        const batchStartedAt = performance.now()
-        const result = this.db
-          .delete(dictionaryEntry)
-          .where(
-            inArray(
-              dictionaryEntry.id,
-              this.db
-                .select({ id: dictionaryEntry.id })
-                .from(dictionaryEntry)
-                .where(eq(dictionaryEntry.dictionaryId, dictionaryId))
-                .limit(2000)
-            )
-          )
-          .run()
-        deletedRows += result.changes
-        maximumBatchMs = Math.max(maximumBatchMs, performance.now() - batchStartedAt)
-        if (result.changes < 2000) break
-        await yieldToEventLoop()
-      }
-    } finally {
-      console.info('[DIDX] legacy cleanup', {
-        dictionaryId,
-        deletedRows,
-        cleanupElapsedMs: Number((performance.now() - startedAt).toFixed(2)),
-        maximumBatchMs: Number(maximumBatchMs.toFixed(2))
-      })
-    }
   }
 
   async recordQueryHistory(term: string): Promise<void> {

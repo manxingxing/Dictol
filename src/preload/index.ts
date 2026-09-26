@@ -26,7 +26,6 @@ import type {
   DictionaryAggregateRequest,
   DictionaryLookupRequest
 } from '../shared/dictionary-navigation'
-import type { DictionaryIndexMigrationResult } from '../shared/dictionary-index-migration'
 
 type ReadyDictionary = {
   id: string
@@ -233,8 +232,6 @@ const api = Object.freeze({
       ipcRenderer.invoke('dictionaries:open-index-directory', dictionaryId),
     reindex: (dictionaryId: string): Promise<DictionaryIndexInfo> =>
       ipcRenderer.invoke('dictionaries:reindex', dictionaryId),
-    migrateIndexes: (): Promise<DictionaryIndexMigrationResult> =>
-      ipcRenderer.invoke('dictionaries:migrate-indexes'),
     import: (request: DictionaryImportRequest): Promise<ImportedDictionary> =>
       ipcRenderer.invoke('dictionaries:import', request),
     importFolder: (request: DictionaryFolderImportRequest): Promise<ImportedDictionary[]> =>

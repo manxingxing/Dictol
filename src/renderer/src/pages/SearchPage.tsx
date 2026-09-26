@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom'
 
 import { useReadyDictionaries } from '@/hooks/use-dictionaries'
 import { EmptyDictionaryState } from './EmptyDictionaryState'
-import { DictionaryIndexMigrationState } from './DictionaryIndexMigrationState'
 import { SearchLayout } from '@/components/SearchLayout'
 import { useAppStore } from '@/stores/app-store'
 
@@ -44,17 +43,6 @@ export function SearchPage(): React.JSX.Element {
 
   if (dictionaries.length === 0) {
     return <EmptyDictionaryState />
-  }
-
-  const pendingIndexes = dictionaries.filter(
-    (
-      dictionary
-    ): dictionary is typeof dictionary & {
-      indexStatus: 'building' | 'error' | 'needs_reindex' | 'missing'
-    } => dictionary.indexStatus !== 'ready'
-  )
-  if (pendingIndexes.length > 0) {
-    return <DictionaryIndexMigrationState dictionaries={pendingIndexes} />
   }
 
   return <SearchLayout />
