@@ -6,8 +6,12 @@ import { cn } from '@/lib/utils'
 import { type ChromeTone, useAppStore } from '@/stores/app-store'
 import type { DictionaryLayout } from '../../../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../../../shared/dictionary-display'
+import type { ThemeMode } from '../../../shared/theme-mode'
 
 export function AppearanceSettingsCard(): React.JSX.Element {
+  const [themeMode, setThemeMode] = useState<ThemeMode>('auto')
+  const [isLoadingThemeMode, setIsLoadingThemeMode] = useState(true)
+  const [isSavingThemeMode, setIsSavingThemeMode] = useState(false)
   const chromeTone = useAppStore((state) => state.chromeTone)
   const setChromeTone = useAppStore((state) => state.setChromeTone)
   const dictionaryDisplay = useAppStore((state) => state.dictionaryDisplay)
@@ -25,6 +29,34 @@ export function AppearanceSettingsCard(): React.JSX.Element {
       active = false
     }
   }, [setDictionaryDisplay])
+
+  useEffect(() => {
+    let active = true
+    void window.dictol.app.getThemeMode().then((savedThemeMode) => {
+      if (active && savedThemeMode) setThemeMode(savedThemeMode)
+    }).catch((error: unknown) => {
+      console.error('Failed to load theme mode', error)
+      if (active) window.alert('主题设置读取失败，请重新打开设置页面。')
+    }).finally(() => {
+      if (active) setIsLoadingThemeMode(false)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const handleThemeModeChange = async (mode: ThemeMode): Promise<void> => {
+    setIsSavingThemeMode(true)
+    try {
+      const savedThemeMode = await window.dictol.app.saveThemeMode(mode)
+      if (savedThemeMode) setThemeMode(savedThemeMode)
+    } catch (error) {
+      console.error('Failed to save theme mode', error)
+      window.alert('主题设置保存失败，请稍后重试。')
+    } finally {
+      setIsSavingThemeMode(false)
+    }
+  }
 
   const handleDictionaryDisplayChange = async (
     event: React.ChangeEvent<HTMLSelectElement>
@@ -61,13 +93,45 @@ export function AppearanceSettingsCard(): React.JSX.Element {
   }
 
   return (
-    <SettingsSection title="外观" description="选择应用框架的布局和色调">
+    <SettingsSection title="外观" description="配置主题模式、框架色调和词典显示">
       <SettingsList>
         <SettingsRow
-          label="框架色调"
-          description="浅色和深色模式仍然跟随系统"
+          label="主题模式"
+          description="选择浅色、深色或自动跟随系统"
           control={
-            <div aria-label="应用框架色调" className="grid gap-2 sm:grid-cols-2" role="group">
+            <div aria-label="主题模式" className="grid gap-2 sm:grid-cols-3" role="group">
+              {themeModeOptions.map((option) => {
+                const selected = themeMode === option.value
+                return (
+                  <Button
+                    aria-pressed={selected}
+                    className={cn(
+                      'h-auto min-w-30 justify-start gap-2 p-2 text-left',
+                      selected &&
+                        'border-primary/45 bg-primary/8 text-foreground ring-1 ring-primary/20 hover:bg-primary/10'
+                    )}
+                    key={option.value}
+                    disabled={isLoadingThemeMode || isSavingThemeMode}
+                    onClick={() => void handleThemeModeChange(option.value)}
+                    type="button"
+                    variant="outline"
+                  >
+                    <AppearanceFramePreview themeMode={option.value} chromeTone={chromeTone} />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">{option.label}</span>
+                    </span>
+                  </Button>
+                )
+              })}
+            </div>
+          }
+          className="items-start"
+        />
+        <SettingsRow
+          label="框架色调"
+          description="选择中性或苔绿配色"
+          control={
+            <div aria-label="框架色调" className="grid gap-2 sm:grid-cols-2" role="group">
               {chromeToneOptions.map((option) => {
                 const selected = chromeTone === option.value
                 return (
@@ -83,19 +147,7 @@ export function AppearanceSettingsCard(): React.JSX.Element {
                     type="button"
                     variant="outline"
                   >
-                    <span
-                      aria-hidden="true"
-                      className="appearance-tone-preview size-10 shrink-0"
-                      data-tone={option.value}
-                    >
-                      <span className="appearance-tone-preview__titlebar" />
-                      <span className="appearance-tone-preview__rail" />
-                      <span className="appearance-tone-preview__content">
-                        <span className="appearance-tone-preview__toolbar" />
-                        <span className="appearance-tone-preview__pill" />
-                        <span className="appearance-tone-preview__message" />
-                      </span>
-                    </span>
+                    <AppearanceFramePreview chromeTone={option.value} />
                     <span className="min-w-0">
                       <span className="block text-sm font-medium">{option.label}</span>
                     </span>
@@ -150,18 +202,73 @@ export function AppearanceSettingsCard(): React.JSX.Element {
   )
 }
 
+function AppearanceFramePreview({
+  themeMode,
+  chromeTone
+}: {
+  themeMode?: ThemeMode
+  chromeTone: ChromeTone
+}): React.JSX.Element {
+  const colorSchemes =
+    themeMode === 'auto' ? ['light', 'dark'] : themeMode ? [themeMode] : ['current']
+
+  return (
+    <span aria-hidden="true" className="appearance-theme-preview size-12 shrink-0">
+      {colorSchemes.map((colorScheme) => (
+        <span
+          className="appearance-theme-preview__pane"
+          data-color-scheme={colorScheme}
+          data-color-tone={chromeTone}
+          key={colorScheme}
+        >
+          <span className="appearance-theme-preview__titlebar">
+            <span className="appearance-theme-preview__window-controls" />
+            <span className="appearance-theme-preview__window-title" />
+          </span>
+          <span className="appearance-theme-preview__body">
+            <span className="appearance-theme-preview__sidebar">
+              <span className="appearance-theme-preview__nav-item is-active" />
+              <span className="appearance-theme-preview__nav-item" />
+              <span className="appearance-theme-preview__nav-item" />
+            </span>
+            <span className="appearance-theme-preview__content">
+              <span className="appearance-theme-preview__toolbar" />
+              <span className="appearance-theme-preview__search" />
+              <span className="appearance-theme-preview__heading" />
+              <span className="appearance-theme-preview__text" />
+              <span className="appearance-theme-preview__text is-short" />
+            </span>
+          </span>
+        </span>
+      ))}
+    </span>
+  )
+}
+
+const themeModeOptions: Array<{
+  value: ThemeMode
+  label: string
+}> = [
+  {
+    value: 'auto',
+    label: '自动'
+  },
+  {
+    value: 'light',
+    label: '浅色'
+  },
+  {
+    value: 'dark',
+    label: '深色'
+  }
+]
+
 const chromeToneOptions: Array<{
   value: ChromeTone
   label: string
 }> = [
-  {
-    value: 'neutral',
-    label: '中性'
-  },
-  {
-    value: 'moss',
-    label: '苔绿'
-  }
+  { value: 'neutral', label: '中性' },
+  { value: 'moss', label: '苔绿' }
 ]
 
 const dictionaryLayoutOptions: Array<{

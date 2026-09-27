@@ -341,7 +341,7 @@ export class CustomCssEditorController extends BaseController {
     preview: NonNullable<typeof this.runtime.windowManager.customCssEditorPreviewView>,
     theme: CustomCssEditorTheme
   ): Promise<void> {
-    preview.setBackgroundColor(theme === 'dark' ? '#212121' : '#ffffff')
+    preview.setBackgroundColor(theme === 'dark' ? '#232323' : '#ffffff')
     const task = this.previewThemeTask.then(async () => {
       // DevTools owns media emulation while open. Restore the preview theme after it closes.
       if (preview.webContents.isDevToolsOpened()) return

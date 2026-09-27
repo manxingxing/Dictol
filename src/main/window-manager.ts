@@ -13,7 +13,7 @@ import { applySelectionWindowBehavior, hideSelectionWindow } from './selection-w
 import { WebContentsViewManager } from './web-contents-view-manager'
 
 const getMainWindowBackgroundColor = (useDarkColors: boolean): string =>
-  process.platform === 'darwin' ? '#00000000' : useDarkColors ? '#171a18' : '#faf9f7'
+  process.platform === 'darwin' ? '#00000000' : useDarkColors ? '#232323' : '#faf9f7'
 
 export class WindowManager {
   mainWindow: BrowserWindow | undefined
@@ -249,7 +249,7 @@ export class WindowManager {
       minHeight: 300,
       show: false,
       frame: false,
-      backgroundColor: darkMode ? '#212121' : '#faf9f7',
+      backgroundColor: darkMode ? '#232323' : '#faf9f7',
       resizable: true,
       minimizable: false,
       maximizable: false,
@@ -270,7 +270,7 @@ export class WindowManager {
     this.ensureActiveSpaceSubscription()
 
     const view = new WebContentsViewManager(window, {
-      backgroundColor: darkMode ? '#212121' : '#ffffff',
+      backgroundColor: darkMode ? '#232323' : '#ffffff',
       view: {
         webPreferences: {
           partition: DICTIONARY_SESSION_PARTITION,
@@ -327,7 +327,7 @@ export class WindowManager {
       minWidth: 900,
       minHeight: 560,
       show: false,
-      backgroundColor: darkMode ? '#212121' : '#faf9f7',
+      backgroundColor: darkMode ? '#232323' : '#faf9f7',
       autoHideMenuBar: true,
       webPreferences: {
         preload: resolvePreloadPath('custom-css-editor.js'),
@@ -337,7 +337,7 @@ export class WindowManager {
       }
     })
     const previewView = new WebContentsViewManager(window, {
-      backgroundColor: darkMode ? '#212121' : '#ffffff',
+      backgroundColor: darkMode ? '#232323' : '#ffffff',
       view: {
         webPreferences: {
           partition: DICTIONARY_SESSION_PARTITION,
@@ -474,7 +474,7 @@ export class WindowManager {
   private createDictionaryEntryView(): WebContentsViewManager {
     const mainWindow = this.requireMainWindow()
     return new WebContentsViewManager(mainWindow, {
-      backgroundColor: nativeTheme.shouldUseDarkColors ? '#212121' : '#ffffff',
+      backgroundColor: nativeTheme.shouldUseDarkColors ? '#232323' : '#ffffff',
       view: {
         webPreferences: {
           partition: DICTIONARY_SESSION_PARTITION,
@@ -507,28 +507,36 @@ export class WindowManager {
   private readonly updateNativeAppearance = (): void => {
     const useDarkColors = nativeTheme.shouldUseDarkColors
     const window = this.mainWindow
-    if (!window || window.isDestroyed()) return
-    window.setBackgroundColor(getMainWindowBackgroundColor(useDarkColors))
+    if (window && !window.isDestroyed()) {
+      window.setBackgroundColor(getMainWindowBackgroundColor(useDarkColors))
+    }
 
     if (this.dictionaryView && !this.dictionaryView.isDestroyed) {
-      this.dictionaryView.setBackgroundColor(useDarkColors ? '#212121' : '#ffffff')
+      this.dictionaryView.setBackgroundColor(useDarkColors ? '#232323' : '#ffffff')
     }
     if (this.aggregateDictionaryView && !this.aggregateDictionaryView.isDestroyed) {
-      this.aggregateDictionaryView.setBackgroundColor(useDarkColors ? '#212121' : '#ffffff')
+      this.aggregateDictionaryView.setBackgroundColor(useDarkColors ? '#232323' : '#ffffff')
     }
 
     const explanationWindow = this.selectionExplanationWindow
     if (explanationWindow && !explanationWindow.isDestroyed()) {
-      explanationWindow.setBackgroundColor(useDarkColors ? '#171a18' : '#faf9f7')
+      explanationWindow.setBackgroundColor(useDarkColors ? '#232323' : '#faf9f7')
     }
     if (this.selectionExplanationView && !this.selectionExplanationView.isDestroyed) {
-      this.selectionExplanationView.setBackgroundColor(useDarkColors ? '#171a18' : '#ffffff')
+      this.selectionExplanationView.setBackgroundColor(useDarkColors ? '#232323' : '#ffffff')
     }
     const customCssEditorWindow = this.customCssEditorWindow
     if (customCssEditorWindow && !customCssEditorWindow.isDestroyed()) {
-      customCssEditorWindow.setBackgroundColor(useDarkColors ? '#171a18' : '#faf9f7')
+      customCssEditorWindow.setBackgroundColor(useDarkColors ? '#232323' : '#faf9f7')
     }
-    if (process.platform === 'win32') {
+    if (this.customCssEditorPreviewView && !this.customCssEditorPreviewView.isDestroyed) {
+      this.customCssEditorPreviewView.setBackgroundColor(useDarkColors ? '#232323' : '#ffffff')
+    }
+    const browseWindow = this.browseWindow
+    if (browseWindow && !browseWindow.isDestroyed()) {
+      browseWindow.setBackgroundColor(useDarkColors ? '#232323' : '#fdfdfb')
+    }
+    if (window && !window.isDestroyed() && process.platform === 'win32') {
       window.setTitleBarOverlay({
         color: '#00000000',
         symbolColor: useDarkColors ? '#dddeda' : '#534f48',

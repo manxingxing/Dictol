@@ -6,7 +6,7 @@ import { WindowTitleBar } from '@/components/WindowTitleBar'
 import { Sidebar } from '@/components/Sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useWindowWidthThreshold } from '@/hooks/use-window-width-threshold'
-import { useChromeTone } from '@/hooks/use-chrome-tone'
+import { useAppChrome } from '@/hooks/use-app-chrome'
 import { useAppStore } from '@/stores/app-store'
 
 export function AppLayout(): React.JSX.Element {
@@ -16,7 +16,7 @@ export function AppLayout(): React.JSX.Element {
   const setDictionaryDisplay = useAppStore((state) => state.setDictionaryDisplay)
 
   useWindowWidthThreshold()
-  useChromeTone()
+  useAppChrome()
 
   useEffect(() => {
     let active = true

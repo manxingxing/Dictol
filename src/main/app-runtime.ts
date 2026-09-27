@@ -1,3 +1,4 @@
+import { nativeTheme } from 'electron'
 import type { BrowserWindow } from 'electron'
 
 import { AppConfigStore, type AppConfig } from './app-config'
@@ -147,6 +148,7 @@ export class AppRuntime {
     if (this.disposed) throw new Error('AppRuntime 已销毁，不能重新初始化')
 
     const config = this.appConfig.load()
+    nativeTheme.themeSource = config.themeMode === 'auto' ? 'system' : config.themeMode
     this.dictionaryLayout = config.dictionaryLayout
     this.selectionDictionaryGroupId = config.selection.dictionaryGroupId
     this.initDB()

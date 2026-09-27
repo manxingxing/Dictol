@@ -3,7 +3,7 @@ import { Check, ChevronDown, LoaderCircle, Search, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useChromeTone } from '@/hooks/use-chrome-tone'
+import { useAppChrome } from '@/hooks/use-app-chrome'
 import { cn } from '@/lib/utils'
 import {
   SEARCH_POPOVER_SUGGESTION_LIST_MAX_HEIGHT,
@@ -48,7 +48,7 @@ const initialPayload: SearchPopoverPayload = {
 }
 
 export function SearchPopoverApp(): React.JSX.Element {
-  useChromeTone()
+  useAppChrome()
 
   const inputRef = useRef<HTMLInputElement>(null)
   const latestPayloadRef = useRef<SearchPopoverPayload>(initialPayload)

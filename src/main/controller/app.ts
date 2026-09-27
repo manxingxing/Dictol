@@ -1,6 +1,7 @@
 import {
   app,
   ipcMain,
+  nativeTheme,
   session,
   shell,
   type IpcMainInvokeEvent,
@@ -10,6 +11,7 @@ import {
 
 import type { DictionaryLayout } from '../../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../../shared/dictionary-display'
+import type { ThemeMode } from '../../shared/theme-mode'
 import { BaseController } from './base-controller'
 import { DICTIONARY_SESSION_PARTITION, EMBED_BROWSER_SESSION_PARTITION } from '../entry-assets'
 
@@ -48,6 +50,8 @@ export class AppController extends BaseController {
     ipcMain.handle('app:save-dictionary-layout', this.saveDictionaryLayout)
     ipcMain.handle('app:get-dictionary-display', this.getDictionaryDisplay)
     ipcMain.handle('app:save-dictionary-display', this.saveDictionaryDisplay)
+    ipcMain.handle('app:get-theme-mode', this.getThemeMode)
+    ipcMain.handle('app:save-theme-mode', this.saveThemeMode)
     ipcMain.handle('app:get-resource-cache-size', this.getResourceCacheSize)
     ipcMain.handle('app:clear-resource-cache', this.clearResourceCache)
     ipcMain.handle('app:open-resource-cache-directory', this.openResourceCacheDirectory)
@@ -93,6 +97,23 @@ export class AppController extends BaseController {
     const current = this.runtime.appConfig.load()
     this.runtime.appConfig.save({ ...current, dictionaryDisplay: display })
     return display
+  }
+
+  getThemeMode = (event: IpcMainInvokeEvent): ThemeMode | null => {
+    if (!this.acceptsSender(event.sender)) return null
+    return this.runtime.appConfig.load().themeMode
+  }
+
+  saveThemeMode = (event: IpcMainInvokeEvent, themeMode: unknown): ThemeMode | null => {
+    if (!this.acceptsSender(event.sender)) return null
+    if (themeMode !== 'auto' && themeMode !== 'light' && themeMode !== 'dark') {
+      throw new Error('主题模式设置无效。')
+    }
+
+    const current = this.runtime.appConfig.load()
+    this.runtime.appConfig.save({ ...current, themeMode })
+    nativeTheme.themeSource = themeMode === 'auto' ? 'system' : themeMode
+    return themeMode
   }
 
   getResourceCacheSize = async (event: IpcMainInvokeEvent): Promise<number> => {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { useChromeTone } from '@/hooks/use-chrome-tone'
+import { useAppChrome } from '@/hooks/use-app-chrome'
 import type { SelectionExplanationPayload } from '../../../shared/selection-explanation'
 import { AiExplanation } from './AiExplanation'
 import { DictionaryExplanation } from './DictionaryExplanation'
@@ -28,7 +28,7 @@ const initialPayload: SelectionExplanationPayload = {
 }
 
 export function SelectionExplanationApp(): React.JSX.Element {
-  useChromeTone()
+  useAppChrome()
 
   const [payload, setPayload] = useState(initialPayload)
   useEffect(() => window.dictolSelectionExplanation.onUpdate(setPayload), [])

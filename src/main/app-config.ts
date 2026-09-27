@@ -5,8 +5,10 @@ import { dirname, join } from 'node:path'
 import { DEFAULT_TTS_VOICE } from '../shared/tts'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
+import type { ThemeMode } from '../shared/theme-mode'
 
 export type AppConfig = {
+  themeMode: ThemeMode
   aggregateLayout: 'vertical' | 'horizontal'
   dictionaryLayout: DictionaryLayout
   dictionaryDisplay: DictionaryDisplay
@@ -34,6 +36,7 @@ export type AppConfig = {
 }
 
 const DEFAULT_CONFIG: AppConfig = {
+  themeMode: 'auto',
   aggregateLayout: 'vertical',
   dictionaryLayout: 'single',
   dictionaryDisplay: 'icon',
@@ -129,6 +132,7 @@ export class AppConfigStore {
 function parseConfig(value: unknown): AppConfig {
   if (typeof value !== 'object' || value === null) return cloneConfig(DEFAULT_CONFIG)
   const candidate = value as {
+    themeMode?: unknown
     aggregateLayout?: unknown
     dictionaryLayout?: unknown
     dictionaryDisplay?: unknown
@@ -148,6 +152,10 @@ function parseConfig(value: unknown): AppConfig {
   }
 
   return {
+    themeMode:
+      candidate.themeMode === 'light' || candidate.themeMode === 'dark'
+        ? candidate.themeMode
+        : DEFAULT_CONFIG.themeMode,
     aggregateLayout: candidate.aggregateLayout === 'horizontal' ? 'horizontal' : 'vertical',
     dictionaryLayout:
       candidate.dictionaryLayout === 'aggregate' ? 'aggregate' : DEFAULT_CONFIG.dictionaryLayout,
@@ -202,6 +210,7 @@ function parseConfig(value: unknown): AppConfig {
 
 function cloneConfig(config: AppConfig): AppConfig {
   return {
+    themeMode: config.themeMode,
     aggregateLayout: config.aggregateLayout,
     dictionaryLayout: config.dictionaryLayout,
     dictionaryDisplay: config.dictionaryDisplay,

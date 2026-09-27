@@ -3,7 +3,7 @@ import { extname, resolve, sep } from 'node:path'
 
 import { getAppRunTime } from './app-runtime'
 
-const MDD_FILE_CACHE_THRESHOLD = 10n * 1024n
+const MDD_FILE_CACHE_THRESHOLD = 20n * 1024n
 
 export type LoadedDictionaryResource = {
   bytes: Buffer
