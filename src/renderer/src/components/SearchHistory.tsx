@@ -41,7 +41,7 @@ export function SearchHistory({
         <Clock3 className="size-3.5" />
         最近查询
       </div>
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="[&>div]:!block">
         <ul className="space-y-1">
           {recentTerms.map((item, index) => (
             <li
