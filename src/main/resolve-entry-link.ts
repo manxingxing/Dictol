@@ -29,16 +29,13 @@ export async function resolveEntryLinkWithAnchor(
     const fallbackTerm = word.slice(0, hashIndex).trim()
     if (!fallbackTerm) return { request, match: null, didLookup: true }
 
-    const match = await lookup(sourceDictionaryId, fallbackTerm)
-    if (!match) return { request, match: null, didLookup: true }
-
     return {
       request: {
         ...request,
-        word: match.word,
+        word: fallbackTerm,
         ...(word.slice(hashIndex + 1) ? { anchor: word.slice(hashIndex + 1) } : {})
       },
-      match,
+      match: { word: fallbackTerm },
       didLookup: true
     }
   } catch (error) {
