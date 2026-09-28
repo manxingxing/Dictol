@@ -20,14 +20,15 @@ export class TrayManager {
 
       this.tray = new Tray(icon)
       this.tray.setToolTip('Dictol')
-      this.tray.setContextMenu(
-        Menu.buildFromTemplate([
-          { label: '显示 Dictol', click: this.showMainWindow },
-          { type: 'separator' },
-          { label: '退出 Dictol', click: () => app.quit() }
-        ])
-      )
-      this.tray.on('click', this.showContextMenu)
+      const contextMenu = Menu.buildFromTemplate([
+        { label: '显示 Dictol', click: this.showMainWindow },
+        { type: 'separator' },
+        { label: '退出 Dictol', click: () => app.quit() }
+      ])
+      this.tray.on('right-click', () => {
+        this.tray?.popUpContextMenu(contextMenu);
+      })
+      this.tray.on('click', this.showMainWindow)
     } catch (error) {
       console.warn('Failed to create system tray', error)
     }
@@ -51,10 +52,6 @@ export class TrayManager {
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.show()
     mainWindow.focus()
-  }
-
-  private readonly showContextMenu = (): void => {
-    this.tray?.popUpContextMenu()
   }
 
   private getMainWindow(): BrowserWindow | undefined {
