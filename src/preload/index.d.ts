@@ -557,7 +557,11 @@ declare global {
       }
       dictionaryView: {
         show: (target: { dictionaryId: string; term: string; anchor?: string }) => Promise<void>
-        showAggregate: (target: { term: string; dictionaryId?: string; anchor?: string }) => Promise<void>
+        showAggregate: (target: {
+          term: string
+          dictionaryId?: string
+          anchor?: string
+        }) => Promise<void>
         scrollToDictionary: (dictionaryId: string) => void
         hide: () => void
         showFindBar: () => void
@@ -565,16 +569,27 @@ declare global {
         onLoadingChanged: (callback: (isLoading: boolean) => void) => () => void
         onActiveDictionaryChanged: (callback: (dictionaryId: string) => void) => () => void
         onLookupWord: (
-          callback: (request: { word: string; sourceDictionaryId?: string; anchor?: string }) => void
+          callback: (request: {
+            word: string
+            sourceDictionaryId?: string
+            anchor?: string
+          }) => void
         ) => () => void
         onExplainWithAi: (callback: (text: string) => void) => () => void
       }
       embedBrowser: {
-        load: (url: string) => Promise<void>
-        setBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
-        hide: () => void
-        onUrlChanged: (callback: (url: string) => void) => () => void
-        onLoadingChanged: (callback: (isLoading: boolean) => void) => () => void
+        load: (tabId: string, url: string, navigationVersion: number) => Promise<void>
+        activate: (
+          tabId: string | null,
+          bounds?: { x: number; y: number; width: number; height: number }
+        ) => void
+        setBounds: (
+          tabId: string,
+          bounds: { x: number; y: number; width: number; height: number }
+        ) => void
+        close: (tabId: string) => Promise<boolean>
+        onUrlChanged: (callback: (tabId: string, url: string) => void) => () => void
+        onLoadingChanged: (callback: (tabId: string, isLoading: boolean) => void) => () => void
       }
     }
   }

@@ -30,7 +30,7 @@ export class NotificationController extends BaseController {
     const views = [
       windowManager.dictionaryView,
       windowManager.aggregateDictionaryView,
-      windowManager.embedBrowserView,
+      ...windowManager.embedBrowserViews.values(),
       windowManager.searchPopoverView,
       windowManager.selectionExplanationView,
       windowManager.findBarView

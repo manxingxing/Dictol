@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useCallback, useEffect, useId, useMemo, useRef } from 'react'
 import {
   AuiIf,
   AssistantRuntimeProvider,
@@ -14,24 +13,26 @@ import {
   type ChatModelAdapter
 } from '@assistant-ui/react'
 import type { TextMessagePartProps } from '@assistant-ui/react'
-import { ArrowUp, Bot, Info, Link, Square, Sparkles, Unlink, X } from 'lucide-react'
+import { ArrowUp, Bot, Info, Square } from 'lucide-react'
 
 import { AiRichText } from '@/components/AiRichText'
-import { RightSidebarSizeToggle } from '@/components/RightSidebarSizeToggle'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import type { RightSidebarAiTab } from '@/stores/app-store'
 import { useAppStore } from '@/stores/app-store'
-
-type AiLookupThreadProps = {
-  word: string
-}
 
 type AiLookupEvent = Parameters<Parameters<typeof window.dictol.aiLookup.onEvent>[0]>[0]
 
-function createIpcChatModel(sourceText: string): ChatModelAdapter {
+function createIpcChatModel(tabId: string, initialTerm: string): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal }) {
       abortSignal.throwIfAborted()
+      const tab = useAppStore
+        .getState()
+        .rightSidebarTabs.find(
+          (tab): tab is RightSidebarAiTab => tab.id === tabId && tab.kind === 'ai'
+        )
+      const sourceText = tab?.term ?? initialTerm
       const serializedMessages = messages.flatMap((message) => {
         const content = message.content
           .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
@@ -130,94 +131,85 @@ function createIpcChatModel(sourceText: string): ChatModelAdapter {
   }
 }
 
-export function AiLookupSidebar(): React.JSX.Element {
-  const { term } = useParams<{ term?: string }>()
-  const word = useAppStore((state) => state.aiSearchTerm)
-  const setAiSearchTerm = useAppStore((state) => state.setAiSearchTerm)
-  const setRightSidebarOpen = useAppStore((state) => state.setRightSidebarOpen)
-  const [followSearch, setFollowSearch] = useState(false)
-  const normalizedTerm = term?.trim() ?? ''
-  const normalizedWord = word.trim()
-  const followedTermRef = useRef(normalizedTerm)
-
-  useEffect(() => {
-    if (!followSearch) return
-    if (normalizedTerm === followedTermRef.current) return
-
-    followedTermRef.current = normalizedTerm
-    if (normalizedTerm && normalizedTerm !== normalizedWord) setAiSearchTerm(normalizedTerm)
-  }, [followSearch, normalizedTerm, normalizedWord, setAiSearchTerm])
-
+export function AiLookupTab({
+  active,
+  tab
+}: {
+  active: boolean
+  tab: RightSidebarAiTab
+}): React.JSX.Element {
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[var(--ai-panel-background)]">
-      <div className="flex h-12 shrink-0 items-center border-b border-border px-4">
-        <Sparkles className="mr-2 size-4 text-primary" />
-        <h2 className="min-w-0 flex-1 text-sm font-medium">AI 查词</h2>
-        <Button
-          aria-label={followSearch ? '关闭跟随查询' : '跟随查询'}
-          aria-pressed={followSearch}
-          className={cn(
-            'mr-1 size-7 shrink-0',
-            followSearch && 'bg-primary/10 text-primary hover:bg-primary/15'
-          )}
-          onClick={() => {
-            if (!followSearch) followedTermRef.current = normalizedTerm
-            setFollowSearch((value) => !value)
-          }}
-          size="icon"
-          title={followSearch ? '关闭跟随查询' : '跟随查询'}
-          type="button"
-          variant="ghost"
-        >
-          {followSearch ? <Link /> : <Unlink />}
-        </Button>
-        <RightSidebarSizeToggle />
-        <Button
-          aria-label="关闭辅助面板"
-          className="size-7 shrink-0"
-          onClick={() => setRightSidebarOpen(false)}
-          size="icon"
-          title="关闭辅助面板"
-          type="button"
-          variant="ghost"
-        >
-          <X />
-        </Button>
-      </div>
-      {normalizedWord ? (
-        <AiLookupSession key={normalizedWord} sourceText={normalizedWord} />
-      ) : (
-        <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm leading-6 text-muted-foreground">
-          选择一个词条后，可以在这里询问 AI
-        </div>
-      )}
-    </div>
+    <section
+      aria-label={`AI 对话：${tab.title}`}
+      className="absolute inset-0 min-h-0 flex-col bg-[var(--ai-panel-background)]"
+      id={`right-sidebar-panel-${tab.id}`}
+      role="tabpanel"
+      style={{ display: active ? 'flex' : 'none' }}
+    >
+      <AiLookupSession
+        followUpPrompt={tab.followUpPrompt}
+        followUpVersion={tab.followUpVersion}
+        initialTerm={tab.initialTerm}
+        tabId={tab.id}
+      />
+    </section>
   )
 }
 
-function AiLookupSession({ sourceText }: { sourceText: string }): React.JSX.Element {
-  const model = useMemo(() => createIpcChatModel(sourceText), [sourceText])
+function AiLookupSession({
+  followUpPrompt,
+  followUpVersion,
+  initialTerm,
+  tabId
+}: {
+  followUpPrompt: string
+  followUpVersion: number
+  initialTerm: string
+  tabId: string
+}): React.JSX.Element {
+  const model = useMemo(() => createIpcChatModel(tabId, initialTerm), [tabId, initialTerm])
   const runtime = useLocalRuntime(model)
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <AiLookupThread word={sourceText} />
+      <AiLookupThread
+        followUpPrompt={followUpPrompt}
+        followUpVersion={followUpVersion}
+        initialTerm={initialTerm}
+      />
     </AssistantRuntimeProvider>
   )
 }
 
-function AiLookupThread({ word }: AiLookupThreadProps): React.JSX.Element {
+function AiLookupThread({
+  followUpPrompt,
+  followUpVersion,
+  initialTerm
+}: {
+  followUpPrompt: string
+  followUpVersion: number
+  initialTerm: string
+}): React.JSX.Element {
   const aui = useAui()
-  const normalizedWord = word.trim()
+  const handledFollowUpVersionRef = useRef(followUpVersion)
 
   useEffect(() => {
-    if (!normalizedWord) return
-    aui.thread().reset()
+    if (!initialTerm) return
     aui.thread().append({
       role: 'user',
-      content: [{ type: 'text', text: normalizedWord }],
+      content: [{ type: 'text', text: initialTerm }],
       startRun: true
     })
-  }, [aui, normalizedWord])
+  }, [aui, initialTerm])
+
+  useEffect(() => {
+    if (!followUpPrompt || followUpVersion === handledFollowUpVersionRef.current) return
+    handledFollowUpVersionRef.current = followUpVersion
+    aui.thread().append({
+      role: 'user',
+      content: [{ type: 'text', text: followUpPrompt }],
+      startRun: true
+    })
+  }, [aui, followUpPrompt, followUpVersion])
 
   const renderMessage = useCallback(
     ({ message }: { message: { role: string } }): React.JSX.Element => {

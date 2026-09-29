@@ -19,7 +19,7 @@ export class WindowManager {
   mainWindow: BrowserWindow | undefined
   dictionaryView: WebContentsViewManager | undefined
   aggregateDictionaryView: WebContentsViewManager | undefined
-  embedBrowserView: WebContentsViewManager | undefined
+  readonly embedBrowserViews = new Map<string, WebContentsViewManager>()
   searchPopoverView: WebContentsViewManager | undefined
   selectionToolbarWindow: BrowserWindow | undefined
   selectionExplanationWindow: BrowserWindow | undefined
@@ -38,12 +38,11 @@ export class WindowManager {
 
     this.dictionaryView?.dispose()
     this.aggregateDictionaryView?.dispose()
-    this.embedBrowserView?.dispose()
+    this.disposeEmbedBrowserViews()
     this.searchPopoverView?.dispose()
     this.findBarView?.dispose()
     this.dictionaryView = undefined
     this.aggregateDictionaryView = undefined
-    this.embedBrowserView = undefined
     this.searchPopoverView = undefined
     this.findBarView = undefined
 
@@ -90,7 +89,10 @@ export class WindowManager {
     }
     this.mainWindow = mainWindow
     mainWindow.on('closed', () => {
-      if (this.mainWindow === mainWindow) this.mainWindow = undefined
+      if (this.mainWindow === mainWindow) {
+        this.mainWindow = undefined
+        this.disposeEmbedBrowserViews()
+      }
     })
     return mainWindow
   }
@@ -138,9 +140,10 @@ export class WindowManager {
     return searchPopoverView
   }
 
-  createEmbedBrowserView(): WebContentsViewManager {
-    if (this.embedBrowserView && !this.embedBrowserView.isDestroyed) {
-      return this.embedBrowserView
+  createEmbedBrowserView(tabId: string): WebContentsViewManager {
+    const existing = this.embedBrowserViews.get(tabId)
+    if (existing && !existing.isDestroyed) {
+      return existing
     }
 
     const mainWindow = this.requireMainWindow()
@@ -156,8 +159,16 @@ export class WindowManager {
       }
     })
 
-    this.embedBrowserView = embedBrowserView
+    this.embedBrowserViews.set(tabId, embedBrowserView)
     return embedBrowserView
+  }
+
+  closeEmbedBrowserView(tabId: string): boolean {
+    const view = this.embedBrowserViews.get(tabId)
+    if (!view) return false
+    this.embedBrowserViews.delete(tabId)
+    view.dispose()
+    return true
   }
 
   createFindBarView(): WebContentsViewManager {
@@ -367,8 +378,12 @@ export class WindowManager {
 
     const mainBounds = mainWindow.getBounds()
     const display = screen.getDisplayMatching(mainBounds)
-    const { x: workAreaX, y: workAreaY, width: workAreaWidth, height: workAreaHeight } =
-      display.workArea
+    const {
+      x: workAreaX,
+      y: workAreaY,
+      width: workAreaWidth,
+      height: workAreaHeight
+    } = display.workArea
     const width = 350
     const gap = 8
     const height = Math.min(mainBounds.height, workAreaHeight)
@@ -429,7 +444,7 @@ export class WindowManager {
     }
     this.dictionaryView?.dispose()
     this.aggregateDictionaryView?.dispose()
-    this.embedBrowserView?.dispose()
+    this.disposeEmbedBrowserViews()
     this.searchPopoverView?.dispose()
     this.selectionExplanationView?.dispose()
     this.findBarView?.dispose()
@@ -449,7 +464,6 @@ export class WindowManager {
 
     this.dictionaryView = undefined
     this.aggregateDictionaryView = undefined
-    this.embedBrowserView = undefined
     this.searchPopoverView = undefined
     this.selectionToolbarWindow = undefined
     this.selectionExplanationWindow = undefined
@@ -469,6 +483,11 @@ export class WindowManager {
     }
 
     return this.mainWindow
+  }
+
+  private disposeEmbedBrowserViews(): void {
+    for (const view of this.embedBrowserViews.values()) view.dispose()
+    this.embedBrowserViews.clear()
   }
 
   private createDictionaryEntryView(): WebContentsViewManager {

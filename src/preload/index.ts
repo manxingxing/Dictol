@@ -169,9 +169,7 @@ type WordCaptureStatus = {
 }
 
 type WordCaptureEvent =
-  | { type: 'permission-required' }
-  | { type: 'empty' }
-  | { type: 'error'; message: string }
+  { type: 'permission-required' } | { type: 'empty' } | { type: 'error'; message: string }
 
 type WordCaptureShortcutResult = {
   ok: boolean
@@ -555,18 +553,29 @@ const api = Object.freeze({
     }
   }),
   embedBrowser: Object.freeze({
-    load: (url: string): Promise<void> => ipcRenderer.invoke('embed-browser:load', url),
-    setBounds: (bounds: { x: number; y: number; width: number; height: number }): void =>
-      ipcRenderer.send('embed-browser:set-bounds', bounds),
-    hide: (): void => ipcRenderer.send('embed-browser:hide'),
-    onUrlChanged: (callback: (url: string) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, url: string): void => callback(url)
+    load: (tabId: string, url: string, navigationVersion: number): Promise<void> =>
+      ipcRenderer.invoke('embed-browser:load', { tabId, url, navigationVersion }),
+    activate: (
+      tabId: string | null,
+      bounds?: { x: number; y: number; width: number; height: number }
+    ): void => ipcRenderer.send('embed-browser:activate', { tabId, bounds }),
+    setBounds: (
+      tabId: string,
+      bounds: { x: number; y: number; width: number; height: number }
+    ): void => ipcRenderer.send('embed-browser:set-bounds', { tabId, bounds }),
+    close: (tabId: string): Promise<boolean> => ipcRenderer.invoke('embed-browser:close', tabId),
+    onUrlChanged: (callback: (tabId: string, url: string) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, tabId: string, url: string): void =>
+        callback(tabId, url)
       ipcRenderer.on('embed-browser:url-changed', listener)
       return () => ipcRenderer.removeListener('embed-browser:url-changed', listener)
     },
-    onLoadingChanged: (callback: (isLoading: boolean) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, isLoading: boolean): void =>
-        callback(isLoading)
+    onLoadingChanged: (callback: (tabId: string, isLoading: boolean) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        tabId: string,
+        isLoading: boolean
+      ): void => callback(tabId, isLoading)
       ipcRenderer.on('embed-browser:loading-changed', listener)
       return () => ipcRenderer.removeListener('embed-browser:loading-changed', listener)
     }

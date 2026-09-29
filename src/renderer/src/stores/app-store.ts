@@ -9,7 +9,28 @@ export const RIGHT_SIDEBAR_MAX_SIZE = '50'
 export const APP_PREFERENCES_STORAGE_KEY = 'dictol:app-preferences'
 
 export type ChromeTone = 'neutral' | 'moss'
-export type RightSidebarType = 'ai-search' | 'embed-browser'
+export type RightSidebarTab = RightSidebarAiTab | RightSidebarOnlineTab
+export type RightSidebarAiTab = {
+  id: string
+  kind: 'ai'
+  title: string
+  initialTerm: string
+  term: string
+  followUpPrompt: string
+  followUpVersion: number
+}
+export type RightSidebarOnlineTab = {
+  id: string
+  kind: 'online'
+  title: string
+  dictionaryId: string
+  faviconUrl: string
+  urlTemplate: string
+  url: string
+  currentUrl: string
+  searchTerm: string
+  navigationVersion: number
+}
 type ResizablePanelSize = number | string | undefined
 
 interface AppState {
@@ -25,8 +46,20 @@ interface AppState {
   rightSidebarOpen: boolean
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
-  rightSidebarType: RightSidebarType
-  setRightSidebarType: (type: RightSidebarType) => void
+  rightSidebarTabs: RightSidebarTab[]
+  activeRightSidebarTabId: string | null
+  followRightSidebarSearch: boolean
+  openOnlineDictionaryTab: (
+    dictionary: { id: string | number; name: string; faviconUrl: string; urlTemplate: string },
+    term: string
+  ) => void
+  openAiLookupTab: (term: string) => void
+  activateRightSidebarTab: (id: string) => void
+  closeRightSidebarTab: (id: string) => void
+  navigateOnlineDictionaryTab: (id: string, url: string, searchTerm: string) => void
+  updateOnlineDictionaryTabUrl: (id: string, currentUrl: string) => void
+  setFollowRightSidebarSearch: (follow: boolean) => void
+  followSearchInRightSidebarTabs: (term: string) => void
   searchPanelSize: number | undefined
   setSearchPanelSize: (size: number | undefined) => void
   rightSidebarSize: ResizablePanelSize
@@ -35,12 +68,6 @@ interface AppState {
   setRightSidebarMaximized: (maximized: boolean) => void
   rightSidebarResizeRequest: number
   toggleRightSidebarSize: () => void
-  embedBrowserUrl: string
-  setEmbedBrowserUrl: (url: string) => void
-  embedBrowserSearchTerm: string
-  setEmbedBrowserSearchTerm: (term: string) => void
-  aiSearchTerm: string
-  setAiSearchTerm: (term: string) => void
   windowBelowCompactThreshold: boolean
   setWindowBelowCompactThreshold: (belowThreshold: boolean) => void
   searchQuery: string
@@ -67,8 +94,156 @@ export const useAppStore = create<AppState>()(
       rightSidebarOpen: false,
       toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),
       setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
-      rightSidebarType: 'ai-search',
-      setRightSidebarType: (rightSidebarType) => set({ rightSidebarType }),
+      rightSidebarTabs: [],
+      activeRightSidebarTabId: null,
+      followRightSidebarSearch: false,
+      openOnlineDictionaryTab: (dictionary, term) => {
+        const normalizedTerm = term.trim()
+        const tabId = `tab-${crypto.randomUUID()}`
+        const url = fillDictionaryUrlTemplate(dictionary.urlTemplate, normalizedTerm)
+        set((state) => {
+          const existing = state.rightSidebarTabs.find(
+            (tab): tab is RightSidebarOnlineTab =>
+              tab.kind === 'online' && tab.dictionaryId === String(dictionary.id)
+          )
+          const tabs = existing
+            ? state.rightSidebarTabs.map((tab) =>
+                tab.id === existing.id
+                  ? {
+                      ...existing,
+                      title: dictionary.name,
+                      faviconUrl: dictionary.faviconUrl,
+                      urlTemplate: dictionary.urlTemplate,
+                      url,
+                      currentUrl: url,
+                      searchTerm: normalizedTerm,
+                      navigationVersion: existing.navigationVersion + 1
+                    }
+                  : tab
+              )
+            : [
+                ...state.rightSidebarTabs,
+                {
+                  id: tabId,
+                  kind: 'online' as const,
+                  title: dictionary.name,
+                  dictionaryId: String(dictionary.id),
+                  faviconUrl: dictionary.faviconUrl,
+                  urlTemplate: dictionary.urlTemplate,
+                  url,
+                  currentUrl: url,
+                  searchTerm: normalizedTerm,
+                  navigationVersion: 0
+                }
+              ]
+          const activeId = existing?.id ?? tabId
+          return {
+            rightSidebarTabs: tabs,
+            activeRightSidebarTabId: activeId,
+            rightSidebarOpen: true
+          }
+        })
+      },
+      openAiLookupTab: (term) => {
+        const normalizedTerm = term.trim()
+        if (!normalizedTerm) return
+        set((state) => {
+          const existing = state.rightSidebarTabs.find(
+            (tab): tab is RightSidebarAiTab => tab.kind === 'ai'
+          )
+          const tab: RightSidebarAiTab = existing
+            ? {
+                ...existing,
+                title: normalizedTerm,
+                term: normalizedTerm,
+                followUpPrompt: normalizedTerm,
+                followUpVersion: existing.followUpVersion + 1
+              }
+            : {
+                id: `tab-${crypto.randomUUID()}`,
+                kind: 'ai',
+                title: normalizedTerm,
+                initialTerm: normalizedTerm,
+                term: normalizedTerm,
+                followUpPrompt: '',
+                followUpVersion: 0
+              }
+          return {
+            rightSidebarTabs: existing
+              ? state.rightSidebarTabs.map((currentTab) =>
+                  currentTab.id === existing.id ? tab : currentTab
+                )
+              : [...state.rightSidebarTabs, tab],
+            activeRightSidebarTabId: tab.id,
+            rightSidebarOpen: true
+          }
+        })
+      },
+      activateRightSidebarTab: (activeRightSidebarTabId) =>
+        set({ activeRightSidebarTabId, rightSidebarOpen: true }),
+      closeRightSidebarTab: (id) =>
+        set((state) => {
+          const index = state.rightSidebarTabs.findIndex((tab) => tab.id === id)
+          if (index < 0) return state
+          const tabs = state.rightSidebarTabs.filter((tab) => tab.id !== id)
+          const activeRightSidebarTabId =
+            state.activeRightSidebarTabId === id
+              ? ((tabs[index - 1] ?? tabs[index])?.id ?? null)
+              : state.activeRightSidebarTabId
+          return { rightSidebarTabs: tabs, activeRightSidebarTabId }
+        }),
+      navigateOnlineDictionaryTab: (id, url, searchTerm) =>
+        set((state) => ({
+          rightSidebarTabs: state.rightSidebarTabs.map((tab) =>
+            tab.id === id && tab.kind === 'online'
+              ? {
+                  ...tab,
+                  url,
+                  currentUrl: url,
+                  searchTerm,
+                  urlTemplate: '',
+                  navigationVersion: tab.navigationVersion + 1
+                }
+              : tab
+          )
+        })),
+      updateOnlineDictionaryTabUrl: (id, currentUrl) =>
+        set((state) => ({
+          rightSidebarTabs: state.rightSidebarTabs.map((tab) =>
+            tab.id === id && tab.kind === 'online' ? { ...tab, currentUrl } : tab
+          )
+        })),
+      setFollowRightSidebarSearch: (followRightSidebarSearch) => set({ followRightSidebarSearch }),
+      followSearchInRightSidebarTabs: (term) => {
+        const normalizedTerm = term.trim()
+        if (!normalizedTerm) return
+        set((state) => ({
+          rightSidebarTabs: state.rightSidebarTabs.map((tab) => {
+            if (tab.kind === 'ai') {
+              return tab.term === normalizedTerm
+                ? tab
+                : {
+                    ...tab,
+                    title: normalizedTerm,
+                    term: normalizedTerm,
+                    followUpPrompt: normalizedTerm,
+                    followUpVersion: tab.followUpVersion + 1
+                  }
+            }
+            if (tab.searchTerm === normalizedTerm) return tab
+            const url = tab.urlTemplate
+              ? fillDictionaryUrlTemplate(tab.urlTemplate, normalizedTerm)
+              : replaceSearchTerm(tab.currentUrl || tab.url, tab.searchTerm, normalizedTerm)
+            return {
+              ...tab,
+              url,
+              currentUrl: url,
+              searchTerm: normalizedTerm,
+              navigationVersion: tab.navigationVersion + 1
+            }
+          })
+        }))
+      },
       searchPanelSize: undefined,
       setSearchPanelSize: (searchPanelSize) => set({ searchPanelSize }),
       rightSidebarSize: undefined,
@@ -94,18 +269,12 @@ export const useAppStore = create<AppState>()(
             : RIGHT_SIDEBAR_MAX_SIZE,
           rightSidebarResizeRequest: state.rightSidebarResizeRequest + 1
         })),
-      embedBrowserUrl: '',
-      setEmbedBrowserUrl: (embedBrowserUrl) => set({ embedBrowserUrl }),
-      embedBrowserSearchTerm: '',
-      setEmbedBrowserSearchTerm: (embedBrowserSearchTerm) => set({ embedBrowserSearchTerm }),
       windowBelowCompactThreshold:
         typeof window !== 'undefined' && window.innerWidth < COMPACT_MODE_WIDTH_THRESHOLD,
       setWindowBelowCompactThreshold: (windowBelowCompactThreshold) =>
         set({ windowBelowCompactThreshold }),
       searchQuery: '',
       setSearchQuery: (searchQuery) => set({ searchQuery }),
-      aiSearchTerm: '',
-      setAiSearchTerm: (aiSearchTerm) => set({ aiSearchTerm }),
       lastQueryPath: '',
       setLastQueryPath: (lastQueryPath) => set({ lastQueryPath })
     }),
@@ -124,3 +293,17 @@ export const useAppStore = create<AppState>()(
     }
   )
 )
+
+function fillDictionaryUrlTemplate(template: string, term: string): string {
+  return template.split('%s').join(encodeURIComponent(term))
+}
+
+function replaceSearchTerm(url: string, previousTerm: string, nextTerm: string): string {
+  if (!previousTerm) return url
+  const encodedPreviousTerm = encodeURIComponent(previousTerm)
+  if (url.includes(encodedPreviousTerm)) {
+    return url.split(encodedPreviousTerm).join(encodeURIComponent(nextTerm))
+  }
+  if (url.includes(previousTerm)) return url.split(previousTerm).join(nextTerm)
+  return url
+}

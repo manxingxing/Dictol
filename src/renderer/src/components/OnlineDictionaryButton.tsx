@@ -17,17 +17,10 @@ export function OnlineDictionaryButton({
   searchTerm,
   zIndex
 }: OnlineDictionaryButtonProps): React.JSX.Element {
-  const setEmbedBrowserUrl = useAppStore((state) => state.setEmbedBrowserUrl)
-  const setEmbedBrowserSearchTerm = useAppStore((state) => state.setEmbedBrowserSearchTerm)
-  const setRightSidebarOpen = useAppStore((state) => state.setRightSidebarOpen)
-  const setRightSidebarType = useAppStore((state) => state.setRightSidebarType)
+  const openOnlineDictionaryTab = useAppStore((state) => state.openOnlineDictionaryTab)
 
   const lookupInOnlineDictionary = (): void => {
-    const url = dictionary.urlTemplate.split('%s').join(encodeURIComponent(searchTerm))
-    setEmbedBrowserSearchTerm(searchTerm)
-    setEmbedBrowserUrl(url)
-    setRightSidebarType('embed-browser')
-    setRightSidebarOpen(true)
+    openOnlineDictionaryTab(dictionary, searchTerm)
   }
 
   return (

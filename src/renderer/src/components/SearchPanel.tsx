@@ -28,10 +28,7 @@ export const SearchPanel = (): React.JSX.Element => {
   const [searchParams] = useSearchParams()
   const searchQuery = useAppStore((state) => state.searchQuery)
   const setSearchQuery = useAppStore((state) => state.setSearchQuery)
-  const setRightSidebarOpen = useAppStore((state) => state.setRightSidebarOpen)
-  const setRightSidebarType = useAppStore((state) => state.setRightSidebarType)
-  const setEmbedBrowserSearchTerm = useAppStore((state) => state.setEmbedBrowserSearchTerm)
-  const setEmbedBrowserUrl = useAppStore((state) => state.setEmbedBrowserUrl)
+  const openOnlineDictionaryTab = useAppStore((state) => state.openOnlineDictionaryTab)
   const setRightSidebarSize = useAppStore((state) => state.setRightSidebarSize)
   const displayInCompactMode = useAppStore(selectCompactMode)
 
@@ -296,13 +293,7 @@ export const SearchPanel = (): React.JSX.Element => {
                         aria-label={`在 ${dictionary.name} 中查找 ${normalizedQuery}`}
                         className="h-9 w-full justify-start px-3 text-left"
                         onClick={() => {
-                          const url = dictionary.urlTemplate
-                            .split('%s')
-                            .join(encodeURIComponent(normalizedQuery))
-                          setEmbedBrowserSearchTerm(normalizedQuery)
-                          setEmbedBrowserUrl(url)
-                          setRightSidebarType('embed-browser')
-                          setRightSidebarOpen(true)
+                          openOnlineDictionaryTab(dictionary, normalizedQuery)
                           setRightSidebarSize(RIGHT_SIDEBAR_MAX_SIZE)
                         }}
                         title={`在 ${dictionary.name} 中查找`}

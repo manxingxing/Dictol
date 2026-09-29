@@ -10,24 +10,19 @@ interface AiLookupButtonProps {
 }
 
 export function AiLookupButton({ term }: AiLookupButtonProps): React.JSX.Element {
-  const aiSearchTerm = useAppStore((state) => state.aiSearchTerm)
-  const setAiSearchTerm = useAppStore((state) => state.setAiSearchTerm)
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
-  const setRightSidebarOpen = useAppStore((state) => state.setRightSidebarOpen)
-  const rightSidebarType = useAppStore((state) => state.rightSidebarType)
-  const setRightSidebarType = useAppStore((state) => state.setRightSidebarType)
+  const activeTab = useAppStore((state) =>
+    state.rightSidebarTabs.find((tab) => tab.id === state.activeRightSidebarTabId)
+  )
+  const openAiLookupTab = useAppStore((state) => state.openAiLookupTab)
 
   const isAiSearchActive = Boolean(
-    rightSidebarOpen && rightSidebarType === 'ai-search' && term && term === aiSearchTerm
+    rightSidebarOpen && activeTab?.kind === 'ai' && activeTab.term === term
   )
 
   const lookupTermInAISideBar = useCallback(
-    (term): void => {
-      setAiSearchTerm(term)
-      setRightSidebarType('ai-search')
-      setRightSidebarOpen(true)
-    },
-    [setAiSearchTerm, setRightSidebarOpen, setRightSidebarType]
+    (term: string): void => openAiLookupTab(term),
+    [openAiLookupTab]
   )
 
   // 响应词典解释区的 "AI 解释" 请求
