@@ -17,6 +17,7 @@ import { WordLookupController } from './word-lookup'
 import { WordbookController } from './wordbook'
 import { KeyboardController } from './keyboard'
 import { BrowseWordsController } from './browse-words'
+import { TouchBarController } from './touch-bar'
 
 export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
   const controllers = [
@@ -37,7 +38,8 @@ export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
     new WordCaptureController(appRuntime),
     new WordLookupController(appRuntime),
     new WordbookController(appRuntime),
-    new BrowseWordsController(appRuntime)
+    new BrowseWordsController(appRuntime),
+    new TouchBarController(appRuntime)
   ]
 
   controllers.forEach((controller) => controller.mount())

@@ -27,6 +27,7 @@ import type {
   DictionaryAggregateRequest,
   DictionaryLookupRequest
 } from '../shared/dictionary-navigation'
+import type { TouchBarPage, TouchBarState } from '../shared/touch-bar'
 
 type ReadyDictionary = {
   id: string
@@ -371,6 +372,9 @@ const api = Object.freeze({
       ipcRenderer.invoke('app:open-resource-cache-directory'),
     getViewCacheSize: (): Promise<number> => ipcRenderer.invoke('app:get-view-cache-size'),
     clearViewCache: (): Promise<void> => ipcRenderer.invoke('app:clear-view-cache'),
+    setTouchBarPage: (page: TouchBarPage): void => ipcRenderer.send('app:touchbar-page', page),
+    updateTouchBarState: (state: TouchBarState): void =>
+      ipcRenderer.send('app:touchbar-state', state),
     onSearchRequest: (callback: (request: MainWindowSearchRequest) => void): (() => void) => {
       searchRequestSubscribers.add(callback)
       if (pendingSearchRequest) {
@@ -389,6 +393,17 @@ const api = Object.freeze({
       const listener = (): void => callback()
       ipcRenderer.on('app:show-find-bar', listener)
       return () => ipcRenderer.removeListener('app:show-find-bar', listener)
+    },
+    onTouchBarToggleStar: (callback: () => void): (() => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('app:touchbar-toggle-star', listener)
+      return () => ipcRenderer.removeListener('app:touchbar-toggle-star', listener)
+    },
+    onTouchBarSelectDictionary: (callback: (dictionaryId: string) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, dictionaryId: string): void =>
+        callback(dictionaryId)
+      ipcRenderer.on('app:touchbar-select-dictionary', listener)
+      return () => ipcRenderer.removeListener('app:touchbar-select-dictionary', listener)
     }
   }),
   keyboard: Object.freeze({

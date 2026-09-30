@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { BookOpenText } from 'lucide-react'
+import { toast } from 'sonner'
 import { AiLookupButton } from '@/components/AiLookupButton'
 import { OnlineDictionaryButton } from '@/components/OnlineDictionaryButton'
 import { StarButton } from '@/components/StarButton'
@@ -11,6 +12,7 @@ import { useRecordQueryHistory } from '@/hooks/use-query-history'
 import { useAppStore } from '@/stores/app-store'
 import { useAiLookupConfig } from '@/hooks/use-ai-lookup'
 import { useOnlineDictionaries } from '@/hooks/use-online-dictionaries'
+import { useIsStarred, useToggleStar } from '@/hooks/use-wordbooks'
 import { DICTIONARY_SEARCH_ERROR_MESSAGE } from '../../../shared/dictionary-search-error'
 import { DICTIONARY_ENTRY_ANCHOR_PARAM } from '../../../shared/dictionary-navigation'
 import { SingleDictionaryResult } from './search-result/SingleDictionaryResult'
@@ -19,7 +21,7 @@ import { SearchResultToolbar } from './search-result/SearchResultToolbar'
 
 export function SearchResultPage(): React.JSX.Element {
   const { term } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const normalizedTerm = term?.trim()
   const anchor = searchParams.get(DICTIONARY_ENTRY_ANCHOR_PARAM) ?? undefined
   const { data: groups } = useDictionarySearchGroups()
@@ -44,6 +46,8 @@ export function SearchResultPage(): React.JSX.Element {
     onlineDictionaries.length || hasDictionaryEntries || aiConfig.data?.enabled
   )
   const { mutateAsync: recordQueryHistory } = useRecordQueryHistory()
+  const { data: isStarred } = useIsStarred(group?.word)
+  const { mutate: toggleStarWord, isPending: isTogglingStar } = useToggleStar()
   useEffect(() => {
     if (!group || isPlaceholderData || recordedPathname.current === location.pathname) {
       return
@@ -53,10 +57,68 @@ export function SearchResultPage(): React.JSX.Element {
       console.error('Failed to record query history', error)
     })
   }, [group, isPlaceholderData, location.pathname, recordQueryHistory])
+
+  useEffect(() => {
+    if (!group || isPlaceholderData || group.dictionaries.length === 0) {
+      window.dictol.app.updateTouchBarState({ word: null, starred: false, dictionaries: [] })
+      return
+    }
+
+    window.dictol.app.updateTouchBarState({
+      word: group.word,
+      starred: Boolean(isStarred),
+      dictionaries: group.dictionaries.map(({ dictionaryId, dictionaryName }) => ({
+        dictionaryId,
+        dictionaryName
+      }))
+    })
+
+    return () => {
+      window.dictol.app.updateTouchBarState({ word: null, starred: false, dictionaries: [] })
+    }
+  }, [group, isPlaceholderData, isStarred])
+
+  useEffect(() => {
+    return window.dictol.app.onTouchBarToggleStar(() => {
+      if (!group?.word || isPlaceholderData || isTogglingStar) return
+
+      toggleStarWord(group.word, {
+        onError: (error) => {
+          toast.error('操作失败', { description: error.message })
+        }
+      })
+    })
+  }, [group?.word, isPlaceholderData, isTogglingStar, toggleStarWord])
+
+  useEffect(() => {
+    return window.dictol.app.onTouchBarSelectDictionary((dictionaryId) => {
+      if (
+        !group ||
+        isPlaceholderData ||
+        !group.dictionaries.some((dictionary) => dictionary.dictionaryId === dictionaryId)
+      ) {
+        return
+      }
+
+      if (dictionaryLayout === 'aggregate') {
+        window.dictol.dictionaryView.scrollToDictionary(dictionaryId)
+        return
+      }
+
+      if (dictionaryLayout !== 'single') return
+      const next = new URLSearchParams(searchParams)
+      next.set('dictionaryId', dictionaryId)
+      setSearchParams(next, { replace: true })
+    })
+  }, [dictionaryLayout, group, isPlaceholderData, searchParams, setSearchParams])
+
   if (!normalizedTerm) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-        <BookOpenText aria-hidden="true" className="size-15 stroke-[1.5] text-muted-foreground/55" />
+        <BookOpenText
+          aria-hidden="true"
+          className="size-15 stroke-[1.5] text-muted-foreground/55"
+        />
         <p className="text-xl font-semibold text-muted-foreground/75 tracking-tight">开始查词</p>
       </div>
     )

@@ -12,6 +12,15 @@ export function SearchPage(): React.JSX.Element {
   const location = useLocation()
 
   useEffect(() => {
+    window.dictol.app.setTouchBarPage('search')
+    window.dictol.app.updateTouchBarState({ word: null, starred: false, dictionaries: [] })
+    return () => {
+      window.dictol.app.setTouchBarPage(null)
+      window.dictol.app.updateTouchBarState({ word: null, starred: false, dictionaries: [] })
+    }
+  }, [])
+
+  useEffect(() => {
     const unsubscribe = window.dictol.app.onShowFindBar(() =>
       window.dictol.dictionaryView.showFindBar()
     )

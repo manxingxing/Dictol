@@ -1238,6 +1238,17 @@ export class DBService {
     return mdxFile ? findDictionaryIconPath(dictionaryPath, mdxFile.filePath) : null
   }
 
+  async getDictionaryIconPathById(dictionaryId: string): Promise<string | null> {
+    const numericDictionaryId = Number(dictionaryId)
+    if (!Number.isSafeInteger(numericDictionaryId) || numericDictionaryId <= 0) return null
+
+    const dictionary = await this.dictionaryRepo.findById(numericDictionaryId)
+    if (!dictionary?.dictPath) return null
+
+    const relativeIconPath = await this.getDictionaryIconPath(dictionary.id, dictionary.dictPath)
+    return relativeIconPath ? join(resolve(dictionary.dictPath), relativeIconPath) : null
+  }
+
   private async createDictionaryIconUrl(row: Dictionary): Promise<string | null> {
     const iconPath = await this.getDictionaryIconPath(row.id, row.dictPath)
     return iconPath ? createDictionaryAssetUrl(row.id, iconPath) : null

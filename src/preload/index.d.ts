@@ -10,6 +10,7 @@ import type {
   CustomCssEditorState,
   CustomCssEditorTheme
 } from '../shared/custom-css-editor'
+import type { TouchBarPage, TouchBarState } from '../shared/touch-bar'
 
 declare global {
   interface Window {
@@ -383,9 +384,13 @@ declare global {
         openResourceCacheDirectory: () => Promise<void>
         getViewCacheSize: () => Promise<number>
         clearViewCache: () => Promise<void>
+        setTouchBarPage: (page: TouchBarPage) => void
+        updateTouchBarState: (state: TouchBarState) => void
         onSearchRequest: (callback: (request: MainWindowSearchRequest) => void) => () => void
         onFocusSearch: (callback: () => void) => () => void
         onShowFindBar: (callback: () => void) => () => void
+        onTouchBarToggleStar: (callback: () => void) => () => void
+        onTouchBarSelectDictionary: (callback: (dictionaryId: string) => void) => () => void
       }
       keyboard: {
         getStatus: () => Promise<{ shortcut: string; registered: boolean } | null>
