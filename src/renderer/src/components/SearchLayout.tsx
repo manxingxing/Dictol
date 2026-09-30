@@ -117,7 +117,11 @@ export const SearchLayout = (): React.JSX.Element => {
             >
               <SearchPanel />
             </ResizablePanel>
-            <ResizableHandle key="search-panel-handle" />
+            <ResizableHandle
+              className={displayInCompactMode ? 'hidden' : ''}
+              disabled={displayInCompactMode}
+              key="search-panel-handle"
+            />
             <ResizablePanel id="search-results" minSize={100}>
               <Outlet />
             </ResizablePanel>
