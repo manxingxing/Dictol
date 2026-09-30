@@ -264,6 +264,16 @@ body [data-sonner-toaster].toaster {
   transition: none;
 }
 
+.dictionary-tab-trigger:focus-visible {
+  outline: none;
+}
+
+.dictionary-tab-trigger:focus-visible .dictionary-tab-icon,
+.dictionary-tab-trigger:focus-visible .dictionary-source-label {
+  outline: 2px solid #d49a00;
+  outline-offset: 2px;
+}
+
 .dictionary-tab-trigger[data-state='inactive'],
 .dictionary-tab-trigger[data-state='active'],
 .dictionary-tab-trigger:hover {

@@ -79,7 +79,7 @@ export function AggregateDictionaryResult({
       <SearchResultToolbar actions={actions} loading={isFetching || loading}>
         <div
           aria-label="汇总词典导航"
-          className="flex h-full shrink-0 items-center gap-1.5 pr-3"
+          className="flex h-full shrink-0 items-center gap-1.5 px-3"
           role="tablist"
         >
           {dictionaries.map((item) => (

@@ -51,7 +51,7 @@ export function SearchResultToolbar({
   return (
     <div
       ref={toolbarRef}
-      className="relative flex h-14 shrink-0 items-center overflow-visible border-b border-border bg-[var(--dictionary-toolbar-background)] px-3"
+      className="relative flex h-14 shrink-0 items-center overflow-visible border-b border-border bg-[var(--dictionary-toolbar-background)] pr-3"
     >
       {children ? (
         <ScrollArea

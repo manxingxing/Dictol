@@ -69,7 +69,7 @@ export function SingleDictionaryResult({
       }}
     >
       <SearchResultToolbar actions={actions} loading={isFetching || loading}>
-        <TabsList className="h-full shrink-0 gap-1.5 bg-transparent p-0 pr-3">
+        <TabsList className="h-full shrink-0 gap-1.5 bg-transparent p-0 px-3">
           {dictionaries.map((item) => (
             <TabsTrigger
               aria-label={item.dictionaryName}

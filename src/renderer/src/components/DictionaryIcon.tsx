@@ -35,12 +35,12 @@ export function DictionaryTabIcon({
 
   if (display === 'icon') {
     const iconContent = (
-      <>
+      <span className="dictionary-tab-icon inline-flex items-center">
         <span className="dictionary-source-icon flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-background bg-background text-[11px] font-semibold text-muted-foreground group-data-[state=active]:text-primary">
           {icon}
         </span>
         <span aria-hidden="true" className="dictionary-tab-indicator" />
-      </>
+      </span>
     )
 
     if (!showTooltip) return iconContent
