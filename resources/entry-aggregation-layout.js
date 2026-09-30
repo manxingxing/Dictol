@@ -8,6 +8,7 @@
     )
     let publishedSection = null
     const container = document.getElementById('dictol-concatenated-entry')
+    const verticalActiveOffset = 8
     const isHorizontal = () => document.body.dataset.layout === 'horizontal'
 
     const findSectionAtViewportTop = () => {
@@ -22,7 +23,7 @@
       }
       return sections.find((section) => {
         const rect = section.getBoundingClientRect()
-        return rect.top <= 0 && rect.bottom > 0
+        return rect.top <= verticalActiveOffset && rect.bottom + 11 > verticalActiveOffset
       })
     }
 
@@ -43,10 +44,10 @@
       observer?.disconnect()
       observer = new IntersectionObserver(syncActiveSection, {
         root: isHorizontal() ? container : null,
-        // 用像素明确表示 viewport 顶部的线，避免百分比的宽高基准差异。
+        // 用像素明确表示 active line，避免百分比的宽高基准差异。
         rootMargin: isHorizontal()
           ? `0px -${Math.max(0, container.clientWidth - 13)}px 0px -12px`
-          : `0px 0px -${document.documentElement.clientHeight}px 0px`,
+          : `-${verticalActiveOffset}px 0px -${Math.max(0, document.documentElement.clientHeight - verticalActiveOffset)}px 0px`,
         threshold: 0
       })
       sections.forEach((section) => observer.observe(section))

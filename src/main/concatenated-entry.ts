@@ -36,7 +36,7 @@ export function createConcatenatedEntryDocument(
       const customCss = entry.customCss
         ? `<style data-dictionary-custom-css="${entry.dictionaryId}">${escapeStyleContent(rewriteDictionaryCss(entry.customCss, entry.dictionaryId, { inline: true }))}</style>`
         : ''
-      return `<div id="dictol-dictionary-section-${entry.dictionaryId}" class="dictol-dictionary-section dictol-dictionary-section-${entry.dictionaryId} ${escapeHtml(htmlClass)}" data-dictionary-id="${entry.dictionaryId}"><button class="dictol-dictionary-title" data-dictionary-id="${entry.dictionaryId}" aria-controls="dictol-dictionary-${entry.dictionaryId}" type="button" aria-expanded="true"><span class="dictol-dictionary-title-name">${escapeHtml(entry.dictionaryName)}</span>${DICTIONARY_COLLAPSE_MARKERS}</button><div id="dictol-dictionary-${entry.dictionaryId}" class="dictol-dictionary-entry ${scopeClass} ${escapeHtml(bodyClass)}" data-dictionary-id="${entry.dictionaryId}">${customCss}${html}</div></div>`
+      return `<div id="dictol-dictionary-section-${entry.dictionaryId}" class="dictol-dictionary-section dictol-dictionary-section-${entry.dictionaryId} ${escapeHtml(htmlClass)}" data-dictionary-id="${entry.dictionaryId}"><div class="dictol-dictionary-title" data-dictionary-id="${entry.dictionaryId}" aria-controls="dictol-dictionary-${entry.dictionaryId}" aria-expanded="true"><span class="dictol-dictionary-title-name">${escapeHtml(entry.dictionaryName)}</span>${DICTIONARY_COLLAPSE_MARKERS}</div><div id="dictol-dictionary-${entry.dictionaryId}" class="dictol-dictionary-entry ${scopeClass} ${escapeHtml(bodyClass)}" data-dictionary-id="${entry.dictionaryId}">${customCss}${html}</div></div>`
     })
     .join('')
 
