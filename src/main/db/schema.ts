@@ -167,6 +167,35 @@ export const wordbookWord = sqliteTable(
   ]
 )
 
+export const wordbookTag = sqliteTable(
+  'wordbook_tag',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull(),
+    normalizedName: text('normalized_name').notNull().unique(),
+    createdAt: text('created_at').notNull().default(isoNow),
+    updatedAt: text('updated_at').notNull().default(isoNow)
+  },
+  (table) => [index('wordbook_tag_name_idx').on(table.name)]
+)
+
+export const wordbookWordTag = sqliteTable(
+  'wordbook_word_tag',
+  {
+    wordbookWordId: integer('wordbook_word_id')
+      .notNull()
+      .references(() => wordbookWord.id, { onDelete: 'cascade' }),
+    tagId: integer('tag_id')
+      .notNull()
+      .references(() => wordbookTag.id, { onDelete: 'cascade' }),
+    createdAt: text('created_at').notNull().default(isoNow)
+  },
+  (table) => [
+    primaryKey({ columns: [table.wordbookWordId, table.tagId] }),
+    index('wordbook_word_tag_tag_id_idx').on(table.tagId)
+  ]
+)
+
 export const onlineDictionary = sqliteTable(
   'online_dictionary',
   {
@@ -270,6 +299,21 @@ export const wordbookWordRelations = relations(wordbookWord, ({ one }) => ({
   })
 }))
 
+export const wordbookTagRelations = relations(wordbookTag, ({ many }) => ({
+  words: many(wordbookWordTag)
+}))
+
+export const wordbookWordTagRelations = relations(wordbookWordTag, ({ one }) => ({
+  word: one(wordbookWord, {
+    fields: [wordbookWordTag.wordbookWordId],
+    references: [wordbookWord.id]
+  }),
+  tag: one(wordbookTag, {
+    fields: [wordbookWordTag.tagId],
+    references: [wordbookTag.id]
+  })
+}))
+
 export type Dictionary = typeof dictionary.$inferSelect
 export type NewDictionary = typeof dictionary.$inferInsert
 export type DictionaryIndex = typeof dictionaryIndex.$inferSelect
@@ -283,6 +327,8 @@ export type Wordbook = typeof wordbook.$inferSelect
 export type NewWordbook = typeof wordbook.$inferInsert
 export type WordbookWord = typeof wordbookWord.$inferSelect
 export type NewWordbookWord = typeof wordbookWord.$inferInsert
+export type WordbookTag = typeof wordbookTag.$inferSelect
+export type NewWordbookTag = typeof wordbookTag.$inferInsert
 export type OnlineDictionary = typeof onlineDictionary.$inferSelect
 export type NewOnlineDictionary = typeof onlineDictionary.$inferInsert
 export type DictionaryGroup = typeof dictionaryGroup.$inferSelect

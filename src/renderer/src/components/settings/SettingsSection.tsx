@@ -14,6 +14,7 @@ type SettingsRowProps = {
   description?: string
   control: ReactNode
   className?: string
+  controlClassName?: string
 }
 
 export function SettingsSection({
@@ -53,12 +54,13 @@ export function SettingsRow({
   label,
   description,
   control,
-  className
+  className,
+  controlClassName
 }: SettingsRowProps): React.JSX.Element {
   return (
     <div
       className={cn(
-        'flex min-h-16 items-center justify-between gap-7 border-b border-border bg-card px-4 py-3 last:border-b-0 hover:bg-muted/40',
+        'flex min-h-16 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 last:border-b-0 hover:bg-muted/40',
         className
       )}
     >
@@ -68,7 +70,7 @@ export function SettingsRow({
           <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
         )}
       </div>
-      <div className="shrink-0">{control}</div>
+      <div className={cn('shrink-0', controlClassName)}>{control}</div>
     </div>
   )
 }

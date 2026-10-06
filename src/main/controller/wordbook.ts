@@ -15,7 +15,6 @@ export class WordbookController extends BaseController {
     ipcMain.handle('wordbooks:list', this.list)
     ipcMain.handle('wordbooks:create', this.create)
     ipcMain.handle('wordbooks:list-words', this.listWords)
-    ipcMain.handle('wordbooks:filter-words', this.filterWords)
     ipcMain.handle('wordbooks:add-word', this.addWord)
     ipcMain.handle('wordbooks:import-words', this.importWords)
     ipcMain.handle('wordbooks:toggle-star', this.toggleStar)
@@ -43,19 +42,11 @@ export class WordbookController extends BaseController {
     _event: IpcMainInvokeEvent,
     wordbookId?: string,
     page = 1,
-    pageSize = 25
+    pageSize = 25,
+    tagId?: string | null,
+    keyword?: string
   ): Promise<WordbookWordsPaginated> => {
-    return await this.db.listWordbookWordsPaginated(wordbookId, page, pageSize)
-  }
-
-  filterWords = async (
-    _event: IpcMainInvokeEvent,
-    keyword: string,
-    wordbookId?: string,
-    page = 1,
-    pageSize = 25
-  ): Promise<WordbookWordsPaginated> => {
-    return await this.db.filterWordbookWords(keyword, wordbookId, page, pageSize)
+    return await this.db.listWordbookWordsPaginated(wordbookId, page, pageSize, tagId, keyword)
   }
 
   addWord = async (
@@ -136,5 +127,17 @@ export class WordbookController extends BaseController {
     const mainWindow = this.runtime.mainWindow
     if (!mainWindow || mainWindow.webContents.isDestroyed()) return
     mainWindow.webContents.send('wordbooks:export-status-changed', status)
+
+    if (status.state === 'completed' && status.destinationPath) {
+      mainWindow.webContents.send('notification:toast', {
+        type: 'success',
+        message: `导出完成：${status.destinationPath}`
+      })
+    } else if (status.state === 'error' && status.error) {
+      mainWindow.webContents.send('notification:toast', {
+        type: 'error',
+        message: `导出失败：${status.error}`
+      })
+    }
   }
 }

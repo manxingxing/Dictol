@@ -13,6 +13,7 @@ import { SelectionToolbarController } from './selection-toolbar'
 import { WordCaptureController } from './word-capture'
 import { WordLookupController } from './word-lookup'
 import { WordbookController } from './wordbook'
+import { WordbookTagController } from './wordbook-tag'
 import { KeyboardController } from './keyboard'
 import { BrowseWordsController } from './browse-words'
 import { TouchBarController } from './touch-bar'
@@ -34,6 +35,7 @@ export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
     new WordCaptureController(appRuntime),
     new WordLookupController(appRuntime),
     new WordbookController(appRuntime),
+    new WordbookTagController(appRuntime),
     new BrowseWordsController(appRuntime),
     new TouchBarController(appRuntime)
   ]

@@ -10,14 +10,21 @@ import {
 import { useEffect } from 'react'
 
 export const wordbooksQueryKey = ['wordbooks'] as const
-export const wordbookWordsQueryKey = (wordbookId?: string, page = 1, pageSize = 25) =>
-  ['wordbooks', 'words', wordbookId ?? 'all', { page, pageSize }] as const
-export const wordbookFilterQueryKey = (
+export const wordbookWordsQueryKey = (
   keyword: string,
   wordbookId?: string,
   page = 1,
-  pageSize = 25
-) => ['wordbooks', 'filter', wordbookId ?? 'all', keyword, page, pageSize] as const
+  pageSize = 25,
+  tagId?: string | null
+) =>
+  [
+    'wordbooks',
+    'words',
+    wordbookId ?? 'all',
+    keyword.trim(),
+    { page, pageSize },
+    tagId === null ? 'untagged' : (tagId ?? 'all-tags')
+  ] as const
 export const wordbookExportStatusQueryKey = ['wordbooks', 'export-status'] as const
 export const wordbookStarredQueryKey = (word: string) => ['wordbooks', 'starred', word] as const
 
@@ -31,7 +38,6 @@ export type WordbookExportStatus = Awaited<
   ReturnType<Window['dictol']['wordbooks']['getExportStatus']>
 >
 export type WordbookImportResult = Awaited<ReturnType<Window['dictol']['wordbooks']['importWords']>>
-
 type StarUpdateContext = {
   snapshots: Array<[QueryKey, WordbookWordsPaginated | undefined]>
 }
@@ -44,30 +50,18 @@ export function useWordbooks(): UseQueryResult<WordbookSummary[], Error> {
 }
 
 export function useWordbookWords(
-  wordbookId?: string,
-  page = 1,
-  pageSize = 25,
-  enabled = true
-): UseQueryResult<WordbookWordsPaginated, Error> {
-  return useQuery({
-    queryKey: wordbookWordsQueryKey(wordbookId, page, pageSize),
-    queryFn: () => window.dictol.wordbooks.listWords(wordbookId, page, pageSize),
-    placeholderData: keepPreviousData,
-    enabled
-  })
-}
-
-export function useFilterWords(
   keyword: string,
   wordbookId?: string,
   page = 1,
-  pageSize = 25
+  pageSize = 25,
+  tagId?: string | null
 ): UseQueryResult<WordbookWordsPaginated, Error> {
+  const normalizedKeyword = keyword.trim()
   return useQuery({
-    queryKey: wordbookFilterQueryKey(keyword, wordbookId, page, pageSize),
-    queryFn: () => window.dictol.wordbooks.filterWords(keyword, wordbookId, page, pageSize),
-    placeholderData: keepPreviousData,
-    enabled: keyword.trim().length > 0
+    queryKey: wordbookWordsQueryKey(normalizedKeyword, wordbookId, page, pageSize, tagId),
+    queryFn: () =>
+      window.dictol.wordbooks.listWords(wordbookId, page, pageSize, tagId, normalizedKeyword),
+    placeholderData: keepPreviousData
   })
 }
 
@@ -136,15 +130,18 @@ export function useMoveWordbookWords(): UseMutationResult<
 export function useWordbookExportStatus(): UseQueryResult<WordbookExportStatus, Error> {
   const queryClient = useQueryClient()
 
-  useEffect(() => {
-    return window.dictol.wordbooks.onExportStatus((status) => {
-      queryClient.setQueryData(wordbookExportStatusQueryKey, status)
-    })
-  }, [queryClient])
+  useEffect(
+    () =>
+      window.dictol.wordbooks.onExportStatus((status) => {
+        queryClient.setQueryData(wordbookExportStatusQueryKey, status)
+      }),
+    [queryClient]
+  )
 
   return useQuery({
     queryKey: wordbookExportStatusQueryKey,
-    queryFn: () => window.dictol.wordbooks.getExportStatus()
+    queryFn: () => window.dictol.wordbooks.getExportStatus(),
+    refetchOnMount: 'always'
   })
 }
 
@@ -200,22 +197,18 @@ export function useUpdateStar(): UseMutationResult<void, Error, { word: string; 
   return useMutation({
     mutationFn: ({ word, star }) => window.dictol.wordbooks.updateStar(word, star),
     onMutate: async ({ word, star }): Promise<StarUpdateContext> => {
-      const queryKeys = [['wordbooks', 'words'] as const, ['wordbooks', 'filter'] as const]
-      await Promise.all(queryKeys.map((queryKey) => queryClient.cancelQueries({ queryKey })))
+      const queryKey = ['wordbooks', 'words'] as const
+      await queryClient.cancelQueries({ queryKey })
 
-      const snapshots = queryKeys.flatMap((queryKey) =>
-        queryClient.getQueriesData<WordbookWordsPaginated>({ queryKey })
+      const snapshots = queryClient.getQueriesData<WordbookWordsPaginated>({ queryKey })
+      queryClient.setQueriesData<WordbookWordsPaginated>({ queryKey }, (current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) => (item.word === word ? { ...item, star } : item))
+            }
+          : current
       )
-      for (const queryKey of queryKeys) {
-        queryClient.setQueriesData<WordbookWordsPaginated>({ queryKey }, (current) =>
-          current
-            ? {
-                ...current,
-                items: current.items.map((item) => (item.word === word ? { ...item, star } : item))
-              }
-            : current
-        )
-      }
       return { snapshots }
     },
     onError: (_error, _variables, context) => {

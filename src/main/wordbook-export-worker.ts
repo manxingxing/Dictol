@@ -59,6 +59,7 @@ async function exportWordbooks({
         { header: '音标', key: 'phonetic', width: 22 },
         { header: '中文释义', key: 'translation', width: 48 },
         { header: '英文释义', key: 'definition', width: 56 },
+        { header: '标签', key: 'tags', width: 32 },
         { header: '星级', key: 'star', width: 10 },
         { header: '生词本', key: 'wordbookName', width: 22 },
         { header: '添加时间', key: 'createdAt', width: 24 }
@@ -71,6 +72,7 @@ async function exportWordbooks({
           phonetic: word.phonetic,
           translation: word.translation,
           definition: word.definition,
+          tags: word.tags.map((tag) => tag.name).join(', '),
           star: word.star,
           wordbookName: word.wordbookName,
           createdAt: word.createdAt

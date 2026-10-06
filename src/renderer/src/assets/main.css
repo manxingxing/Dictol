@@ -633,3 +633,28 @@ body [data-sonner-toaster].toaster [data-sonner-toast] * {
 .native-view-loading-indicator {
   animation: native-view-loading 1.15s ease-in-out infinite;
 }
+
+.wordbook-list-header,
+.wordbook-list-pinned-header {
+  background-color: color-mix(in oklab, var(--muted) 30%, var(--background));
+}
+
+.wordbook-list-row:hover {
+  background-color: color-mix(in oklab, var(--muted) 40%, var(--background));
+}
+
+.wordbook-list-row.is-selected {
+  background-color: color-mix(in oklab, var(--primary) 8%, var(--background));
+}
+
+.wordbook-list-pinned-cell {
+  background-color: var(--background);
+}
+
+.wordbook-list-row:hover > .wordbook-list-pinned-cell {
+  background-color: color-mix(in oklab, var(--muted) 40%, var(--background));
+}
+
+.wordbook-list-row.is-selected > .wordbook-list-pinned-cell {
+  background-color: color-mix(in oklab, var(--primary) 8%, var(--background));
+}

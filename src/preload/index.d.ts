@@ -271,7 +271,9 @@ declare global {
         listWords: (
           wordbookId?: string,
           page?: number,
-          pageSize?: number
+          pageSize?: number,
+          tagId?: string | null,
+          keyword?: string
         ) => Promise<{
           items: {
             id: string
@@ -283,29 +285,7 @@ declare global {
             phonetic: string | null
             definition: string | null
             translation: string | null
-            ecdictVersion: string | null
-            createdAt: string
-            updatedAt: string
-          }[]
-          total: number
-        }>
-        filterWords: (
-          keyword: string,
-          wordbookId?: string,
-          page?: number,
-          pageSize?: number
-        ) => Promise<{
-          items: {
-            id: string
-            wordbookId: string
-            wordbookName: string
-            word: string
-            star: number
-            dictionaryWord: string | null
-            phonetic: string | null
-            definition: string | null
-            translation: string | null
-            ecdictVersion: string | null
+            tags: { id: string; name: string }[]
             createdAt: string
             updatedAt: string
           }[]
@@ -324,7 +304,7 @@ declare global {
           phonetic: string | null
           definition: string | null
           translation: string | null
-          ecdictVersion: string | null
+          tags: { id: string; name: string }[]
           createdAt: string
           updatedAt: string
         }>
@@ -365,6 +345,13 @@ declare global {
         selectDirectory: () => Promise<string | null>
         deleteWordbook: (wordbookId: string) => Promise<void>
         renameWordbook: (wordbookId: string, name: string) => Promise<void>
+        listTags: () => Promise<{ id: string; name: string; wordCount: number }[]>
+        createTag: (name: string) => Promise<{ id: string; name: string }>
+        renameTag: (tagId: string, name: string) => Promise<void>
+        deleteTag: (tagId: string) => Promise<void>
+        setWordTags: (wordId: string, tagIds: string[]) => Promise<void>
+        addTagToWords: (wordIds: string[], tagId: string) => Promise<void>
+        removeTagFromWords: (wordIds: string[], tagId: string) => Promise<void>
       }
       app: {
         getVersion: () => Promise<string | null>

@@ -134,7 +134,13 @@ type WordbookWordItem = {
   phonetic: string | null
   definition: string | null
   translation: string | null
-  ecdictVersion: string | null
+  tags: WordbookTagItem[]
+  createdAt: string
+  updatedAt: string
+}
+
+type WordbookTagItem = { id: string; name: string }
+type WordbookTagSummary = WordbookTagItem & { wordCount: number }
   createdAt: string
   updatedAt: string
 }
@@ -311,10 +317,13 @@ const api = Object.freeze({
     list: (): Promise<WordbookSummary[]> => ipcRenderer.invoke('wordbooks:list'),
     create: (name: string): Promise<WordbookSummary> =>
       ipcRenderer.invoke('wordbooks:create', name),
-    listWords: (wordbookId?: string, page = 1, pageSize = 25) =>
-      ipcRenderer.invoke('wordbooks:list-words', wordbookId, page, pageSize),
-    filterWords: (keyword: string, wordbookId?: string, page = 1, pageSize = 25) =>
-      ipcRenderer.invoke('wordbooks:filter-words', keyword, wordbookId, page, pageSize),
+    listWords: (
+      wordbookId?: string,
+      page = 1,
+      pageSize = 25,
+      tagId?: string | null,
+      keyword?: string
+    ) => ipcRenderer.invoke('wordbooks:list-words', wordbookId, page, pageSize, tagId, keyword),
     addWord: (word: string, star?: number): Promise<WordbookWordItem> =>
       ipcRenderer.invoke('wordbooks:add-word', word, star),
     importWords: (text: string, wordbookId?: string): Promise<WordbookImportResult> =>
@@ -343,7 +352,19 @@ const api = Object.freeze({
     deleteWordbook: (wordbookId: string): Promise<void> =>
       ipcRenderer.invoke('wordbooks:delete', wordbookId),
     renameWordbook: (wordbookId: string, name: string): Promise<void> =>
-      ipcRenderer.invoke('wordbooks:rename', wordbookId, name)
+      ipcRenderer.invoke('wordbooks:rename', wordbookId, name),
+    listTags: (): Promise<WordbookTagSummary[]> => ipcRenderer.invoke('wordbooks:list-tags'),
+    createTag: (name: string): Promise<WordbookTagItem> =>
+      ipcRenderer.invoke('wordbooks:create-tag', name),
+    renameTag: (tagId: string, name: string): Promise<void> =>
+      ipcRenderer.invoke('wordbooks:rename-tag', tagId, name),
+    deleteTag: (tagId: string): Promise<void> => ipcRenderer.invoke('wordbooks:delete-tag', tagId),
+    setWordTags: (wordId: string, tagIds: string[]): Promise<void> =>
+      ipcRenderer.invoke('wordbooks:set-word-tags', wordId, tagIds),
+    addTagToWords: (wordIds: string[], tagId: string): Promise<void> =>
+      ipcRenderer.invoke('wordbooks:add-tag-to-words', wordIds, tagId),
+    removeTagFromWords: (wordIds: string[], tagId: string): Promise<void> =>
+      ipcRenderer.invoke('wordbooks:remove-tag-from-words', wordIds, tagId)
   }),
   app: Object.freeze({
     getVersion: (): Promise<string | null> => ipcRenderer.invoke('app:get-version'),

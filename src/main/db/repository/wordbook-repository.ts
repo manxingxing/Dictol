@@ -1,10 +1,13 @@
-import { and, asc, desc, eq, inArray, like, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, like, sql, type SQL } from 'drizzle-orm'
 
 import type { BuiltInLexiconEntry } from '../../built-in-lexicon-service'
 import type { DictolDatabase } from '../drizzle'
+import type { WordbookTagItem } from './wordbook-tag-repository'
 import {
   wordbook,
+  wordbookTag,
   wordbookWord,
+  wordbookWordTag,
   type NewWordbookWord,
   type Wordbook,
   type WordbookWord
@@ -14,9 +17,10 @@ export type WordbookWithWordCount = Wordbook & {
   wordCount: number
 }
 
-export type WordbookWordWithWordbook = WordbookWord & {
+export type WordbookWordWithWordbook = Omit<WordbookWord, 'ecdictVersion'> & {
   wordbookName: string
   isDefault: boolean
+  tags: WordbookTagItem[]
 }
 
 export type WordbookImportItem = {
@@ -36,7 +40,6 @@ const wordbookWordFields = {
   phonetic: wordbookWord.phonetic,
   definition: wordbookWord.definition,
   translation: wordbookWord.translation,
-  ecdictVersion: wordbookWord.ecdictVersion,
   createdAt: wordbookWord.createdAt,
   updatedAt: wordbookWord.updatedAt,
   wordbookName: wordbook.name,
@@ -89,7 +92,7 @@ export class WordbookRepository {
       ? await query.where(eq(wordbookWord.wordbookId, wordbookId))
       : await query
 
-    return rows
+    return await this.attachTags(rows)
   }
 
   async listWordsByIds(ids: number[]): Promise<WordbookWordWithWordbook[]> {
@@ -100,7 +103,8 @@ export class WordbookRepository {
       .innerJoin(wordbook, eq(wordbookWord.wordbookId, wordbook.id))
       .where(inArray(wordbookWord.id, ids))
 
-    return rows.sort((left, right) => ids.indexOf(left.id) - ids.indexOf(right.id))
+    const orderedRows = rows.sort((left, right) => ids.indexOf(left.id) - ids.indexOf(right.id))
+    return await this.attachTags(orderedRows)
   }
 
   async star(
@@ -272,7 +276,9 @@ export class WordbookRepository {
   async listWordsPaginated(
     wordbookId?: number,
     page = 1,
-    pageSize = 25
+    pageSize = 25,
+    tagId?: number | null,
+    keyword = ''
   ): Promise<{ items: WordbookWordWithWordbook[]; total: number }> {
     const safePage = Math.max(1, Math.trunc(page))
     const safeSize = Math.min(100, Math.max(1, Math.trunc(pageSize)))
@@ -283,55 +289,52 @@ export class WordbookRepository {
       .from(wordbookWord)
       .innerJoin(wordbook, eq(wordbookWord.wordbookId, wordbook.id))
 
-    const target = wordbookId ? base.where(eq(wordbookWord.wordbookId, wordbookId)) : base
+    const conditions: SQL[] = []
+    if (wordbookId !== undefined) conditions.push(eq(wordbookWord.wordbookId, wordbookId))
+    if (keyword) conditions.push(like(wordbookWord.word, `%${keyword}%`))
+    if (tagId !== undefined) conditions.push(tagFilterCondition(tagId))
+    const target = conditions.length > 0 ? base.where(and(...conditions)) : base
 
     const countQuery = this.db
       .select({ count: sql<number>`count(*)` })
       .from(wordbookWord)
       .innerJoin(wordbook, eq(wordbookWord.wordbookId, wordbook.id))
 
-    const [countRow] = wordbookId
-      ? await countQuery.where(eq(wordbookWord.wordbookId, wordbookId))
-      : await countQuery
+    const [countRow] =
+      conditions.length > 0 ? await countQuery.where(and(...conditions)) : await countQuery
 
-    const items = await target.orderBy(desc(wordbookWord.createdAt)).limit(safeSize).offset(offset)
+    const rows = await target.orderBy(desc(wordbookWord.createdAt)).limit(safeSize).offset(offset)
+    const items = await this.attachTags(rows)
 
     return { items, total: countRow?.count ?? 0 }
   }
 
-  async filterWords(
-    keyword: string,
-    wordbookId?: number,
-    page = 1,
-    pageSize = 25
-  ): Promise<{ items: WordbookWordWithWordbook[]; total: number }> {
-    const safePage = Math.max(1, Math.trunc(page))
-    const safeSize = Math.min(100, Math.max(1, Math.trunc(pageSize)))
-    const offset = (safePage - 1) * safeSize
-    const pattern = `%${keyword}%`
-
-    const conditions = [like(wordbookWord.word, pattern)]
-    if (wordbookId !== undefined) {
-      conditions.push(eq(wordbookWord.wordbookId, wordbookId))
+  private async attachTags<T extends { id: number }>(
+    rows: T[]
+  ): Promise<Array<T & { tags: WordbookTagItem[] }>> {
+    if (rows.length === 0) return []
+    const links = await this.db
+      .select({
+        wordbookWordId: wordbookWordTag.wordbookWordId,
+        id: wordbookTag.id,
+        name: wordbookTag.name
+      })
+      .from(wordbookWordTag)
+      .innerJoin(wordbookTag, eq(wordbookWordTag.tagId, wordbookTag.id))
+      .where(
+        inArray(
+          wordbookWordTag.wordbookWordId,
+          rows.map(({ id }) => id)
+        )
+      )
+      .orderBy(asc(wordbookTag.name))
+    const tagsByWordId = new Map<number, WordbookTagItem[]>()
+    for (const { wordbookWordId, id, name } of links) {
+      const tags = tagsByWordId.get(wordbookWordId) ?? []
+      tags.push({ id, name })
+      tagsByWordId.set(wordbookWordId, tags)
     }
-    const whereClause = and(...conditions)
-
-    const [countRow] = await this.db
-      .select({ count: sql<number>`count(*)` })
-      .from(wordbookWord)
-      .innerJoin(wordbook, eq(wordbookWord.wordbookId, wordbook.id))
-      .where(whereClause)
-
-    const items = await this.db
-      .select(wordbookWordFields)
-      .from(wordbookWord)
-      .innerJoin(wordbook, eq(wordbookWord.wordbookId, wordbook.id))
-      .where(whereClause)
-      .orderBy(desc(wordbookWord.createdAt))
-      .limit(safeSize)
-      .offset(offset)
-
-    return { items, total: countRow?.count ?? 0 }
+    return rows.map((row) => ({ ...row, tags: tagsByWordId.get(row.id) ?? [] }))
   }
 
   async updateStar(word: string, star: number): Promise<void> {
@@ -342,6 +345,19 @@ export class WordbookRepository {
       .set({ star, updatedAt: new Date().toISOString() })
       .where(eq(wordbookWord.normalizedWord, normalizedWord))
   }
+}
+
+function tagFilterCondition(tagId: number | null): SQL {
+  return tagId === null
+    ? sql`not exists (
+        select 1 from ${wordbookWordTag}
+        where ${wordbookWordTag.wordbookWordId} = ${wordbookWord.id}
+      )`
+    : sql`exists (
+        select 1 from ${wordbookWordTag}
+        where ${wordbookWordTag.wordbookWordId} = ${wordbookWord.id}
+          and ${wordbookWordTag.tagId} = ${tagId}
+      )`
 }
 
 function* splitIntoBatches<T>(items: T[], size: number): Generator<T[]> {

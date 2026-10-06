@@ -38,6 +38,7 @@ import {
   type WordbookImportItem,
   type WordbookWordWithWordbook
 } from './db/repository/wordbook-repository'
+import { WordbookTagRepository } from './db/repository/wordbook-tag-repository'
 import { createDictionaryAssetUrl } from './dictionary-entry-url'
 
 export type DictionaryStatus = 'pending' | 'importing' | 'ready' | 'error'
@@ -171,11 +172,19 @@ export type WordbookWordItem = {
   phonetic: string | null
   definition: string | null
   translation: string | null
-  ecdictVersion: string | null
+  tags: WordbookTagItem[]
   createdAt: string
   updatedAt: string
 }
 
+export type WordbookTagItem = {
+  id: string
+  name: string
+}
+
+export type WordbookTagSummary = WordbookTagItem & {
+  wordCount: number
+}
 export type OnlineDictionaryConfig = {
   id: string
   name: string
@@ -218,6 +227,7 @@ export class DBService {
   private readonly dictionaryIconPaths = new Map<number, Promise<string | null>>()
   private readonly queryHistoryRepo: QueryHistoryRepository
   private readonly wordbookRepo: WordbookRepository
+  private readonly wordbookTagRepo: WordbookTagRepository
   private readonly onlineDictionaryRepo: OnlineDictionaryRepository
   private wordbookExportStatus: WordbookExportStatus = {
     state: 'idle',
@@ -236,6 +246,7 @@ export class DBService {
     this.fileRepo = new DictionaryFileRepository(db)
     this.queryHistoryRepo = new QueryHistoryRepository(db)
     this.wordbookRepo = new WordbookRepository(db)
+    this.wordbookTagRepo = new WordbookTagRepository(db)
     this.onlineDictionaryRepo = new OnlineDictionaryRepository(db)
   }
 
@@ -271,14 +282,20 @@ export class DBService {
   async listWordbookWordsPaginated(
     wordbookId?: string,
     page = 1,
-    pageSize = 25
+    pageSize = 25,
+    tagId?: string | null,
+    keyword?: string
   ): Promise<WordbookWordsPaginated> {
+    if (keyword !== undefined && typeof keyword !== 'string') throw new Error('无效的关键词')
+    const normalizedKeyword = keyword?.trim() ?? ''
     const numericWordbookId =
       wordbookId === undefined ? undefined : this.parseWordbookId(wordbookId)
     const { items, total } = await this.wordbookRepo.listWordsPaginated(
       numericWordbookId,
       page,
-      pageSize
+      pageSize,
+      tagId === undefined ? undefined : tagId === null ? null : this.parseWordbookTagId(tagId),
+      normalizedKeyword
     )
     return {
       items: items.map(toWordbookWordItem),
@@ -286,29 +303,43 @@ export class DBService {
     }
   }
 
-  async filterWordbookWords(
-    keyword: string,
-    wordbookId?: string,
-    page = 1,
-    pageSize = 25
-  ): Promise<WordbookWordsPaginated> {
-    if (typeof keyword !== 'string') throw new Error('无效的关键词')
-    const trimmed = keyword.trim()
-    if (!trimmed) throw new Error('关键词不能为空')
+  async listWordbookTags(): Promise<WordbookTagSummary[]> {
+    return (await this.wordbookTagRepo.listTags()).map((tag) => ({
+      id: String(tag.id),
+      name: tag.name,
+      wordCount: tag.wordCount
+    }))
+  }
 
-    const numericWordbookId =
-      wordbookId === undefined ? undefined : this.parseWordbookId(wordbookId)
+  async createWordbookTag(term: string): Promise<WordbookTagItem> {
+    const created = await this.wordbookTagRepo.createTag(term)
+    return { id: String(created.id), name: created.name }
+  }
 
-    const { items, total } = await this.wordbookRepo.filterWords(
-      trimmed,
-      numericWordbookId,
-      page,
-      pageSize
-    )
-    return {
-      items: items.map(toWordbookWordItem),
-      total
-    }
+  async renameWordbookTag(tagId: string, term: string): Promise<void> {
+    const numericId = this.parseWordbookTagId(tagId)
+    await this.wordbookTagRepo.renameTag(numericId, term)
+  }
+
+  async deleteWordbookTag(tagId: string): Promise<void> {
+    await this.wordbookTagRepo.deleteTag(this.parseWordbookTagId(tagId))
+  }
+
+  async setWordbookWordTags(wordId: string, tagIds: string[]): Promise<void> {
+    if (!Array.isArray(tagIds)) throw new Error('无效的标签列表')
+    const numericTagIds = tagIds.map((id) => this.parseWordbookTagId(id))
+    if (new Set(numericTagIds).size !== numericTagIds.length) throw new Error('标签列表包含重复项')
+    await this.wordbookTagRepo.replaceWordTags(this.parseWordbookWordId(wordId), numericTagIds)
+  }
+
+  async addWordbookTagToWords(wordIds: string[], tagId: string): Promise<void> {
+    const numericWordIds = parseWordbookWordIds(wordIds)
+    await this.wordbookTagRepo.addTagToWords(numericWordIds, this.parseWordbookTagId(tagId))
+  }
+
+  async removeWordbookTagFromWords(wordIds: string[], tagId: string): Promise<void> {
+    const numericWordIds = parseWordbookWordIds(wordIds)
+    await this.wordbookTagRepo.removeTagFromWords(numericWordIds, this.parseWordbookTagId(tagId))
   }
 
   async deleteWordbook(wordbookId: string): Promise<void> {
@@ -332,9 +363,10 @@ export class DBService {
     if (!Number.isInteger(star) || star < 0 || star > 5) throw new Error('星级必须在 0 到 5 之间')
 
     const saved = await this.wordbookRepo.star(word, star, this.lexicon?.lookup(word) ?? null)
-    const defaultWordbook = await this.wordbookRepo.findDefault()
-    if (!defaultWordbook) throw new Error('默认生词本不存在')
-    return toWordbookWordItem({ ...saved, wordbookName: defaultWordbook.name, isDefault: true })
+    const [savedWithRelations] = await this.wordbookRepo.listWordsByIds([saved.id])
+    if (!savedWithRelations) throw new Error('添加单词失败')
+    return toWordbookWordItem(savedWithRelations)
+  }
   }
 
   async importWordbookWords(text: string, wordbookId?: string): Promise<WordbookImportResult> {
@@ -1146,6 +1178,12 @@ export class DBService {
     return numericId
   }
 
+  private parseWordbookTagId(tagId: string): number {
+    const numericId = Number(tagId)
+    if (!Number.isSafeInteger(numericId) || numericId <= 0) throw new Error('无效的标签 ID')
+    return numericId
+  }
+
   private async validateWordbookExportRequest(
     request: WordbookExportRequest
   ): Promise<
@@ -1367,10 +1405,22 @@ function toWordbookWordItem(row: WordbookWordWithWordbook): WordbookWordItem {
     phonetic: row.phonetic,
     definition: row.definition,
     translation: row.translation,
-    ecdictVersion: row.ecdictVersion,
+    tags: row.tags.map((tag) => ({ id: String(tag.id), name: tag.name })),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   }
+}
+
+
+function parseWordbookWordIds(wordIds: string[]): number[] {
+  if (!Array.isArray(wordIds) || wordIds.length === 0) throw new Error('请选择至少一个单词')
+  const numericIds = wordIds.map((id) => {
+    const numericId = Number(id)
+    if (!Number.isSafeInteger(numericId) || numericId <= 0) throw new Error('无效的单词 ID')
+    return numericId
+  })
+  if (new Set(numericIds).size !== numericIds.length) throw new Error('单词列表包含重复项')
+  return numericIds
 }
 
 const DICTIONARY_ICON_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif']

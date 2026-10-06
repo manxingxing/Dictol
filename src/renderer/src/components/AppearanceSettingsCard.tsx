@@ -93,13 +93,13 @@ export function AppearanceSettingsCard(): React.JSX.Element {
   }
 
   return (
-    <SettingsSection title="外观" description="配置主题模式、框架色调和词典显示">
+    <SettingsSection title="外观" description="配置主题、色调和词典显示">
       <SettingsList>
         <SettingsRow
-          label="主题模式"
+          label="主题"
           description="选择浅色、深色或自动跟随系统"
           control={
-            <div aria-label="主题模式" className="grid gap-2 sm:grid-cols-3" role="group">
+            <div aria-label="主题" className="flex flex-wrap gap-2" role="group">
               {themeModeOptions.map((option) => {
                 const selected = themeMode === option.value
                 return (
@@ -125,13 +125,14 @@ export function AppearanceSettingsCard(): React.JSX.Element {
               })}
             </div>
           }
-          className="items-start"
+          className="items-start flex-wrap sm:flex-nowrap"
+          controlClassName="w-full sm:w-auto"
         />
         <SettingsRow
-          label="框架色调"
+          label="色调"
           description="选择中性或苔绿配色"
           control={
-            <div aria-label="框架色调" className="grid gap-2 sm:grid-cols-2" role="group">
+            <div aria-label="色调" className="flex flex-wrap gap-2" role="group">
               {chromeToneOptions.map((option) => {
                 const selected = chromeTone === option.value
                 return (
@@ -156,7 +157,8 @@ export function AppearanceSettingsCard(): React.JSX.Element {
               })}
             </div>
           }
-          className="items-start"
+          className="items-start flex-wrap sm:flex-nowrap"
+          controlClassName="w-full sm:w-auto"
         />
         <SettingsRow
           label="查词页面布局"
