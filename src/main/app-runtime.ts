@@ -5,7 +5,12 @@ import { AppConfigStore, type AppConfig } from './app-config'
 import { AiLookupService } from './ai-service'
 import { BuiltInLexiconService } from './built-in-lexicon-service'
 import { initDrizzleDB, type DictolDatabase, type SqliteDatabase } from './db/drizzle'
-import { getDatabasePath, getDictionaryIndexRoot, getMigrationsPath } from './db/paths'
+import {
+  getDatabasePath,
+  getDictionaryIndexRoot,
+  getMigrationsPath,
+  getSqliteSimpleExtensionPath
+} from './db/paths'
 import { DBService } from './db-service'
 import { MdictResourceManager } from './mdict-resource-manager'
 import { ResourceCache } from './resource-cache'
@@ -78,7 +83,11 @@ export class AppRuntime {
   }
 
   initDB(): void {
-    const { orm, db: conn } = initDrizzleDB(getDatabasePath(), getMigrationsPath())
+    const { orm, db: conn } = initDrizzleDB(
+      getDatabasePath(),
+      getMigrationsPath(),
+      getSqliteSimpleExtensionPath()
+    )
     this.db = orm
     try {
       this.builtInLexicon = new BuiltInLexiconService()
