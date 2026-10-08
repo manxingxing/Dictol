@@ -167,6 +167,53 @@ export const wordbookWord = sqliteTable(
   ]
 )
 
+export const dictionaryNote = sqliteTable(
+  'dictionary_note',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    excerpt: text('excerpt'),
+    comment: text('comment'),
+    commentRich: text('comment_rich'),
+    sourceDictionaryId: integer('source_dictionary_id'),
+    sourceEntryTerm: text('source_entry_term'),
+    createdAt: text('created_at').notNull().default(isoNow),
+    updatedAt: text('updated_at').notNull().default(isoNow)
+  },
+  (table) => [index('dictionary_note_created_at_idx').on(table.createdAt)]
+)
+
+export const dictionaryNoteWord = sqliteTable(
+  'dictionary_note_word',
+  {
+    noteId: integer('note_id')
+      .notNull()
+      .references(() => dictionaryNote.id, { onDelete: 'cascade' }),
+    term: text('term').notNull(),
+    normalizedTerm: text('normalized_term').notNull()
+  },
+  (table) => [
+    primaryKey({ columns: [table.noteId, table.normalizedTerm] }),
+    index('dictionary_note_word_normalized_term_idx').on(table.normalizedTerm)
+  ]
+)
+
+export const dictionaryNoteAttachment = sqliteTable(
+  'dictionary_note_attachment',
+  {
+    id: text('id').primaryKey(),
+    noteId: integer('note_id')
+      .notNull()
+      .references(() => dictionaryNote.id, { onDelete: 'cascade' }),
+    storageKey: text('storage_key').notNull().unique(),
+    mimeType: text('mime_type').notNull(),
+    byteSize: integer('byte_size').notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    createdAt: text('created_at').notNull().default(isoNow)
+  },
+  (table) => [index('dictionary_note_attachment_note_id_idx').on(table.noteId)]
+)
+
 export const wordbookTag = sqliteTable(
   'wordbook_tag',
   {
@@ -299,6 +346,21 @@ export const wordbookWordRelations = relations(wordbookWord, ({ one }) => ({
   })
 }))
 
+export const dictionaryNoteRelations = relations(dictionaryNote, ({ one, many }) => ({
+  sourceDictionary: one(dictionary, {
+    fields: [dictionaryNote.sourceDictionaryId],
+    references: [dictionary.id]
+  }),
+  words: many(dictionaryNoteWord)
+}))
+
+export const dictionaryNoteWordRelations = relations(dictionaryNoteWord, ({ one }) => ({
+  note: one(dictionaryNote, {
+    fields: [dictionaryNoteWord.noteId],
+    references: [dictionaryNote.id]
+  })
+}))
+
 export const wordbookTagRelations = relations(wordbookTag, ({ many }) => ({
   words: many(wordbookWordTag)
 }))
@@ -327,6 +389,8 @@ export type Wordbook = typeof wordbook.$inferSelect
 export type NewWordbook = typeof wordbook.$inferInsert
 export type WordbookWord = typeof wordbookWord.$inferSelect
 export type NewWordbookWord = typeof wordbookWord.$inferInsert
+export type DictionaryNote = typeof dictionaryNote.$inferSelect
+export type NewDictionaryNote = typeof dictionaryNote.$inferInsert
 export type WordbookTag = typeof wordbookTag.$inferSelect
 export type NewWordbookTag = typeof wordbookTag.$inferInsert
 export type OnlineDictionary = typeof onlineDictionary.$inferSelect
