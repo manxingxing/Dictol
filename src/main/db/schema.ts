@@ -174,7 +174,7 @@ export const dictionaryNote = sqliteTable(
     excerpt: text('excerpt'),
     comment: text('comment'),
     commentRich: text('comment_rich'),
-    sourceDictionaryId: integer('source_dictionary_id'),
+    sourceDictionaryName: text('source_dictionary_name'),
     sourceEntryTerm: text('source_entry_term'),
     createdAt: text('created_at').notNull().default(isoNow),
     updatedAt: text('updated_at').notNull().default(isoNow)

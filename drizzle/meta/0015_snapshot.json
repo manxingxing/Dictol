@@ -706,9 +706,9 @@
           "notNull": false,
           "autoincrement": false
         },
-        "source_dictionary_id": {
-          "name": "source_dictionary_id",
-          "type": "integer",
+        "source_dictionary_name": {
+          "name": "source_dictionary_name",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

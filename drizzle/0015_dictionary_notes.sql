@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS `dictionary_note` (
 	`excerpt` text,
 	`comment` text,
 	`comment_rich` text,
-	`source_dictionary_id` integer,
+	`source_dictionary_name` text,
 	`source_entry_term` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL
