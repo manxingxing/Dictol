@@ -1,6 +1,8 @@
 import {
+  Menu,
   clipboard,
   ipcMain,
+  nativeImage,
   shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
@@ -11,14 +13,18 @@ import type { WebContentsViewManager } from '../web-contents-view-manager'
 import {
   createDictionaryAggregateUrl,
   createDictionaryEntryUrl,
+  parseDictionaryAggregateUrl,
+  parseDictionaryEntryUrl,
   parseDictionaryEntryNavigation
 } from '../dictionary-entry-url'
 import { resolveEntryLinkWithAnchor } from '../resolve-entry-link'
 import { resolveRendererUrl } from '../output-path'
+import { createDictionaryNoteWithImages } from '../service/dictionary-note-image'
 import type {
   DictionaryAggregateRequest,
   DictionaryLookupRequest
 } from '../../shared/dictionary-navigation'
+import type { DictionaryNoteCreationResultEvent } from '../../shared/dictionary-note'
 import { BaseController } from './base-controller'
 import { dismissSearchPopover } from './search-popover'
 
@@ -43,6 +49,8 @@ export class DictionaryViewController extends BaseController {
     ipcMain.on('dictionary-view:set-bounds', this.setBounds)
     ipcMain.on('dictionary-view:lookup-word', this.lookupWord)
     ipcMain.handle('dictionary-view:can-explain-with-ai', this.canExplainWithAi)
+    ipcMain.handle('dictionary-view:can-create-note', this.canCreateNote)
+    ipcMain.on('dictionary-view:open-note', this.createNote)
     ipcMain.on('dictionary-view:explain-with-ai', this.explainWithAi)
     ipcMain.on('dictionary-view:copy-text', this.copyText)
     ipcMain.on('dictionary-view:pointer-down', this.pointerDown)
@@ -170,16 +178,8 @@ export class DictionaryViewController extends BaseController {
   }
 
   explainWithAi = (event: IpcMainEvent, text: string): void => {
-    const normalizedText = text.trim()
-    if (
-      !this.acceptsViewSender(event.sender.id) ||
-      !this.runtime.appConfig.load().aiLookup.enabled ||
-      !normalizedText ||
-      normalizedText.length > DictionaryViewController.maxAiExplanationTextLength
-    ) {
-      return
-    }
-    this.activeView.sendToMainWindow('dictionary-view:explain-with-ai', normalizedText)
+    if (!this.acceptsViewSender(event.sender.id)) return
+    this.explainWithAiText(text)
   }
 
   copyText = (event: IpcMainEvent, text: string): void => {
@@ -192,6 +192,67 @@ export class DictionaryViewController extends BaseController {
       return
     }
     clipboard.writeText(text)
+  }
+
+  canCreateNote = (event: IpcMainInvokeEvent): boolean => {
+    return this.acceptsViewSender(event.sender.id) && this.getCurrentNoteContext() !== null
+  }
+
+  // 从 context menu创建文本摘抄
+  createNote = (event: IpcMainEvent, text: string, sourceDictionaryId?: unknown): void => {
+    if (!this.acceptsViewSender(event.sender.id)) return
+    void this.createTextNote(text, this.parseSourceDictionaryId(sourceDictionaryId))
+  }
+
+  private async createTextNote(text: string, sourceDictionaryId?: number): Promise<void> {
+    const normalizedText = typeof text === 'string' ? text.trim() : ''
+    if (!normalizedText || normalizedText.length > 100_000) return
+
+    const context = this.getCurrentNoteContext(sourceDictionaryId)
+    if (!context) return
+    try {
+      await this.db.createDictionaryNote({
+        relatedTerms: [context.term],
+        sourceDictionaryId:
+          context.sourceDictionaryId === undefined ? null : String(context.sourceDictionaryId),
+        sourceEntryTerm: context.term,
+        excerpt: normalizedText
+      })
+      this.notifyNoteCreated(context.term)
+    } catch (error) {
+      console.error('Failed to create a dictionary text note', error)
+      this.notifyNoteCreationFailed(context.term, error)
+    }
+  }
+
+  private notifyNoteCreated(term: string): void {
+    const payload: DictionaryNoteCreationResultEvent = { status: 'success', term }
+    this.notifyNoteCreationResult(payload)
+  }
+
+  private notifyNoteCreationFailed(term: string, error: unknown): void {
+    const payload: DictionaryNoteCreationResultEvent = {
+      status: 'fail',
+      term,
+      message: error instanceof Error ? error.message : '摘抄保存失败'
+    }
+    this.notifyNoteCreationResult(payload)
+  }
+
+  private notifyNoteCreationResult(payload: DictionaryNoteCreationResultEvent): void {
+    this.runtime.mainWindow?.webContents.send('note-creation-result', payload)
+  }
+
+  private explainWithAiText(text: string): void {
+    const normalizedText = text.trim()
+    if (
+      !this.runtime.appConfig.load().aiLookup.enabled ||
+      !normalizedText ||
+      normalizedText.length > DictionaryViewController.maxAiExplanationTextLength
+    ) {
+      return
+    }
+    this.activeView.sendToMainWindow('dictionary-view:explain-with-ai', normalizedText)
   }
 
   pointerDown = (event: IpcMainEvent): void => {
@@ -254,6 +315,58 @@ export class DictionaryViewController extends BaseController {
     return load
   }
 
+  private getCurrentNoteContext(
+    selectedDictionaryId?: number
+  ): { term: string; sourceDictionaryId?: number } | null {
+    const currentUrl = this.desiredUrl ?? this.loadedUrl
+    if (!currentUrl) return null
+    const entry = parseDictionaryEntryUrl(currentUrl)
+    if (entry) return { term: entry.term, sourceDictionaryId: entry.dictionaryId }
+
+    const aggregate = parseDictionaryAggregateUrl(currentUrl)
+    if (!aggregate) return null
+    return {
+      term: aggregate.term,
+      sourceDictionaryId: selectedDictionaryId
+    }
+  }
+
+  private parseSourceDictionaryId(value: unknown): number | undefined {
+    const dictionaryId = typeof value === 'number' ? value : Number(value)
+    return Number.isSafeInteger(dictionaryId) && dictionaryId > 0 ? dictionaryId : undefined
+  }
+
+  // 右键菜单 - 图片
+  private async getDictionaryIdAtPoint(
+    view: WebContentsViewManager,
+    x: number,
+    y: number
+  ): Promise<number | undefined> {
+    const currentUrl = this.desiredUrl ?? this.loadedUrl
+    if (!currentUrl || !parseDictionaryAggregateUrl(currentUrl)) return undefined
+    const value: unknown = await view.webContents.executeJavaScript(`(() => {
+      const element = document.elementFromPoint(${x}, ${y})
+      const value = element?.closest('.dictol-dictionary-section')?.getAttribute('data-dictionary-id')
+      const dictionaryId = Number(value)
+      return Number.isSafeInteger(dictionaryId) && dictionaryId > 0 ? dictionaryId : null
+    })()`)
+    return this.parseSourceDictionaryId(value)
+  }
+
+  // 右键菜单 - 文本
+  private async getSelectedDictionaryId(view: WebContentsViewManager): Promise<number | undefined> {
+    const currentUrl = this.desiredUrl ?? this.loadedUrl
+    if (!currentUrl || !parseDictionaryAggregateUrl(currentUrl)) return undefined
+    const value: unknown = await view.webContents.executeJavaScript(`(() => {
+      const anchorNode = window.getSelection()?.anchorNode
+      const anchorElement = anchorNode instanceof Element ? anchorNode : anchorNode?.parentElement
+      const value = anchorElement?.closest('.dictol-dictionary-section')?.getAttribute('data-dictionary-id')
+      const dictionaryId = Number(value)
+      return Number.isSafeInteger(dictionaryId) && dictionaryId > 0 ? dictionaryId : null
+    })()`)
+    return this.parseSourceDictionaryId(value)
+  }
+
   private hideView(): void {
     this.desiredUrl = undefined
     this.notifyLoadingState(false)
@@ -286,6 +399,11 @@ export class DictionaryViewController extends BaseController {
   }
 
   private configureView(view: WebContentsViewManager): void {
+    view.webContents.on('context-menu', (event, params) => {
+      if (!params.hasImageContents && !params.selectionText.trim()) return
+      event.preventDefault()
+      this.showContextMenu(view, params)
+    })
     view.webContents.setWindowOpenHandler(({ url }) => {
       if (url.startsWith('https://') || url.startsWith('http://')) {
         void shell.openExternal(url).catch((error: unknown) => {
@@ -294,6 +412,7 @@ export class DictionaryViewController extends BaseController {
       }
       return { action: 'deny' }
     })
+    // 处理 entry 逻辑跳转
     view.webContents.on('will-navigate', (event) => {
       if (event.url.startsWith('dictol-entry://')) return
       event.preventDefault()
@@ -307,9 +426,11 @@ export class DictionaryViewController extends BaseController {
         })
       }
     })
+    // 页面内查找
     view.webContents.on('found-in-page', (_event, result) => {
       this.findBarView?.send('find-bar:find-result', result)
     })
+
     view.webContents.on(
       'did-fail-load',
       (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
@@ -326,6 +447,139 @@ export class DictionaryViewController extends BaseController {
       view.webContents.stopFindInPage('clearSelection')
       this.hideFindBarView()
     })
+  }
+
+  private showContextMenu(view: WebContentsViewManager, params: Electron.ContextMenuParams): void {
+    const window = this.runtime.mainWindow
+    if (!window) return
+
+    if (params.hasImageContents) {
+      const menuItems: Electron.MenuItemConstructorOptions[] = [
+        {
+          label: '复制',
+          click: () => void this.copyImageToClipboard(view, params)
+        }
+      ]
+      if (this.getCurrentNoteContext()) {
+        menuItems.push({
+          label: '摘抄',
+          click: () => void this.createImageNote(view, params)
+        })
+      }
+      Menu.buildFromTemplate(menuItems).popup({
+        window,
+        x: Math.round(this.lastDictBounds.x + params.x),
+        y: Math.round(this.lastDictBounds.y + params.y)
+      })
+      return
+    }
+
+    const text = params.selectionText.trim()
+    if (!text || text.length > 100_000) return
+
+    const menuItems: Electron.MenuItemConstructorOptions[] = [
+      { label: '复制', click: () => clipboard.writeText(text) },
+      {
+        label: '查词',
+        enabled: text.length <= 200,
+        click: () => this.sendLookup({ word: text })
+      }
+    ]
+    if (this.getCurrentNoteContext()) {
+      menuItems.push({
+        label: '摘抄',
+        click: () => void this.createNoteFromSelection(view, text)
+      })
+    }
+    if (this.runtime.appConfig.load().aiLookup.enabled) {
+      menuItems.push({
+        label: 'AI 解释',
+        enabled: text.length <= DictionaryViewController.maxAiExplanationTextLength,
+        click: () => this.explainWithAiText(text)
+      })
+    }
+
+    Menu.buildFromTemplate(menuItems).popup({
+      window,
+      x: Math.round(this.lastDictBounds.x + params.x),
+      y: Math.round(this.lastDictBounds.y + params.y)
+    })
+  }
+
+  private async copyImageToClipboard(
+    view: WebContentsViewManager,
+    params: Electron.ContextMenuParams
+  ): Promise<void> {
+    const bytes = await this.readContextImage(view, params)
+    if (bytes) clipboard.writeImage(nativeImage.createFromBuffer(bytes))
+    else view.webContents.copyImageAt(params.x, params.y)
+  }
+
+  private async createImageNote(
+    view: WebContentsViewManager,
+    params: Electron.ContextMenuParams
+  ): Promise<void> {
+    let term: string | null = null
+    try {
+      const selectedDictionaryId = await this.getDictionaryIdAtPoint(view, params.x, params.y)
+      const context = this.getCurrentNoteContext(selectedDictionaryId)
+      if (!context) return
+      term = context.term
+
+      const bytes = await this.readContextImage(view, params)
+      if (!bytes) throw new Error('无法读取词典图片')
+
+      await createDictionaryNoteWithImages(this.db, {
+        relatedTerms: [context.term],
+        sourceDictionaryId:
+          context.sourceDictionaryId === undefined ? null : String(context.sourceDictionaryId),
+        sourceEntryTerm: context.term,
+        imageBytes: [new Uint8Array(bytes)]
+      })
+      this.notifyNoteCreated(term)
+    } catch (error) {
+      console.error('Failed to create a dictionary image note', error)
+      if (term) {
+        this.notifyNoteCreationFailed(term, error)
+      }
+    }
+  }
+
+  private async createNoteFromSelection(view: WebContentsViewManager, text: string): Promise<void> {
+    const context = this.getCurrentNoteContext()
+    if (!context) return
+    try {
+      const selectedDictionaryId = await this.getSelectedDictionaryId(view)
+      await this.createTextNote(text, selectedDictionaryId)
+    } catch (error) {
+      console.error('Failed to resolve the source dictionary for a text note', error)
+      this.notifyNoteCreationFailed(context.term, error)
+    }
+  }
+
+  private async readContextImage(
+    view: WebContentsViewManager,
+    params: Electron.ContextMenuParams
+  ): Promise<Buffer | null> {
+    if (params.srcURL.startsWith('data:image/')) {
+      const image = nativeImage.createFromDataURL(params.srcURL)
+      return image.isEmpty() ? null : image.toPNG()
+    }
+
+    try {
+      const response = await view.webContents.session.fetch(params.srcURL)
+      if (response.ok) {
+        const bytes = Buffer.from(await response.arrayBuffer())
+        const image = nativeImage.createFromBuffer(bytes)
+        if (!image.isEmpty()) return image.toPNG()
+      }
+    } catch (error) {
+      console.warn('Failed to read dictionary image', {
+        srcURL: params.srcURL,
+        error
+      })
+    }
+    return null
   }
 
   private sendLookup(request: DictionaryLookupRequest): void {

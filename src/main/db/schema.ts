@@ -346,11 +346,7 @@ export const wordbookWordRelations = relations(wordbookWord, ({ one }) => ({
   })
 }))
 
-export const dictionaryNoteRelations = relations(dictionaryNote, ({ one, many }) => ({
-  sourceDictionary: one(dictionary, {
-    fields: [dictionaryNote.sourceDictionaryId],
-    references: [dictionary.id]
-  }),
+export const dictionaryNoteRelations = relations(dictionaryNote, ({ many }) => ({
   words: many(dictionaryNoteWord)
 }))
 

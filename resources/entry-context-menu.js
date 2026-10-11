@@ -32,23 +32,23 @@
     button {
       display: flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
+      width: 30px;
       height: 30px;
-      padding: 0 10px;
+      padding: 0;
       border: 0;
       border-radius: 8px;
       background: transparent;
       color: #242824;
       font: 500 13px/1 inherit;
-      white-space: nowrap;
-      cursor: default;
+      cursor: pointer;
     }
     button:hover { background: rgba(255, 255, 255, .52); }
     button:active { background: rgba(218, 224, 217, .62); }
     button:disabled { opacity: .38; cursor: not-allowed; }
     svg {
-      width: 14px;
-      height: 14px;
+      width: 16px;
+      height: 16px;
       fill: none;
       stroke: currentColor;
       stroke-width: 1.8;

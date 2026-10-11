@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld(
       ipcRenderer.invoke('dictionary-view:can-explain-with-ai'),
     explainWithAi: (text: string): void =>
       ipcRenderer.send('dictionary-view:explain-with-ai', text),
+    canCreateNote: (): Promise<boolean> => ipcRenderer.invoke('dictionary-view:can-create-note'),
+    openNote: (text: string, sourceDictionaryId?: number): void =>
+      ipcRenderer.send('dictionary-view:open-note', text, sourceDictionaryId),
     copyText: (text: string): void => ipcRenderer.send('dictionary-view:copy-text', text),
     onScrollToDictionary: (callback: (dictionaryId: number) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, dictionaryId: number): void =>

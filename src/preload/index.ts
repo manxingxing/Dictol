@@ -27,6 +27,14 @@ import type {
   DictionaryAggregateRequest,
   DictionaryLookupRequest
 } from '../shared/dictionary-navigation'
+import type {
+  CreateDictionaryNoteRequest,
+  DictionaryNoteCreationResultEvent,
+  DictionaryNoteItem,
+  DictionaryNoteSearchResult,
+  DictionaryNoteWordGroupSearchResult,
+  UpdateDictionaryNoteContentRequest
+} from '../shared/dictionary-note'
 import type { TouchBarPage, TouchBarState } from '../shared/touch-bar'
 
 type ReadyDictionary = {
@@ -365,6 +373,37 @@ const api = Object.freeze({
       ipcRenderer.invoke('wordbooks:add-tag-to-words', wordIds, tagId),
     removeTagFromWords: (wordIds: string[], tagId: string): Promise<void> =>
       ipcRenderer.invoke('wordbooks:remove-tag-from-words', wordIds, tagId)
+  }),
+  dictionaryNotes: Object.freeze({
+    search: (query: string, page: number, pageSize: number): Promise<DictionaryNoteSearchResult> =>
+      ipcRenderer.invoke('dictionary-notes:search', query, page, pageSize),
+    searchByWord: (
+      query: string,
+      page: number,
+      pageSize: number
+    ): Promise<DictionaryNoteWordGroupSearchResult> =>
+      ipcRenderer.invoke('dictionary-notes:search-by-word', query, page, pageSize),
+    listByTerm: (term: string): Promise<DictionaryNoteItem[]> =>
+      ipcRenderer.invoke('dictionary-notes:list-by-term', term),
+    countByTerm: (term: string): Promise<number> =>
+      ipcRenderer.invoke('dictionary-notes:count-by-term', term),
+    onCreationResult: (
+      callback: (payload: DictionaryNoteCreationResultEvent) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: DictionaryNoteCreationResultEvent
+      ): void => callback(payload)
+      ipcRenderer.on('note-creation-result', listener)
+      return () => ipcRenderer.removeListener('note-creation-result', listener)
+    },
+    create: (input: CreateDictionaryNoteRequest): Promise<DictionaryNoteItem> =>
+      ipcRenderer.invoke('dictionary-notes:create', input),
+    removeImage: (noteId: string, attachmentId: string): Promise<void> =>
+      ipcRenderer.invoke('dictionary-notes:remove-image', noteId, attachmentId),
+    updateContent: (noteId: string, content: UpdateDictionaryNoteContentRequest): Promise<void> =>
+      ipcRenderer.invoke('dictionary-notes:update-content', noteId, content),
+    delete: (noteId: string): Promise<void> => ipcRenderer.invoke('dictionary-notes:delete', noteId)
   }),
   app: Object.freeze({
     getVersion: (): Promise<string | null> => ipcRenderer.invoke('app:get-version'),

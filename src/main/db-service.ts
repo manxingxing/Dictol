@@ -1,5 +1,7 @@
 import { app } from 'electron'
 import type { DidxIndex } from '@dictol/mdict-native'
+import { generateText, type JSONContent } from '@tiptap/core'
+import StarterKit from '@tiptap/starter-kit'
 import { randomUUID } from 'node:crypto'
 import { copyFile, readFile, readdir, rename, rm, stat, unlink } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -12,6 +14,12 @@ import type {
   DictionaryImportWorkerFile,
   DictionaryImportWorkerRequest
 } from '../shared/dictionary-import'
+import type {
+  DictionaryNoteAttachmentItem,
+  DictionaryNoteItem,
+  DictionaryNoteSearchResult,
+  DictionaryNoteWordGroupSearchResult
+} from '../shared/dictionary-note'
 import type { BuiltInLexiconEntry } from './built-in-lexicon-service'
 import { DidxQueryService } from './didx-query-service'
 import type { DictolDatabase } from './db/drizzle'
@@ -29,6 +37,7 @@ import {
   selectDictionaryImportPlans
 } from './dictionary-import-files'
 import { QueryHistoryRepository } from './db/repository/query-history-repository'
+import { DictionaryNoteRepository } from './db/repository/dictionary-note-repository'
 import {
   OnlineDictionaryRepository,
   type OnlineDictionaryInput
@@ -185,6 +194,17 @@ export type WordbookTagItem = {
 export type WordbookTagSummary = WordbookTagItem & {
   wordCount: number
 }
+
+export type CreateDictionaryNoteInput = {
+  relatedTerms: string[]
+  excerpt?: string | null
+  comment?: string | null
+  commentRich?: string | null
+  sourceDictionaryId?: string | null
+  sourceEntryTerm?: string | null
+  attachments?: DictionaryNoteAttachmentItem[]
+}
+
 export type OnlineDictionaryConfig = {
   id: string
   name: string
@@ -226,6 +246,7 @@ export class DBService {
   private readonly fileRepo: DictionaryFileRepository
   private readonly dictionaryIconPaths = new Map<number, Promise<string | null>>()
   private readonly queryHistoryRepo: QueryHistoryRepository
+  private readonly dictionaryNoteRepo: DictionaryNoteRepository
   private readonly wordbookRepo: WordbookRepository
   private readonly wordbookTagRepo: WordbookTagRepository
   private readonly onlineDictionaryRepo: OnlineDictionaryRepository
@@ -245,6 +266,7 @@ export class DBService {
     this.dictionaryGroupRepo = new DictionaryGroupRepository(db)
     this.fileRepo = new DictionaryFileRepository(db)
     this.queryHistoryRepo = new QueryHistoryRepository(db)
+    this.dictionaryNoteRepo = new DictionaryNoteRepository(db)
     this.wordbookRepo = new WordbookRepository(db)
     this.wordbookTagRepo = new WordbookTagRepository(db)
     this.onlineDictionaryRepo = new OnlineDictionaryRepository(db)
@@ -367,6 +389,132 @@ export class DBService {
     if (!savedWithRelations) throw new Error('添加单词失败')
     return toWordbookWordItem(savedWithRelations)
   }
+
+  async listNotesByTerm(term: string): Promise<DictionaryNoteItem[]> {
+    const normalizedTerm = normalizeNoteTerm(term)
+    return (await this.dictionaryNoteRepo.listByTerm(normalizedTerm)).map(toDictionaryNoteItem)
+  }
+
+  async countNotesByTerm(term: string): Promise<number> {
+    const normalizedTerm = normalizeNoteTerm(term)
+    return await this.dictionaryNoteRepo.countByTerm(normalizedTerm)
+  }
+
+  async searchDictionaryNotes(
+    query: string,
+    page = 1,
+    pageSize = 25
+  ): Promise<DictionaryNoteSearchResult> {
+    const normalizedQuery = query.trim()
+    const safePage = Math.max(1, Math.floor(page))
+    const safePageSize = Math.min(100, Math.max(1, Math.floor(pageSize)))
+    const result = await this.dictionaryNoteRepo.search(
+      normalizedQuery,
+      safePageSize,
+      (safePage - 1) * safePageSize
+    )
+    return { items: result.items.map(toDictionaryNoteItem), total: result.total }
+  }
+
+  async searchDictionaryNotesByWord(
+    query: string,
+    page = 1,
+    pageSize = 25
+  ): Promise<DictionaryNoteWordGroupSearchResult> {
+    const normalizedQuery = query.trim()
+    const safePage = Math.max(1, Math.floor(page))
+    const safePageSize = Math.min(100, Math.max(1, Math.floor(pageSize)))
+    const result = await this.dictionaryNoteRepo.searchByWord(
+      normalizedQuery,
+      safePageSize,
+      (safePage - 1) * safePageSize
+    )
+    return {
+      items: result.items.map((group) => ({
+        term: group.term,
+        normalizedTerm: group.normalizedTerm,
+        latestCreatedAt: group.latestCreatedAt,
+        notes: group.notes.map(toDictionaryNoteItem)
+      })),
+      total: result.total
+    }
+  }
+
+  async createDictionaryNote(input: CreateDictionaryNoteInput): Promise<DictionaryNoteItem> {
+    if (!input || typeof input !== 'object') throw new Error('无效的摘抄')
+    const excerpt = normalizeOptionalNoteText(input.excerpt, '摘抄', 100_000)
+    const { comment, commentRich } = normalizeNoteComment(input.comment, input.commentRich)
+    const sourceDictionaryId = parseOptionalPositiveId(input.sourceDictionaryId, '词典 ID')
+    const sourceEntryTerm = normalizeOptionalNoteText(input.sourceEntryTerm, '来源词条', 500)
+    const relatedTerms = normalizeNoteRelatedTerms(input.relatedTerms)
+    const attachments = input.attachments ?? []
+    if (!Array.isArray(attachments) || attachments.length > 20) {
+      throw new Error('笔记图片数量不能超过 20 张')
+    }
+    for (const attachment of attachments) {
+      if (
+        !/^[0-9a-f-]{36}$/i.test(attachment.id) ||
+        attachment.storageKey !== `${attachment.id}.png` ||
+        attachment.mimeType !== 'image/png' ||
+        attachment.byteSize <= 0 ||
+        attachment.width <= 0 ||
+        attachment.height <= 0
+      ) {
+        throw new Error('笔记图片标识无效')
+      }
+    }
+    if (!excerpt && !comment && attachments.length === 0) {
+      throw new Error('摘抄、笔记或图片不能同时为空')
+    }
+    const saved = await this.dictionaryNoteRepo.create({
+      excerpt,
+      comment,
+      commentRich,
+      sourceDictionaryId,
+      sourceEntryTerm,
+      relatedTerms,
+      attachments
+    })
+    return toDictionaryNoteItem(saved)
+  }
+
+  async updateDictionaryNoteContent(
+    noteId: string,
+    content: {
+      comment: string | null
+      commentRich?: string | null
+    }
+  ): Promise<void> {
+    const numericId = parsePositiveId(noteId, '摘抄 ID')
+    const { comment, commentRich } = normalizeNoteComment(content.comment, content.commentRich)
+    await this.dictionaryNoteRepo.updateContent(numericId, {
+      comment,
+      commentRich
+    })
+  }
+
+  async deleteDictionaryNote(noteId: string): Promise<void> {
+    await this.dictionaryNoteRepo.delete(parsePositiveId(noteId, '摘抄 ID'))
+  }
+
+  async hasDictionaryNoteImage(id: string): Promise<boolean> {
+    return await this.dictionaryNoteRepo.hasAttachment(id)
+  }
+
+  async removeDictionaryNoteAttachment(
+    noteId: string,
+    attachmentId: string
+  ): Promise<string | null> {
+    return await this.dictionaryNoteRepo.removeAttachment(
+      parsePositiveId(noteId, '摘抄 ID'),
+      attachmentId
+    )
+  }
+
+  async listDictionaryNoteImageStorageKeys(noteId: string): Promise<string[]> {
+    return await this.dictionaryNoteRepo.listAttachmentStorageKeys(
+      parsePositiveId(noteId, '摘抄 ID')
+    )
   }
 
   async importWordbookWords(text: string, wordbookId?: string): Promise<WordbookImportResult> {
@@ -1411,6 +1559,110 @@ function toWordbookWordItem(row: WordbookWordWithWordbook): WordbookWordItem {
   }
 }
 
+function toDictionaryNoteItem(row: {
+  id: number
+  relatedTerms: string[]
+  excerpt: string | null
+  comment: string | null
+  commentRich: string | null
+  searchMatches?: { excerpt: string[]; comment: string[] }
+  attachments: DictionaryNoteAttachmentItem[]
+  sourceDictionaryName: string | null
+  sourceEntryTerm: string | null
+  createdAt: string
+  updatedAt: string
+}): DictionaryNoteItem {
+  return {
+    id: String(row.id),
+    relatedTerms: row.relatedTerms,
+    excerpt: row.excerpt,
+    comment: row.comment,
+    commentRich: row.commentRich,
+    ...(row.searchMatches ? { searchMatches: row.searchMatches } : {}),
+    attachments: row.attachments,
+    sourceDictionaryName: row.sourceDictionaryName,
+    sourceEntryTerm: row.sourceEntryTerm,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  }
+}
+
+function normalizeNoteRelatedTerms(
+  relatedTerms: string[]
+): { term: string; normalizedTerm: string }[] {
+  if (!Array.isArray(relatedTerms)) {
+    throw new Error('关联单词格式无效')
+  }
+  const uniqueTerms = new Map<string, { term: string; normalizedTerm: string }>()
+  for (const candidate of relatedTerms) {
+    const normalizedTerm = normalizeNoteTerm(candidate)
+    if (!uniqueTerms.has(normalizedTerm)) {
+      uniqueTerms.set(normalizedTerm, { term: candidate.trim(), normalizedTerm })
+    }
+  }
+  return [...uniqueTerms.values()]
+}
+
+function normalizeNoteTerm(term: string): string {
+  if (typeof term !== 'string') throw new Error('无效的单词')
+  const normalized = term.trim().toLocaleLowerCase()
+  if (!normalized) throw new Error('单词不能为空')
+  if (normalized.length > 300) throw new Error('单词不能超过 300 个字符')
+  return normalized
+}
+
+function normalizeNoteComment(
+  comment: string | null | undefined,
+  commentRich: string | null | undefined
+): { comment: string | null; commentRich: string | null } {
+  if (commentRich == null || commentRich.trim() === '') {
+    return {
+      comment: normalizeOptionalNoteText(comment, '笔记', 100_000),
+      commentRich: null
+    }
+  }
+  if (commentRich.length > 1_000_000) throw new Error('笔记内容过长')
+
+  let extracted: string
+  try {
+    const document = JSON.parse(commentRich) as JSONContent
+    if (document?.type !== 'doc') throw new Error('笔记格式无效')
+    extracted = generateText(document, [StarterKit], { blockSeparator: '\n' })
+  } catch {
+    throw new Error('笔记格式无效')
+  }
+  const normalizedComment = normalizeOptionalNoteText(
+    extracted.replace(/\n{3,}/g, '\n\n'),
+    '笔记',
+    100_000
+  )
+  return normalizedComment
+    ? { comment: normalizedComment, commentRich }
+    : { comment: null, commentRich: null }
+}
+
+function normalizeOptionalNoteText(
+  value: string | null | undefined,
+  field: string,
+  maxLength: number
+): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value !== 'string') throw new Error(`无效的${field}`)
+  const normalized = value.trim()
+  if (normalized.length > maxLength) throw new Error(`${field}不能超过 ${maxLength} 个字符`)
+  return normalized || null
+}
+
+function parseOptionalPositiveId(value: string | null | undefined, field: string): number | null {
+  if (value === null || value === undefined) return null
+  return parsePositiveId(value, field)
+}
+
+function parsePositiveId(value: string, field: string): number {
+  const id = Number(value)
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error(`无效的${field}`)
+  return id
+}
 
 function parseWordbookWordIds(wordIds: string[]): number[] {
   if (!Array.isArray(wordIds) || wordIds.length === 0) throw new Error('请选择至少一个单词')

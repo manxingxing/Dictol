@@ -11,6 +11,14 @@ import type {
   CustomCssEditorTheme
 } from '../shared/custom-css-editor'
 import type { TouchBarPage, TouchBarState } from '../shared/touch-bar'
+import type {
+  CreateDictionaryNoteRequest,
+  DictionaryNoteCreationResultEvent,
+  DictionaryNoteItem,
+  DictionaryNoteSearchResult,
+  DictionaryNoteWordGroupSearchResult,
+  UpdateDictionaryNoteContentRequest
+} from '../shared/dictionary-note'
 
 declare global {
   interface Window {
@@ -352,6 +360,30 @@ declare global {
         setWordTags: (wordId: string, tagIds: string[]) => Promise<void>
         addTagToWords: (wordIds: string[], tagId: string) => Promise<void>
         removeTagFromWords: (wordIds: string[], tagId: string) => Promise<void>
+      }
+      dictionaryNotes: {
+        search: (
+          query: string,
+          page: number,
+          pageSize: number
+        ) => Promise<DictionaryNoteSearchResult>
+        searchByWord: (
+          query: string,
+          page: number,
+          pageSize: number
+        ) => Promise<DictionaryNoteWordGroupSearchResult>
+        listByTerm: (term: string) => Promise<DictionaryNoteItem[]>
+        countByTerm: (term: string) => Promise<number>
+        onCreationResult: (
+          callback: (payload: DictionaryNoteCreationResultEvent) => void
+        ) => () => void
+        create: (input: CreateDictionaryNoteRequest) => Promise<DictionaryNoteItem>
+        removeImage: (noteId: string, attachmentId: string) => Promise<void>
+        updateContent: (
+          noteId: string,
+          content: UpdateDictionaryNoteContentRequest
+        ) => Promise<void>
+        delete: (noteId: string) => Promise<void>
       }
       app: {
         getVersion: () => Promise<string | null>
