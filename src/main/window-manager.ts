@@ -27,6 +27,7 @@ export class WindowManager {
   findBarView: WebContentsViewManager | undefined
   customCssEditorWindow: BrowserWindow | undefined
   browseWindow: BrowserWindow | undefined
+  private browseDictionaryId: number | undefined
   customCssEditorPreviewView: WebContentsViewManager | undefined
   private activeSpaceSubscriptionId: number | undefined
   private observingNativeAppearance = false
@@ -393,8 +394,11 @@ export class WindowManager {
     return window
   }
 
-  createBrowseWindow(mainWindow: BrowserWindow): BrowserWindow {
-    if (this.browseWindow && !this.browseWindow.isDestroyed()) return this.browseWindow
+  createBrowseWindow(mainWindow: BrowserWindow, dictionaryId: number): BrowserWindow {
+    if (this.browseWindow && !this.browseWindow.isDestroyed()) {
+      this.browseDictionaryId = dictionaryId
+      return this.browseWindow
+    }
 
     const mainBounds = mainWindow.getBounds()
     const display = screen.getDisplayMatching(mainBounds)
@@ -433,10 +437,21 @@ export class WindowManager {
       }
     })
     window.on('closed', () => {
-      if (this.browseWindow === window) this.browseWindow = undefined
+      if (this.browseWindow === window) {
+        this.browseWindow = undefined
+        this.browseDictionaryId = undefined
+      }
     })
     this.browseWindow = window
+    this.browseDictionaryId = dictionaryId
     return window
+  }
+
+  closeBrowseWindowForDictionary(dictionaryId: number): void {
+    if (this.browseDictionaryId !== dictionaryId) return
+    if (this.browseWindow && !this.browseWindow.isDestroyed()) this.browseWindow.destroy()
+    this.browseWindow = undefined
+    this.browseDictionaryId = undefined
   }
 
   setSelectionExplanationSwitcherVisible(visible: boolean): void {

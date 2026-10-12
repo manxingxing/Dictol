@@ -192,6 +192,7 @@ export class DictionaryController extends BaseController {
     if (!validNumericId) throw new Error('无效的词典 ID')
 
     await this.runtime.dictionaryIndexManager.change(numericId, async () => {
+      this.runtime.windowManager.closeBrowseWindowForDictionary(numericId)
       await this.runtime.mdictResourceManager.close(numericId)
       await this.db.deleteDictionary(dictionaryId)
       await this.runtime.resourceCache.removeDictionary(numericId)
@@ -213,7 +214,7 @@ export class DictionaryController extends BaseController {
     const dictionary = await this.db.getDictionary(dictionaryId)
     if (!dictionary || dictionary.status !== 'ready') throw new Error('词典尚未准备完成')
 
-    const window = this.runtime.windowManager.createBrowseWindow(mainWindow)
+    const window = this.runtime.windowManager.createBrowseWindow(mainWindow, dictionary.id)
     await window.loadURL(
       `${resolveRendererUrl('browse.html')}?dictionaryId=${encodeURIComponent(dictionaryId)}`
     )
