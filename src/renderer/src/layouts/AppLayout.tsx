@@ -70,10 +70,10 @@ export function AppLayout(): React.JSX.Element {
       <div className="relative flex h-screen min-h-0 flex-col text-foreground">
         <WindowTitleBar />
 
-        <div className="flex min-h-0 flex-1 flex-row overflow-hidden">
+        <div className="app-chrome-surface flex min-h-0 flex-1 flex-row overflow-hidden">
           <Sidebar />
 
-          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto border-t bg-background">
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto rounded-tl-lg border-t border-l bg-background">
             <Outlet />
           </main>
         </div>

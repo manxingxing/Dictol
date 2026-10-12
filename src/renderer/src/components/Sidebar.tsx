@@ -24,7 +24,7 @@ export function Sidebar(): React.JSX.Element {
   return (
     <aside
       className={cn(
-        'app-chrome-surface flex shrink-0 flex-col overflow-hidden border-r border-border pt-3.5 pb-3 transition-[width,padding] duration-150 ease-out',
+        'flex shrink-0 flex-col overflow-hidden pt-3.5 pb-3 transition-[width,padding] duration-150 ease-out',
         displayInCompactMode ? 'w-12 px-1' : 'w-[3.75rem] px-[6px]'
       )}
     >
