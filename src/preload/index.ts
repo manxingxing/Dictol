@@ -18,6 +18,7 @@ import type { ToastPayload } from '../shared/notification'
 import type { TtsConfig, TtsSaveConfigRequest } from '../shared/tts'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
+import type { EmbedBrowserHistoryNavigationRequest } from '../shared/embed-browser'
 import type { ThemeMode } from '../shared/theme-mode'
 import type {
   DictionarySearchScopeChange,
@@ -577,6 +578,8 @@ const api = Object.freeze({
   embedBrowser: Object.freeze({
     load: (tabId: string, url: string, navigationVersion: number): Promise<void> =>
       ipcRenderer.invoke('embed-browser:load', { tabId, url, navigationVersion }),
+    navigateHistory: (request: EmbedBrowserHistoryNavigationRequest): void =>
+      ipcRenderer.send('embed-browser:navigate-history', request),
     activate: (
       tabId: string | null,
       bounds?: { x: number; y: number; width: number; height: number }
@@ -586,11 +589,19 @@ const api = Object.freeze({
       bounds: { x: number; y: number; width: number; height: number }
     ): void => ipcRenderer.send('embed-browser:set-bounds', { tabId, bounds }),
     close: (tabId: string): Promise<boolean> => ipcRenderer.invoke('embed-browser:close', tabId),
-    onUrlChanged: (callback: (tabId: string, url: string) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, tabId: string, url: string): void =>
-        callback(tabId, url)
-      ipcRenderer.on('embed-browser:url-changed', listener)
-      return () => ipcRenderer.removeListener('embed-browser:url-changed', listener)
+    onNavigationChanged: (
+      callback: (
+        tabId: string,
+        navigation: { url: string; canGoBack: boolean; canGoForward: boolean }
+      ) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        tabId: string,
+        navigation: { url: string; canGoBack: boolean; canGoForward: boolean }
+      ): void => callback(tabId, navigation)
+      ipcRenderer.on('embed-browser:navigation-changed', listener)
+      return () => ipcRenderer.removeListener('embed-browser:navigation-changed', listener)
     },
     onLoadingChanged: (callback: (tabId: string, isLoading: boolean) => void): (() => void) => {
       const listener = (

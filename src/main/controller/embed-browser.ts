@@ -8,6 +8,7 @@ import {
 } from 'electron'
 
 import type { WebContentsViewManager } from '../web-contents-view-manager'
+import type { EmbedBrowserHistoryNavigationRequest } from '../../shared/embed-browser'
 import { BaseController } from './base-controller'
 import { dismissSearchPopover } from './search-popover'
 
@@ -22,6 +23,7 @@ export class EmbedBrowserController extends BaseController {
   override mount(): void {
     ipcMain.handle('embed-browser:load', this.load)
     ipcMain.handle('embed-browser:close', this.close)
+    ipcMain.on('embed-browser:navigate-history', this.navigateHistory)
     ipcMain.on('embed-browser:activate', this.activate)
     ipcMain.on('embed-browser:set-bounds', this.setBounds)
   }
@@ -93,6 +95,17 @@ export class EmbedBrowserController extends BaseController {
     return this.runtime.windowManager.closeEmbedBrowserView(tabId)
   }
 
+  navigateHistory = (event: IpcMainEvent, value: EmbedBrowserHistoryNavigationRequest): void => {
+    if (!this.acceptsHostSender(event.sender.id) || !isRecord(value)) return
+    const tabId = validateTabId(value.tabId)
+    if (!tabId || (value.direction !== 'back' && value.direction !== 'forward')) return
+    const view = this.runtime.windowManager.embedBrowserViews.get(tabId)
+    if (!view || view.isDestroyed) return
+    const history = view.webContents.navigationHistory
+    if (value.direction === 'back' && history.canGoBack()) history.goBack()
+    if (value.direction === 'forward' && history.canGoForward()) history.goForward()
+  }
+
   private getView(tabId: string): WebContentsViewManager {
     const view = this.runtime.windowManager.createEmbedBrowserView(tabId)
     if (this.configuredViews.has(view.webContents)) return view
@@ -114,8 +127,8 @@ export class EmbedBrowserController extends BaseController {
       if (mouse.type !== 'mouseDown') return
       dismissSearchPopover(this.runtime)
     })
-    view.webContents.on('did-navigate', () => this.notifyUrlChanged(tabId, view))
-    view.webContents.on('did-navigate-in-page', () => this.notifyUrlChanged(tabId, view))
+    view.webContents.on('did-navigate', () => this.notifyNavigationChanged(tabId, view))
+    view.webContents.on('did-navigate-in-page', () => this.notifyNavigationChanged(tabId, view))
     view.webContents.on('did-start-loading', () =>
       view.sendToMainWindow('embed-browser:loading-changed', tabId, true)
     )
@@ -125,9 +138,15 @@ export class EmbedBrowserController extends BaseController {
     return view
   }
 
-  private notifyUrlChanged(tabId: string, view: WebContentsViewManager): void {
+  private notifyNavigationChanged(tabId: string, view: WebContentsViewManager): void {
     const url = view.getURL()
-    if (url) view.sendToMainWindow('embed-browser:url-changed', tabId, url)
+    if (!url) return
+    const history = view.webContents.navigationHistory
+    view.sendToMainWindow('embed-browser:navigation-changed', tabId, {
+      url,
+      canGoBack: history.canGoBack(),
+      canGoForward: history.canGoForward()
+    })
   }
 
   private showActiveView(tabId: string, view: WebContentsViewManager): void {

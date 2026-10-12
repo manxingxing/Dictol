@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ArrowRight, Globe2 } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,15 +18,19 @@ export function EmbedBrowser({
   const [address, setAddress] = useState(tab.currentUrl || tab.url)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [canGoBack, setCanGoBack] = useState(false)
+  const [canGoForward, setCanGoForward] = useState(false)
   const navigateOnlineDictionaryTab = useAppStore((state) => state.navigateOnlineDictionaryTab)
   const updateOnlineDictionaryTabUrl = useAppStore((state) => state.updateOnlineDictionaryTabUrl)
 
   useEffect(
     () =>
-      window.dictol.embedBrowser.onUrlChanged((tabId, url) => {
+      window.dictol.embedBrowser.onNavigationChanged((tabId, navigation) => {
         if (tabId !== tab.id) return
-        setAddress(url)
-        updateOnlineDictionaryTabUrl(tab.id, url)
+        setAddress(navigation.url)
+        setCanGoBack(navigation.canGoBack)
+        setCanGoForward(navigation.canGoForward)
+        updateOnlineDictionaryTabUrl(tab.id, navigation.url)
       }),
     [tab.id, updateOnlineDictionaryTabUrl]
   )
@@ -114,7 +118,34 @@ export function EmbedBrowser({
         className="relative flex h-10 shrink-0 items-center gap-2 border-b border-border px-2"
         onSubmit={submitAddress}
       >
-        <Globe2 aria-hidden="true" className="ml-1 size-4 shrink-0 text-muted-foreground" />
+        <Button
+          aria-label="后退"
+          className="size-8 shrink-0"
+          disabled={!canGoBack}
+          onClick={() =>
+            window.dictol.embedBrowser.navigateHistory({ tabId: tab.id, direction: 'back' })
+          }
+          size="icon"
+          title="后退"
+          type="button"
+          variant="ghost"
+        >
+          <ChevronLeft className="size-4" />
+        </Button>
+        <Button
+          aria-label="前进"
+          className="size-8 shrink-0"
+          disabled={!canGoForward}
+          onClick={() =>
+            window.dictol.embedBrowser.navigateHistory({ tabId: tab.id, direction: 'forward' })
+          }
+          size="icon"
+          title="前进"
+          type="button"
+          variant="ghost"
+        >
+          <ChevronRight className="size-4" />
+        </Button>
         <Input
           aria-label="在线词典网址"
           className="h-8 min-w-0 flex-1 rounded-md px-2 text-xs"
