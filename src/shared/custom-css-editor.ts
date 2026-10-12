@@ -1,15 +1,13 @@
 export type CustomCssEditorTheme = 'light' | 'dark'
 
-export type CustomCssEditorState = {
+export type CustomCssEditorDictionary = {
   dictionaryId: string
   dictionaryName: string
   customCss: string
-  entryWord: string
 }
 
 export type CustomCssEditorSearchResult =
-  | { ok: true; state: CustomCssEditorState }
-  | { ok: false; message: string; cancelled?: boolean }
+  { ok: true; word: string } | { ok: false; message: string; cancelled?: boolean }
 
 export type CustomCssEditorBounds = {
   x: number

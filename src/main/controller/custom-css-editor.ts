@@ -9,8 +9,8 @@ import {
 
 import type {
   CustomCssEditorBounds,
+  CustomCssEditorDictionary,
   CustomCssEditorSearchResult,
-  CustomCssEditorState,
   CustomCssEditorTheme
 } from '../../shared/custom-css-editor'
 import {
@@ -26,7 +26,8 @@ import type { DictionaryLookupRequest } from '../../shared/dictionary-navigation
 const MAX_CUSTOM_CSS_LENGTH = 200_000
 
 export class CustomCssEditorController extends BaseController {
-  private state: CustomCssEditorState | undefined
+  private activeDictionaryId: string | null = null
+  // 用于替换 css 的 identifer
   private previewCssKey: string | undefined
   private currentPreviewCss = ''
   private previewCssTask: Promise<void> = Promise.resolve()
@@ -38,7 +39,7 @@ export class CustomCssEditorController extends BaseController {
 
   override mount(): void {
     ipcMain.handle('dictionaries:open-custom-css-editor', this.openCSSEditor)
-    ipcMain.handle('custom-css-editor:get-state', this.getState)
+    ipcMain.handle('custom-css-editor:get-dictionary', this.getDictionary)
     ipcMain.handle('custom-css-editor:search-entry', this.searchEntry)
     ipcMain.on('custom-css-editor:set-preview-bounds', this.setPreviewBounds)
     ipcMain.on('custom-css-editor:set-preview-theme', this.setPreviewTheme)
@@ -50,6 +51,20 @@ export class CustomCssEditorController extends BaseController {
   openCSSEditor = async (event: IpcMainInvokeEvent, dictionaryId: string): Promise<void> => {
     if (!this.acceptsMainSender(event.sender) || typeof dictionaryId !== 'string') return
 
+    const editorUrl = new URL(resolveRendererUrl('custom-css-editor.html'))
+    editorUrl.searchParams.set('dictionaryId', dictionaryId)
+    const existingWindow = this.runtime.windowManager.customCssEditorWindow
+    if (
+      existingWindow &&
+      !existingWindow.isDestroyed() &&
+      this.activeDictionaryId === dictionaryId &&
+      existingWindow.webContents.getURL() === editorUrl.href
+    ) {
+      existingWindow.show()
+      existingWindow.focus()
+      return
+    }
+
     const version = ++this.previewNavigationVersion
     const dictionary = await this.db.getDictionary(dictionaryId)
     if (version !== this.previewNavigationVersion) return
@@ -58,103 +73,82 @@ export class CustomCssEditorController extends BaseController {
     await this.previewCssTask
     if (version !== this.previewNavigationVersion) return
 
-    this.state = {
-      dictionaryId,
-      dictionaryName: dictionary.name,
-      customCss: dictionary.customCss,
-      entryWord: ''
-    }
-    this.currentPreviewCss = dictionary.customCss
-    this.previewCssKey = undefined
-    this.previewReady = false
-
     const window = this.runtime.windowManager.createCustomCssEditorWindow()
     const preview = this.runtime.windowManager.customCssEditorPreviewView
     if (!preview) throw new Error('CSS 编辑器预览视图尚未初始化')
     this.configurePreview(preview)
+    this.activeDictionaryId = dictionaryId
+    this.currentPreviewCss = ''
+    this.previewCssKey = undefined
+    this.previewReady = false
     preview.hide()
-
-    if (!window.webContents.getURL()) {
-      await window.loadURL(resolveRendererUrl(`custom-css-editor.html`))
-    } else {
-      window.webContents.send('custom-css-editor:state', this.state)
-    }
+    await window.loadURL(editorUrl.href)
 
     window.show()
     window.focus()
   }
 
-  getState = (event: IpcMainInvokeEvent): CustomCssEditorState | null => {
-    if (!this.acceptsEditorSender(event.sender)) return null
-    return this.state ?? null
+  getDictionary = async (
+    event: IpcMainInvokeEvent,
+    dictionaryId: unknown
+  ): Promise<CustomCssEditorDictionary> => {
+    this.assertEditorDictionary(event, dictionaryId)
+    const dictionary = await this.db.getDictionary(dictionaryId)
+    if (!dictionary || dictionary.status !== 'ready') throw new Error('词典尚未准备完成')
+    return { dictionaryId, dictionaryName: dictionary.name, customCss: dictionary.customCss }
   }
 
   searchEntry = async (
     event: IpcMainInvokeEvent,
+    dictionaryId: unknown,
     term: unknown
   ): Promise<CustomCssEditorSearchResult> => {
-    if (!this.acceptsEditorSender(event.sender)) throw new Error('无效的编辑器窗口')
-    const state = this.state
-    if (!state) throw new Error('CSS 编辑器尚未初始化')
+    this.assertEditorDictionary(event, dictionaryId)
     if (typeof term !== 'string' || !term.trim()) {
       return { ok: false, message: '请输入词条' }
     }
     const version = ++this.previewNavigationVersion
-    const match = await this.db.lookupDictionaryEntry(state.dictionaryId, term)
-    if (version !== this.previewNavigationVersion || this.state !== state) {
+    const match = await this.db.lookupDictionaryEntry(dictionaryId, term)
+    if (version !== this.previewNavigationVersion) {
       return { ok: false, message: '', cancelled: true }
     }
     if (!match) return { ok: false, message: '当前词典中未找到该词条' }
 
-    const nextState = await this.loadPreviewEntry(state, match.word, false, undefined, version)
+    await this.loadPreviewEntry(dictionaryId, match.word, false, undefined, version)
     if (version !== this.previewNavigationVersion) {
       return { ok: false, message: '', cancelled: true }
     }
     return {
       ok: true,
-      state: nextState
+      word: match.word
     }
   }
 
   private async loadPreviewEntry(
-    state: CustomCssEditorState,
+    dictionaryId: string,
     entryWord: string,
-    notifyRenderer = false,
-    anchor?: string,
-    navigationVersion?: number
-  ): Promise<CustomCssEditorState> {
+    notifyRenderer: boolean,
+    anchor: string | undefined,
+    navigationVersion: number
+  ): Promise<void> {
     const preview = this.runtime.windowManager.customCssEditorPreviewView
     if (!preview || preview.isDestroyed) throw new Error('词条预览尚未加载')
 
     this.setPreviewReady(false)
     preview.hide()
     await this.previewCssTask
-    if (
-      navigationVersion !== undefined &&
-      navigationVersion !== this.previewNavigationVersion
-    ) {
-      return this.state ?? state
-    }
+    if (navigationVersion !== this.previewNavigationVersion) return
     this.previewCssKey = undefined
     await preview.loadURL(
-      createDictionaryEntryUrl(state.dictionaryId, entryWord, { preview: true, anchor })
+      createDictionaryEntryUrl(dictionaryId, entryWord, { preview: true, anchor })
     )
     await this.previewCssTask
-    if (
-      navigationVersion !== undefined &&
-      navigationVersion !== this.previewNavigationVersion
-    ) {
-      return this.state ?? state
-    }
-    await this.applyPreviewTheme(preview, this.previewTheme).catch((error: unknown) => {
-      console.error('Failed to initialize custom CSS preview theme', { error })
-    })
-    const nextState = { ...state, entryWord }
-    this.state = nextState
-    if (notifyRenderer) this.notifyState(nextState)
+    if (navigationVersion !== this.previewNavigationVersion) return
+    await this.previewThemeTask
+    if (navigationVersion !== this.previewNavigationVersion) return
+    if (notifyRenderer) this.notifyEntryWord(entryWord)
     this.setPreviewReady(true)
     preview.show()
-    return nextState
   }
 
   setPreviewBounds = (event: IpcMainEvent, bounds: CustomCssEditorBounds): void => {
@@ -190,16 +184,16 @@ export class CustomCssEditorController extends BaseController {
     void this.replacePreviewCss(preview)
   }
 
-  save = async (event: IpcMainInvokeEvent, css: unknown): Promise<void> => {
-    if (!this.acceptsEditorSender(event.sender) || typeof css !== 'string') return
+  save = async (event: IpcMainInvokeEvent, dictionaryId: unknown, css: unknown): Promise<void> => {
+    this.assertEditorDictionary(event, dictionaryId)
+    if (typeof css !== 'string') throw new Error('无效的自定义 CSS')
     if (css.length > MAX_CUSTOM_CSS_LENGTH) throw new Error('自定义 CSS 不能超过 200,000 个字符')
-    const state = this.state
-    if (!state) throw new Error('CSS 编辑器尚未初始化')
-
-    await this.db.updateDictionaryCustomCss(state.dictionaryId, css)
     this.currentPreviewCss = css
-    this.state = { ...state, customCss: css }
-    if (css !== state.customCss) this.refreshDictionaryView(state.dictionaryId)
+    const dictionary = await this.db.getDictionary(dictionaryId)
+    if (!dictionary || dictionary.status !== 'ready') throw new Error('词典尚未准备完成')
+
+    await this.db.updateDictionaryCustomCss(dictionaryId, css)
+    if (css !== dictionary.customCss) this.refreshDictionaryView(dictionaryId)
   }
 
   /**
@@ -278,20 +272,16 @@ export class CustomCssEditorController extends BaseController {
     window.webContents.send('custom-css-editor:preview-ready', ready)
   }
 
-  private notifyState(state: CustomCssEditorState): void {
+  private notifyEntryWord(word: string): void {
     const window = this.runtime.windowManager.customCssEditorWindow
     if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return
-    window.webContents.send('custom-css-editor:state', state)
+    window.webContents.send('custom-css-editor:entry-word', word)
   }
 
   private async navigatePreviewEntry(navigation: DictionaryLookupRequest): Promise<void> {
     const normalizedWord = navigation.word.trim()
-    const state = this.state
-    if (
-      !state ||
-      navigation.sourceDictionaryId !== state.dictionaryId ||
-      !normalizedWord
-    ) {
+    const dictionaryId = this.activeDictionaryId
+    if (!dictionaryId || navigation.sourceDictionaryId !== dictionaryId || !normalizedWord) {
       return
     }
     const version = ++this.previewNavigationVersion
@@ -303,12 +293,11 @@ export class CustomCssEditorController extends BaseController {
       if (version !== this.previewNavigationVersion) return
       if (resolution.didLookup && !resolution.match) return
       const match =
-        resolution.match ??
-        (await this.db.lookupDictionaryEntry(state.dictionaryId, normalizedWord))
+        resolution.match ?? (await this.db.lookupDictionaryEntry(dictionaryId, normalizedWord))
       if (!match) return
       if (version !== this.previewNavigationVersion) return
       await this.loadPreviewEntry(
-        state,
+        dictionaryId,
         match.word,
         true,
         resolution.request.anchor,
@@ -392,6 +381,20 @@ export class CustomCssEditorController extends BaseController {
 
   private acceptsEditorSender(sender: Electron.WebContents): boolean {
     return sender === this.runtime.windowManager.customCssEditorWindow?.webContents
+  }
+
+  private assertEditorDictionary(
+    event: IpcMainInvokeEvent,
+    dictionaryId: unknown
+  ): asserts dictionaryId is string {
+    if (
+      !this.acceptsEditorSender(event.sender) ||
+      event.senderFrame !== event.sender.mainFrame ||
+      typeof dictionaryId !== 'string' ||
+      dictionaryId !== this.activeDictionaryId
+    ) {
+      throw new Error('无效的编辑器窗口')
+    }
   }
 }
 

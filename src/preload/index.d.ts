@@ -6,8 +6,8 @@ import type { DictionaryDisplay } from '../shared/dictionary-display'
 import type { ThemeMode } from '../shared/theme-mode'
 import type {
   CustomCssEditorBounds,
+  CustomCssEditorDictionary,
   CustomCssEditorSearchResult,
-  CustomCssEditorState,
   CustomCssEditorTheme
 } from '../shared/custom-css-editor'
 import type { TouchBarPage, TouchBarState } from '../shared/touch-bar'
@@ -15,14 +15,14 @@ import type { TouchBarPage, TouchBarState } from '../shared/touch-bar'
 declare global {
   interface Window {
     dictolCustomCssEditor: {
-      getState: () => Promise<CustomCssEditorState | null>
-      searchEntry: (term: string) => Promise<CustomCssEditorSearchResult>
+      getDictionary: (dictionaryId: string) => Promise<CustomCssEditorDictionary>
+      searchEntry: (dictionaryId: string, term: string) => Promise<CustomCssEditorSearchResult>
       setPreviewBounds: (bounds: CustomCssEditorBounds) => void
       setPreviewTheme: (theme: CustomCssEditorTheme) => void
       openDevTools: () => void
       previewCss: (css: string) => void
-      save: (css: string) => Promise<void>
-      onState: (callback: (state: CustomCssEditorState) => void) => () => void
+      save: (dictionaryId: string, css: string) => Promise<void>
+      onEntryWord: (callback: (word: string) => void) => () => void
       onPreviewReady: (callback: (ready: boolean) => void) => () => void
     }
     dictolBrowse: {
