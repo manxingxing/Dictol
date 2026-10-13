@@ -15,7 +15,6 @@ import type {
 import type { DictionaryInfo } from '../shared/dictionary-info'
 import type { MainWindowSearchRequest } from '../shared/search-request'
 import type { ToastPayload } from '../shared/notification'
-import type { TtsConfig, TtsSaveConfigRequest } from '../shared/tts'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
 import type { EmbedBrowserHistoryNavigationRequest } from '../shared/embed-browser'
@@ -432,11 +431,6 @@ const api = Object.freeze({
       ipcRenderer.on('notification:toast', listener)
       return () => ipcRenderer.removeListener('notification:toast', listener)
     }
-  }),
-  tts: Object.freeze({
-    getConfig: (): Promise<TtsConfig | null> => ipcRenderer.invoke('tts:get-config'),
-    saveConfig: (request: TtsSaveConfigRequest): Promise<TtsConfig | null> =>
-      ipcRenderer.invoke('tts:save-config', request)
   }),
   aiLookup: Object.freeze({
     getConfig: (): Promise<AiLookupPublicConfig | null> =>

@@ -3,7 +3,6 @@ import { AboutSettingsCard } from '@/components/AboutSettingsCard'
 import { AppearanceSettingsCard } from '@/components/AppearanceSettingsCard'
 import { KeyboardSettingsCard } from '@/components/KeyboardSettingsCard'
 import { StorageSettingsCard } from '@/components/StorageSettingsCard'
-import { TtsSettingsCard } from '@/components/TtsSettingsCard'
 import { WordCaptureSettingsCard } from '@/components/WordCaptureSettingsCard'
 
 export function SettingsPage(): React.JSX.Element {
@@ -15,7 +14,6 @@ export function SettingsPage(): React.JSX.Element {
         <AppearanceSettingsCard />
         <WordCaptureSettingsCard />
         <AiLookupSettingsCard />
-        <TtsSettingsCard />
         <KeyboardSettingsCard />
         <StorageSettingsCard />
         <AboutSettingsCard />

@@ -2,7 +2,6 @@
 ;(() => {
   const initialize = () => {
     const maxAiExplanationTextLength = 10_000
-    const maxReadAloudTextLength = 200
     const lookup = (word) => {
       const value = word?.trim()
       if (value && value.length <= 200) window.dictolEntry?.lookupWord(value)
@@ -56,17 +55,6 @@
       stroke-linecap: round;
       stroke-linejoin: round;
     }
-    svg[data-state="waiting"] {
-      transform-origin: 50% 50%;
-      transform-box: fill-box;
-      animation: dictol-read-aloud-spin .8s linear infinite;
-    }
-    @keyframes dictol-read-aloud-spin {
-      to { transform: rotate(360deg); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      svg[data-state="waiting"] { animation: none; }
-    }
     @media (prefers-color-scheme: dark) {
       :host .menu {
         border-color: rgba(255, 255, 255, .14);
@@ -85,37 +73,6 @@
 
     const hideContextMenu = () => {
       contextMenuHost.style.display = 'none'
-    }
-
-    let readAloudButton
-    let readAloudState = 'idle'
-    let readAloudController = null
-    const readAloudStateLabels = {
-      idle: '朗读',
-      waiting: '等待',
-      playing: '播放中'
-    }
-    const readAloudStateIcons = {
-      idle: '<svg data-state="idle" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5Z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M18.5 5.5a9 9 0 0 1 0 13"></path></svg>',
-      waiting:
-        '<svg data-state="waiting" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" opacity=".28"></circle><path d="M12 4a8 8 0 0 1 8 8"></path></svg>',
-      playing:
-        '<svg data-state="playing" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1"></rect></svg>'
-    }
-
-    const setReadAloudState = (state) => {
-      if (state !== 'waiting' && state !== 'playing') state = 'idle'
-      readAloudState = state
-      if (!readAloudButton) return
-
-      const icon = readAloudButton.querySelector('svg')
-      if (icon) icon.outerHTML = readAloudStateIcons[state] ?? readAloudStateIcons.idle
-      readAloudButton.querySelector('span').textContent =
-        readAloudStateLabels[state] ?? readAloudStateLabels.idle
-      const isActive = state === 'waiting' || state === 'playing'
-      readAloudButton.title = isActive ? '停止朗读' : '朗读'
-      readAloudButton.setAttribute('aria-label', isActive ? '停止朗读' : '朗读')
-      readAloudButton.dataset.state = state
     }
 
     const createMenuButton = (label, icon, action, { hideAfterAction = true } = {}) => {
@@ -142,29 +99,6 @@
       () => lookup(contextMenuText)
     )
 
-    const readAloud = () => {
-      if (readAloudState === 'idle') {
-        const controller = new AbortController()
-        readAloudController = controller
-        window.playTTS(contextMenuText, undefined, {
-          onStateChange: (state) => {
-            setReadAloudState(state)
-            if (state !== 'waiting' && state !== 'playing') readAloudController = null
-            if (state === 'completed' || state === 'error') hideContextMenu()
-          },
-          signal: controller.signal
-        })
-      } else {
-        readAloudController?.abort()
-      }
-    }
-    readAloudButton = createMenuButton(
-      '朗读',
-      '<svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5Z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M18.5 5.5a9 9 0 0 1 0 13"></path></svg>',
-      readAloud,
-      { hideAfterAction: false }
-    )
-    setReadAloudState('idle')
     const explainWithAiButton = createMenuButton(
       'AI 解释',
       '<svg viewBox="0 0 24 24"><path d="m12 3-1.9 5.1L5 10l5.1 1.9L12 17l1.9-5.1L19 10l-5.1-1.9L12 3Z"></path><path d="m19 15 .7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7L19 15Z"></path></svg>',
@@ -179,7 +113,7 @@
       if (!availability) return
       availability.then(setAiExplanationEnabled).catch(() => setAiExplanationEnabled(false))
     }
-    contextMenu.append(copyButton, lookupButton, readAloudButton, explainWithAiButton)
+    contextMenu.append(copyButton, lookupButton, explainWithAiButton)
     contextMenuRoot.append(contextMenuStyle, contextMenu)
 
     refreshAiExplanationAvailability()
@@ -188,7 +122,6 @@
     const showContextMenu = (x, y, text, centered = false, aboveY = y) => {
       contextMenuText = text
       lookupButton.disabled = text.length > 200
-      readAloudButton.disabled = readAloudState === 'idle' && text.length > maxReadAloudTextLength
       explainWithAiButton.disabled = text.length > maxAiExplanationTextLength
       refreshAiExplanationAvailability()
       if (!contextMenuHost.isConnected) document.documentElement.append(contextMenuHost)

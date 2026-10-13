@@ -1,5 +1,4 @@
 import type { ToastPayload } from '../shared/notification'
-import type { TtsConfig, TtsSaveConfigRequest } from '../shared/tts'
 import type { MainWindowSearchRequest } from '../shared/search-request'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
@@ -405,10 +404,6 @@ declare global {
       }
       notifications: {
         onToast: (callback: (payload: ToastPayload) => void) => () => void
-      }
-      tts: {
-        getConfig: () => Promise<TtsConfig | null>
-        saveConfig: (request: TtsSaveConfigRequest) => Promise<TtsConfig | null>
       }
       aiLookup: {
         getConfig: () => Promise<{

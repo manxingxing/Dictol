@@ -2,7 +2,6 @@ import { app } from 'electron'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-import { DEFAULT_TTS_VOICE } from '../shared/tts'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
 import type { ThemeMode } from '../shared/theme-mode'
@@ -23,9 +22,6 @@ export type AppConfig = {
   selection: {
     dictionaryGroupId: number | undefined
     excludedPrograms: string[]
-  }
-  tts: {
-    edgeVoice: string
   }
   aiLookup: {
     enabled: boolean
@@ -51,9 +47,6 @@ const DEFAULT_CONFIG: AppConfig = {
   selection: {
     dictionaryGroupId: undefined,
     excludedPrograms: []
-  },
-  tts: {
-    edgeVoice: DEFAULT_TTS_VOICE
   },
   aiLookup: {
     enabled: false,
@@ -142,7 +135,6 @@ function parseConfig(value: unknown): AppConfig {
     }
     shortcuts?: { lookupWordOnShortcut?: unknown; showMainWindow?: unknown }
     selection?: { dictionaryGroupId?: unknown; excludedPrograms?: unknown }
-    tts?: { edgeVoice?: unknown }
     aiLookup?: {
       enabled?: unknown
       provider?: unknown
@@ -189,9 +181,6 @@ function parseConfig(value: unknown): AppConfig {
       dictionaryGroupId: normalizeDictionaryGroupId(candidate.selection?.dictionaryGroupId),
       excludedPrograms: normalizeExcludedPrograms(candidate.selection?.excludedPrograms)
     },
-    tts: {
-      edgeVoice: normalizeConfigString(candidate.tts?.edgeVoice, DEFAULT_CONFIG.tts.edgeVoice, 200)
-    },
     aiLookup: {
       enabled:
         typeof candidate.aiLookup?.enabled === 'boolean'
@@ -219,9 +208,6 @@ function cloneConfig(config: AppConfig): AppConfig {
     selection: {
       dictionaryGroupId: config.selection.dictionaryGroupId,
       excludedPrograms: [...config.selection.excludedPrograms]
-    },
-    tts: {
-      ...config.tts
     },
     aiLookup: {
       ...config.aiLookup

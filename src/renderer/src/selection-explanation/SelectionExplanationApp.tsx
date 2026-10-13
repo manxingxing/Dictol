@@ -13,7 +13,6 @@ declare global {
       selectDictionary: (dictionaryId: string) => void
       close: () => void
       openInMain: () => void
-      readAloud: (text: string, voice?: string) => Promise<Uint8Array | null>
       isStarred: (word: string) => Promise<boolean>
       toggleStar: (word: string) => Promise<void>
     }
