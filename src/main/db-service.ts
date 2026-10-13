@@ -215,6 +215,7 @@ export class DBService {
   private readonly dictionaryRepo: DictionaryRepository
   private readonly dictionaryGroupRepo: DictionaryGroupRepository
   private readonly fileRepo: DictionaryFileRepository
+  private readonly dictionaryIconPaths = new Map<number, Promise<string | null>>()
   private readonly queryHistoryRepo: QueryHistoryRepository
   private readonly wordbookRepo: WordbookRepository
   private readonly onlineDictionaryRepo: OnlineDictionaryRepository
@@ -611,6 +612,7 @@ export class DBService {
 
     try {
       await this.dictionaryRepo.deleteById(numericId)
+      this.dictionaryIconPaths.delete(numericId)
     } catch (error) {
       if (directoryWasStaged && dictionaryDirectory && stagedDirectory) {
         try {
@@ -1231,9 +1233,29 @@ export class DBService {
 
   private async getDictionaryIconPath(
     dictionaryId: number,
-    dictionaryPath: string | null
+    dictionaryPath: string | null,
+    cacheable: boolean
   ): Promise<string | null> {
     if (!dictionaryPath) return null
+    if (!cacheable) return this.loadDictionaryIconPath(dictionaryId, dictionaryPath)
+
+    const cached = this.dictionaryIconPaths.get(dictionaryId)
+    if (cached) return cached
+
+    const loading = this.loadDictionaryIconPath(dictionaryId, dictionaryPath)
+    this.dictionaryIconPaths.set(dictionaryId, loading)
+    void loading.catch(() => {
+      if (this.dictionaryIconPaths.get(dictionaryId) === loading) {
+        this.dictionaryIconPaths.delete(dictionaryId)
+      }
+    })
+    return loading
+  }
+
+  private async loadDictionaryIconPath(
+    dictionaryId: number,
+    dictionaryPath: string
+  ): Promise<string | null> {
     const [mdxFile] = await this.fileRepo.listByDictionaryIdAndType(dictionaryId, 'mdx')
     return mdxFile ? findDictionaryIconPath(dictionaryPath, mdxFile.filePath) : null
   }
@@ -1245,12 +1267,16 @@ export class DBService {
     const dictionary = await this.dictionaryRepo.findById(numericDictionaryId)
     if (!dictionary?.dictPath) return null
 
-    const relativeIconPath = await this.getDictionaryIconPath(dictionary.id, dictionary.dictPath)
+    const relativeIconPath = await this.getDictionaryIconPath(
+      dictionary.id,
+      dictionary.dictPath,
+      dictionary.status === 'ready'
+    )
     return relativeIconPath ? join(resolve(dictionary.dictPath), relativeIconPath) : null
   }
 
   private async createDictionaryIconUrl(row: Dictionary): Promise<string | null> {
-    const iconPath = await this.getDictionaryIconPath(row.id, row.dictPath)
+    const iconPath = await this.getDictionaryIconPath(row.id, row.dictPath, row.status === 'ready')
     return iconPath ? createDictionaryAssetUrl(row.id, iconPath) : null
   }
 }
