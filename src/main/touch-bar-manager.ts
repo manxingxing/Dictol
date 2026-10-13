@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeImage, TouchBar } from 'electron'
+import { BrowserWindow, nativeImage, TouchBar, type NativeImage } from 'electron'
 
 import type { TouchBarState } from '../shared/touch-bar'
 
@@ -8,6 +8,7 @@ const TOUCH_BAR_ICON_SIZE = 18
 
 export class TouchBarManager {
   private visible = false
+  private readonly resizedIcons = new Map<string, NativeImage | undefined>()
   private state: TouchBarState = {
     word: null,
     starred: false,
@@ -58,11 +59,16 @@ export class TouchBarManager {
         } catch {
           // A dictionary can be removed while its previous search result is still visible.
         }
-        const image = iconPath ? nativeImage.createFromPath(iconPath) : null
-        const icon =
-          image && !image.isEmpty()
-            ? image.resize({ width: TOUCH_BAR_ICON_SIZE, height: TOUCH_BAR_ICON_SIZE })
-            : undefined
+        if (iconPath && !this.resizedIcons.has(iconPath)) {
+          const image = nativeImage.createFromPath(iconPath)
+          this.resizedIcons.set(
+            iconPath,
+            image.isEmpty()
+              ? undefined
+              : image.resize({ width: TOUCH_BAR_ICON_SIZE, height: TOUCH_BAR_ICON_SIZE })
+          )
+        }
+        const icon = iconPath ? this.resizedIcons.get(iconPath) : undefined
         const initial = Array.from(dictionary.dictionaryName.trim())[0] ?? '?'
 
         const { TouchBarButton } = TouchBar
