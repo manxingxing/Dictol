@@ -49,6 +49,11 @@ export function formatTime(value: string): string {
   return (sameDay ? sameDayTimeFormatter : otherDayTimeFormatter).format(date)
 }
 
+export function formatNoteDate(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('zh-CN')
+}
+
 export function formatFileSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '—'
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`

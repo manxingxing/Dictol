@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import type { DidxIndex } from '@dictol/mdict-native'
 import { generateText, type JSONContent } from '@tiptap/core'
-import StarterKit from '@tiptap/starter-kit'
+import { StarterKit } from '@tiptap/starter-kit'
 import { randomUUID } from 'node:crypto'
 import { copyFile, readFile, readdir, rename, rm, stat, unlink } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -499,16 +499,6 @@ export class DBService {
 
   async hasDictionaryNoteImage(id: string): Promise<boolean> {
     return await this.dictionaryNoteRepo.hasAttachment(id)
-  }
-
-  async removeDictionaryNoteAttachment(
-    noteId: string,
-    attachmentId: string
-  ): Promise<string | null> {
-    return await this.dictionaryNoteRepo.removeAttachment(
-      parsePositiveId(noteId, '摘抄 ID'),
-      attachmentId
-    )
   }
 
   async listDictionaryNoteImageStorageKeys(noteId: string): Promise<string[]> {

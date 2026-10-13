@@ -4,6 +4,7 @@ import { BookOpenText } from 'lucide-react'
 import { toast } from 'sonner'
 import { AiLookupButton } from '@/components/AiLookupButton'
 import { OnlineDictionaryButton } from '@/components/OnlineDictionaryButton'
+import { DictionaryNotesButton } from '@/components/dictionaryNote/DictionaryNotesButton'
 import { StarButton } from '@/components/StarButton'
 import { useDictionaryLookup } from '@/hooks/use-dictionary-entries'
 import { useDictionarySearchGroups } from '@/hooks/use-dictionary-entries'
@@ -173,6 +174,7 @@ export function SearchResultPage(): React.JSX.Element {
           </div>
         </div>
       )}
+      {hasDictionaryEntries && <DictionaryNotesButton term={group?.word ?? normalizedTerm} />}
       {hasDictionaryEntries && <StarButton word={group?.word} />}
       {aiConfig.data?.enabled && <AiLookupButton term={normalizedTerm} />}
     </div>

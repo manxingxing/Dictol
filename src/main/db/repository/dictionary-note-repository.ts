@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, sql, type SQL } from 'drizzle-orm'
+import { asc, count, desc, eq, inArray, sql, type SQL } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
 
 import type { DictolDatabase } from '../drizzle'
@@ -318,25 +318,6 @@ export class DictionaryNoteRepository {
       .where(eq(dictionaryNoteAttachment.id, id))
       .limit(1)
     return row !== undefined
-  }
-
-  async removeAttachment(noteId: number, attachmentId: string): Promise<string | null> {
-    return this.db.transaction((tx) => {
-      const [attachment] = tx
-        .select({ storageKey: dictionaryNoteAttachment.storageKey })
-        .from(dictionaryNoteAttachment)
-        .where(
-          and(
-            eq(dictionaryNoteAttachment.noteId, noteId),
-            eq(dictionaryNoteAttachment.id, attachmentId)
-          )
-        )
-        .limit(1)
-        .all()
-      if (!attachment) return null
-      tx.delete(dictionaryNoteAttachment).where(eq(dictionaryNoteAttachment.id, attachmentId)).run()
-      return attachment.storageKey
-    })
   }
 
   private async listById(id: number): Promise<DictionaryNoteWithSource[]> {

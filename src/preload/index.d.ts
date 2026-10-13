@@ -378,7 +378,6 @@ declare global {
           callback: (payload: DictionaryNoteCreationResultEvent) => void
         ) => () => void
         create: (input: CreateDictionaryNoteRequest) => Promise<DictionaryNoteItem>
-        removeImage: (noteId: string, attachmentId: string) => Promise<void>
         updateContent: (
           noteId: string,
           content: UpdateDictionaryNoteContentRequest

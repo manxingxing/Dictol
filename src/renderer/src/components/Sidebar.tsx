@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { BookMarked, History, Languages, Library, Search, Settings } from 'lucide-react'
+import { BookMarked, History, Languages, Library, Quote, Search, Settings } from 'lucide-react'
 
 import appIcon from '@/assets/icon_320x320.png'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,8 @@ import { selectCompactMode, useAppStore } from '@/stores/app-store'
 const navigation = [
   { label: '查词', path: '/search', icon: Search },
   { label: '历史', path: '/history', icon: History },
-  { label: '生词本', path: '/wordbooks', icon: BookMarked }
+  { label: '生词本', path: '/wordbooks', icon: BookMarked },
+  { label: '摘抄', path: '/excerpts', icon: Quote }
 ]
 
 export function Sidebar(): React.JSX.Element {

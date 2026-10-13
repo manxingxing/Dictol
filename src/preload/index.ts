@@ -399,8 +399,6 @@ const api = Object.freeze({
     },
     create: (input: CreateDictionaryNoteRequest): Promise<DictionaryNoteItem> =>
       ipcRenderer.invoke('dictionary-notes:create', input),
-    removeImage: (noteId: string, attachmentId: string): Promise<void> =>
-      ipcRenderer.invoke('dictionary-notes:remove-image', noteId, attachmentId),
     updateContent: (noteId: string, content: UpdateDictionaryNoteContentRequest): Promise<void> =>
       ipcRenderer.invoke('dictionary-notes:update-content', noteId, content),
     delete: (noteId: string): Promise<void> => ipcRenderer.invoke('dictionary-notes:delete', noteId)

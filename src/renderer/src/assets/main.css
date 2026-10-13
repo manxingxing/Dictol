@@ -206,6 +206,138 @@ body [data-sonner-toaster].toaster [data-sonner-toast] * {
   -webkit-app-region: no-drag;
 }
 
+.rich-note-editor p,
+.rich-note-content p {
+  margin: 0;
+}
+
+.rich-note-editor p + p,
+.rich-note-content p + p {
+  margin-top: 0.5rem;
+}
+
+.rich-note-editor :is(h1, h2, h3, h4, h5, h6),
+.rich-note-content :is(h1, h2, h3, h4, h5, h6) {
+  margin: 0.8em 0 0.35em;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.rich-note-editor :is(h1, h2, h3, h4, h5, h6):first-child,
+.rich-note-content :is(h1, h2, h3, h4, h5, h6):first-child {
+  margin-top: 0;
+}
+
+.rich-note-editor h1,
+.rich-note-content h1 {
+  font-size: 1.5rem;
+}
+
+.rich-note-editor h2,
+.rich-note-content h2 {
+  font-size: 1.3rem;
+}
+
+.rich-note-editor h3,
+.rich-note-content h3 {
+  font-size: 1.15rem;
+}
+
+.rich-note-editor h4,
+.rich-note-content h4 {
+  font-size: 1.05rem;
+}
+
+.rich-note-editor h5,
+.rich-note-content h5 {
+  font-size: 1rem;
+}
+
+.rich-note-editor h6,
+.rich-note-content h6 {
+  font-size: 0.9rem;
+}
+
+.rich-note-editor ul,
+.rich-note-editor ol,
+.rich-note-content ul,
+.rich-note-content ol {
+  padding-left: 1.25rem;
+}
+
+.rich-note-editor ul,
+.rich-note-content ul {
+  list-style: disc;
+}
+
+.rich-note-editor ol,
+.rich-note-content ol {
+  list-style: decimal;
+}
+
+.rich-note-content ul,
+.rich-note-content ol {
+  margin: 0.5rem 0;
+}
+
+.rich-note-editor code,
+.rich-note-content code {
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: var(--muted);
+  padding: 0.08em 0.32em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875em;
+}
+
+.rich-note-editor pre,
+.rich-note-content pre {
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--muted);
+  padding: 0.75rem;
+  line-height: 1.55;
+}
+
+.rich-note-editor pre code,
+.rich-note-content pre code {
+  display: block;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 0.85rem;
+  white-space: pre;
+}
+
+.rich-note-editor blockquote,
+.rich-note-content blockquote {
+  margin: 0.75rem 0;
+  border-left: 3px solid var(--primary);
+  border-radius: 0 0.25rem 0.25rem 0;
+  background: color-mix(in srgb, var(--primary) 5%, var(--background));
+  padding: 0.35rem 0.75rem;
+}
+
+.rich-note-editor li p,
+.rich-note-content li p {
+  display: inline;
+}
+
+.rich-note-editor p.is-editor-empty:first-child::before {
+  color: var(--muted-foreground);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.rich-note-editor:focus {
+  outline: none;
+}
+
 .window-titlebar-content {
   margin-left: env(titlebar-area-x, 0px);
   width: env(titlebar-area-width, 100%);
@@ -627,6 +759,48 @@ body [data-sonner-toaster].toaster [data-sonner-toast] * {
   100% {
     width: 35%;
     transform: translateX(300%);
+  }
+}
+
+@keyframes dictionary-notes-button-flash {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+
+  12% {
+    transform: scale(1.16) rotate(-11deg);
+  }
+
+  26% {
+    transform: scale(1.32) rotate(9deg);
+  }
+
+  40% {
+    transform: scale(1.25) rotate(-8deg);
+  }
+
+  54% {
+    transform: scale(1.16) rotate(6deg);
+  }
+
+  68% {
+    transform: scale(1.09) rotate(-4deg);
+  }
+
+  82% {
+    transform: scale(1.03) rotate(2deg);
+  }
+}
+
+.dictionary-notes-button-flash {
+  transform-origin: center;
+  animation: dictionary-notes-button-flash 620ms ease-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dictionary-notes-button-flash {
+    animation: none;
   }
 }
 

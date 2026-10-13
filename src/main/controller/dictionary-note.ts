@@ -20,7 +20,6 @@ export class DictionaryNoteController extends BaseController {
     ipcMain.handle('dictionary-notes:search', this.search)
     ipcMain.handle('dictionary-notes:search-by-word', this.searchByWord)
     ipcMain.handle('dictionary-notes:create', this.create)
-    ipcMain.handle('dictionary-notes:remove-image', this.removeImage)
     ipcMain.handle('dictionary-notes:update-content', this.updateContent)
     ipcMain.handle('dictionary-notes:delete', this.delete)
   }
@@ -57,20 +56,6 @@ export class DictionaryNoteController extends BaseController {
   ): Promise<DictionaryNoteItem> => {
     const { imageBytes = [], ...noteInput } = input
     return await createDictionaryNoteWithImages(this.db, { ...noteInput, imageBytes })
-  }
-
-  removeImage = async (
-    _event: IpcMainInvokeEvent,
-    noteId: string,
-    attachmentId: string
-  ): Promise<void> => {
-    const storageKey = await this.db.removeDictionaryNoteAttachment(noteId, attachmentId)
-    if (!storageKey) throw new Error('笔记图片不存在')
-    try {
-      await deleteDictionaryNoteImage(storageKey)
-    } catch (error) {
-      console.error('Failed to remove detached dictionary note image', error)
-    }
   }
 
   updateContent = async (
