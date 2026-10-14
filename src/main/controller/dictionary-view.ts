@@ -20,6 +20,7 @@ import {
 import { resolveEntryLinkWithAnchor } from '../resolve-entry-link'
 import { resolveRendererUrl } from '../output-path'
 import { createDictionaryNoteWithImages } from '../service/dictionary-note-image'
+import { readDictionaryContextImage } from '../lib/dictionary-context-image'
 import type {
   DictionaryAggregateRequest,
   DictionaryLookupRequest
@@ -510,7 +511,7 @@ export class DictionaryViewController extends BaseController {
     view: WebContentsViewManager,
     params: Electron.ContextMenuParams
   ): Promise<void> {
-    const bytes = await this.readContextImage(view, params)
+    const bytes = await readDictionaryContextImage(view.webContents, params)
     if (bytes) clipboard.writeImage(nativeImage.createFromBuffer(bytes))
     else view.webContents.copyImageAt(params.x, params.y)
   }
@@ -526,7 +527,7 @@ export class DictionaryViewController extends BaseController {
       if (!context) return
       term = context.term
 
-      const bytes = await this.readContextImage(view, params)
+      const bytes = await readDictionaryContextImage(view.webContents, params)
       if (!bytes) throw new Error('无法读取词典图片')
 
       await createDictionaryNoteWithImages(this.db, {
@@ -555,31 +556,6 @@ export class DictionaryViewController extends BaseController {
       console.error('Failed to resolve the source dictionary for a text note', error)
       this.notifyNoteCreationFailed(context.term, error)
     }
-  }
-
-  private async readContextImage(
-    view: WebContentsViewManager,
-    params: Electron.ContextMenuParams
-  ): Promise<Buffer | null> {
-    if (params.srcURL.startsWith('data:image/')) {
-      const image = nativeImage.createFromDataURL(params.srcURL)
-      return image.isEmpty() ? null : image.toPNG()
-    }
-
-    try {
-      const response = await view.webContents.session.fetch(params.srcURL)
-      if (response.ok) {
-        const bytes = Buffer.from(await response.arrayBuffer())
-        const image = nativeImage.createFromBuffer(bytes)
-        if (!image.isEmpty()) return image.toPNG()
-      }
-    } catch (error) {
-      console.warn('Failed to read dictionary image', {
-        srcURL: params.srcURL,
-        error
-      })
-    }
-    return null
   }
 
   private sendLookup(request: DictionaryLookupRequest): void {

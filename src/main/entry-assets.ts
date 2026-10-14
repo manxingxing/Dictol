@@ -1,5 +1,6 @@
 export const ENTRY_SCHEME = 'dictol-entry'
 export const DICTOL_ASSET_SCHEME = 'dictol-asset'
+export const DICTOL_NOTE_IMAGE_SCHEME = 'dictol-note'
 export const DICTIONARY_SESSION_PARTITION = 'persist:dictol-dictionary'
 /** 内置浏览器（WebContentsView）使用的持久化分区。 */
 export const EMBED_BROWSER_SESSION_PARTITION = 'persist:dictol-embed-browser'

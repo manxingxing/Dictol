@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { getAppRunTime, type AppRuntime } from './app-runtime'
+import { readDictionaryNoteImage } from './service/dictionary-note-image'
 import type { DBService } from './db-service'
 import {
   parseDictionaryEntryResourceUrl,
@@ -18,6 +19,7 @@ import { processEntryContent } from './html-rewritter'
 import {
   DICTIONARY_SESSION_PARTITION,
   DICTOL_ASSET_SCHEME,
+  DICTOL_NOTE_IMAGE_SCHEME,
   ENTRY_AGGREGATION_LAYOUT_URL,
   ENTRY_CONTEXT_MENU_URL,
   ENTRY_GLOBAL_STYLE_URL,
@@ -72,6 +74,14 @@ export function registerResourceSchemes(): void {
         corsEnabled: true
       }
     },
+    {
+      scheme: DICTOL_NOTE_IMAGE_SCHEME,
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true
+      }
+    },
     ...[AUDIO_SCHEME, SOUND_SCHEME].map((scheme) => ({
       scheme,
       privileges: {
@@ -114,6 +124,9 @@ export class DictionaryResourceProtocolHandlers {
   private registerAssetsHandlers(): void {
     session.defaultSession.protocol.handle(DICTOL_ASSET_SCHEME, (request) =>
       this.handleDictionaryAssetProtocol(request)
+    )
+    session.defaultSession.protocol.handle(DICTOL_NOTE_IMAGE_SCHEME, (request) =>
+      this.handleDictionaryNoteImageProtocol(request)
     )
   }
 
@@ -217,6 +230,34 @@ export class DictionaryResourceProtocolHandlers {
     } catch (error) {
       console.error('Failed to handle dictionary asset request', { url: request.url, error })
       return textResponse('Failed to load dictionary icon', 500)
+    }
+  }
+
+  private async handleDictionaryNoteImageProtocol(request: Request): Promise<Response> {
+    const methodError = validateMethod(request)
+    if (methodError) return methodError
+
+    let url: URL
+    try {
+      url = new URL(request.url)
+    } catch {
+      return textResponse('Invalid note image URL', 400)
+    }
+    const storageKey =
+      url.hostname === 'image' && /^\/[0-9a-f-]{36}\.png$/i.test(url.pathname)
+        ? url.pathname.slice(1)
+        : null
+    if (!storageKey || url.search || url.hash) return textResponse('Invalid note image URL', 400)
+
+    try {
+      const bytes = await readDictionaryNoteImage(storageKey)
+      return bytesResponse(request, bytes, 'image/png', 'private, max-age=31536000, immutable')
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        return textResponse('Note image not found', 404)
+      }
+      console.error('Failed to load dictionary note image', { storageKey, error })
+      return textResponse('Failed to load note image', 500)
     }
   }
 

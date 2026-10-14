@@ -6,6 +6,7 @@ import { OnlineDictionariesList } from '@/components/OnlineDictionariesList'
 import { DictionariesPage } from '@/pages/DictionariesPage'
 import { DictionaryManagementLayout } from '@/pages/DictionaryManagementLayout'
 import { DictionaryGroupsPage } from '@/pages/DictionaryGroupsPage'
+import { ExcerptsPage } from '@/pages/ExcerptsPage'
 import { HistoryPage } from '@/pages/HistoryPage'
 import { SearchPage } from '@/pages/SearchPage'
 import { SearchResultPage } from '@/pages/SearchResultPage'
@@ -45,6 +46,7 @@ export const router = createHashRouter([
         ]
       },
       { path: 'history', element: <HistoryPage /> },
+      { path: 'excerpts', element: <ExcerptsPage /> },
       {
         path: 'wordbooks',
         element: <WordbooksPage />,

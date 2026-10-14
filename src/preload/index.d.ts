@@ -42,6 +42,9 @@ declare global {
     }
     dictol: {
       platform: NodeJS.Platform
+      selectionExplanation: {
+        show: (word: string) => void
+      }
       dictionaries: {
         list: () => Promise<
           {

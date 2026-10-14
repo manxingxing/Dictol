@@ -1,15 +1,15 @@
+import { defaultTreeAdapter, parse, serialize } from 'parse5'
 import {
   ENTRY_AGGREGATION_LAYOUT_URL,
   ENTRY_BASE_URL,
   ENTRY_CONTEXT_MENU_URL,
   ENTRY_GLOBAL_STYLE_URL
 } from './entry-assets'
+import { findChildNode } from './html-rewritter'
 
-// 如果是完整的html，就注入 css, js
-// 如果不是完整的 html(没有 head，body)， 则把内容包裹在 html 之中，再嵌入 css, js
 export function createEntryDocument(
   html: string,
-  _dictionaryId: string,
+  dictionaryId: string,
   customCss = '',
   options: {
     includeActiveDictionary?: boolean
@@ -28,27 +28,67 @@ export function createEntryDocument(
     "base-uri 'none'",
     "object-src 'none'"
   ].join('; ')
-  const appearance = `<meta name="color-scheme" content="light dark">`
-  const headContent = `${appearance}<meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy}">`
-  const withHead = /<head(?:\s[^>]*)?>/i.test(html)
-    ? html.replace(/<head(?:\s[^>]*)?>/i, (head) => `${head}${headContent}`)
-    : `<head>${headContent}</head>${html}`
-  const customStyle =
-    options.includeCustomCss !== false && customCss
-      ? `<style id="dictol-custom-style">${escapeStyleContent(customCss)}</style>`
-      : ''
-  const globalStyle = `<link id="dictol-entry-style" rel="stylesheet" href="${ENTRY_GLOBAL_STYLE_URL}">`
-  const withStyles = withHead.replace(/<\/head>/i, `${globalStyle}${customStyle}</head>`)
-  const entryScripts = [
-    `<script defer src="${ENTRY_BASE_URL}"></script>`,
-    options.includeContextMenu === false
-      ? ''
-      : `<script defer src="${ENTRY_CONTEXT_MENU_URL}"></script>`,
-    options.includeActiveDictionary
-      ? `<script defer src="${ENTRY_AGGREGATION_LAYOUT_URL}"></script>`
-      : ''
-  ].join('')
-  return withStyles.replace(/<\/head>/i, `${entryScripts}</head>`)
+  const document = parse(html)
+  const htmlElement = findChildNode(document, ['html'])!
+  const head = findChildNode(htmlElement, ['head'])!
+  const createHeadElement = (tagName: string, attrs: { name: string; value: string }[]) =>
+    defaultTreeAdapter.createElement(tagName, head.namespaceURI, attrs)
+
+  const firstChild = head.childNodes[0]
+  for (const meta of [
+    createHeadElement('meta', [
+      { name: 'name', value: 'color-scheme' },
+      { name: 'content', value: 'light dark' }
+    ]),
+    createHeadElement('meta', [
+      { name: 'name', value: 'dictol-dictionary-id' },
+      { name: 'content', value: dictionaryId }
+    ]),
+    createHeadElement('meta', [
+      { name: 'name', value: 'dictol-entry-mode' },
+      { name: 'content', value: dictionaryId === 'aggregate' ? 'aggregate' : 'single' }
+    ]),
+    createHeadElement('meta', [
+      { name: 'http-equiv', value: 'Content-Security-Policy' },
+      { name: 'content', value: contentSecurityPolicy }
+    ])
+  ]) {
+    if (firstChild) defaultTreeAdapter.insertBefore(head, meta, firstChild)
+    else defaultTreeAdapter.appendChild(head, meta)
+  }
+
+  defaultTreeAdapter.appendChild(
+    head,
+    createHeadElement('link', [
+      { name: 'id', value: 'dictol-entry-style' },
+      { name: 'rel', value: 'stylesheet' },
+      { name: 'href', value: ENTRY_GLOBAL_STYLE_URL }
+    ])
+  )
+  if (options.includeCustomCss !== false && customCss) {
+    const style = createHeadElement('style', [{ name: 'id', value: 'dictol-custom-style' }])
+    defaultTreeAdapter.appendChild(
+      style,
+      defaultTreeAdapter.createTextNode(escapeStyleContent(customCss))
+    )
+    defaultTreeAdapter.appendChild(head, style)
+  }
+  for (const src of [
+    ENTRY_BASE_URL,
+    options.includeContextMenu === false ? null : ENTRY_CONTEXT_MENU_URL,
+    options.includeActiveDictionary ? ENTRY_AGGREGATION_LAYOUT_URL : null
+  ]) {
+    if (src) {
+      defaultTreeAdapter.appendChild(
+        head,
+        createHeadElement('script', [
+          { name: 'defer', value: '' },
+          { name: 'src', value: src }
+        ])
+      )
+    }
+  }
+  return serialize(document)
 }
 
 function escapeStyleContent(value: string): string {

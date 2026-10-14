@@ -63,6 +63,7 @@ import {
   WordbookBulkTagPopover,
   WordbookTagManager
 } from '@/components/wordbook/WordbookTagControls'
+import { DictionaryNotesDrawer } from '@/components/dictionaryNote/DictionaryNotesDrawer'
 import { WordbookWordsTable } from '@/pages/wordbook/WordbookWordsTable'
 import { createWordbookColumns } from '@/pages/wordbook/wordbook-columns'
 import { ImportWordbookWordsDialog } from '@/components/wordbook/ImportWordbookWordsDialog'
@@ -132,6 +133,7 @@ export const WordbookWords = (): React.JSX.Element => {
   const { mutate: unStarMutate, isPending: isRemovingWord } = useUnStarWord()
   const navigate = useNavigate()
   const setSearchQuery = useAppStore((s) => s.setSearchQuery)
+  const [notesWord, setNotesWord] = useState<string | null>(null)
 
   const lookupWord = useCallback(
     (word: string) => {
@@ -151,6 +153,7 @@ export const WordbookWords = (): React.JSX.Element => {
   )
 
   const removeWord = useCallback((word: string) => unStarMutate(word), [unStarMutate])
+  const openNotes = useCallback((word: string) => setNotesWord(word), [])
 
   // ---------- table state ----------
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
@@ -167,6 +170,7 @@ export const WordbookWords = (): React.JSX.Element => {
         showWordbookName: !wordbookId,
         onLookup: lookupWord,
         onOpenSearchExplanation: openSearchExplanation,
+        onNotes: openNotes,
         onRemove: removeWord,
         onUpdateStar: updateWordStar,
         removing: isRemovingWord
@@ -174,6 +178,7 @@ export const WordbookWords = (): React.JSX.Element => {
     [
       isRemovingWord,
       lookupWord,
+      openNotes,
       openSearchExplanation,
       removeWord,
       wordbookId,
@@ -590,6 +595,13 @@ export const WordbookWords = (): React.JSX.Element => {
           />
         </div>
       </section>
+      <DictionaryNotesDrawer
+        onOpenChange={(open) => {
+          if (!open) setNotesWord(null)
+        }}
+        open={notesWord !== null}
+        term={notesWord ?? ''}
+      />
     </div>
   )
 }

@@ -233,6 +233,9 @@ ipcRenderer.on('app:search-request', (_event, request: MainWindowSearchRequest) 
 
 const api = Object.freeze({
   platform: process.platform,
+  selectionExplanation: Object.freeze({
+    show: (word: string): void => ipcRenderer.send('selection-explanation:show-from-main', word)
+  }),
   dictionaries: Object.freeze({
     list: (): Promise<DictionarySummary[]> => ipcRenderer.invoke('dictionaries:list'),
     listReady: (): Promise<ReadyDictionary[]> => ipcRenderer.invoke('dictionaries:list-ready'),

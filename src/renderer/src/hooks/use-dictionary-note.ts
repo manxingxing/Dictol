@@ -18,7 +18,7 @@ type CreateDictionaryNoteInput = {
 }
 
 export const dictionaryNotesQueryKey = (term: string) =>
-  ['dictionary-notes', term.toLocaleLowerCase()] as const
+  ['dictionary-notes', 'term', term.toLocaleLowerCase()] as const
 export const dictionaryNoteCountQueryKey = (term: string) =>
   ['dictionary-note-count', term.toLocaleLowerCase()] as const
 
@@ -39,6 +39,32 @@ export function useDictionaryNoteCount(term: string): UseQueryResult<number, Err
     queryKey: dictionaryNoteCountQueryKey(term),
     queryFn: () => window.dictol.dictionaryNotes.countByTerm(term),
     enabled: term.trim().length > 0
+  })
+}
+
+export function useSearchDictionaryNotes(
+  query: string,
+  page: number,
+  pageSize: number,
+  enabled: boolean
+) {
+  return useQuery({
+    queryKey: ['dictionary-notes', 'search', query, page, pageSize],
+    queryFn: () => window.dictol.dictionaryNotes.search(query, page, pageSize),
+    enabled
+  })
+}
+
+export function useSearchDictionaryNotesByWord(
+  query: string,
+  page: number,
+  pageSize: number,
+  enabled: boolean
+) {
+  return useQuery({
+    queryKey: ['dictionary-notes', 'search-by-word', query, page, pageSize],
+    queryFn: () => window.dictol.dictionaryNotes.searchByWord(query, page, pageSize),
+    enabled
   })
 }
 
@@ -89,14 +115,11 @@ export function useUpdateNoteContentForTerm(
   })
 }
 
-export function useDeleteNote(
-  onDeleted: () => void
-): UseMutationResult<void, Error, string> {
+export function useDeleteNote(): UseMutationResult<void, Error, string> {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (noteId) => window.dictol.dictionaryNotes.delete(noteId),
     onSuccess: async () => {
-      onDeleted()
       await queryClient.invalidateQueries({ queryKey: ['dictionary-notes'] })
       await queryClient.invalidateQueries({ queryKey: ['dictionary-note-count'] })
     }

@@ -1,8 +1,9 @@
 import { memo, useCallback, useEffect, useLayoutEffect } from 'react'
-import { Globe2, Link, Sparkles, Unlink, X } from 'lucide-react'
+import { Globe2, Link, NotebookPen, Sparkles, Unlink, X } from 'lucide-react'
 
 import { AiLookupTab } from '@/components/AiLookupSidebar'
 import { EmbedBrowser } from '@/components/EmbedBrowser'
+import { DictionaryNotesSidebar } from '@/components/dictionaryNote/DictionaryNotesSidebar'
 import { RightSidebarSizeToggle } from '@/components/RightSidebarSizeToggle'
 import { Button } from '@/components/ui/button'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
@@ -75,7 +76,13 @@ export const RightSidebar = memo(function RightSidebar(): React.JSX.Element {
                     id={`right-sidebar-tab-${tab.id}`}
                     onClick={() => activateTab(tab.id)}
                     role="tab"
-                    title={tab.kind === 'online' ? tab.title : `AI 对话：${tab.title}`}
+                    title={
+                      tab.kind === 'online'
+                        ? tab.title
+                        : tab.kind === 'ai'
+                          ? `AI 对话：${tab.title}`
+                          : `笔记：${tab.title}`
+                    }
                     type="button"
                   >
                     <RightSidebarTabIcon tab={tab} />
@@ -83,7 +90,7 @@ export const RightSidebar = memo(function RightSidebar(): React.JSX.Element {
                   </button>
                   {active && (
                     <Button
-                      aria-label={`关闭${tab.kind === 'online' ? `${tab.title}词典` : `AI 对话 ${tab.title}`}`}
+                      aria-label={`关闭${tab.kind === 'online' ? `${tab.title}词典` : tab.kind === 'ai' ? `AI 对话 ${tab.title}` : '笔记'}`}
                       className="mr-1 size-5 shrink-0 rounded-full p-0 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
                       onClick={() => void handleCloseTab(tab)}
                       size="icon"
@@ -137,8 +144,14 @@ export const RightSidebar = memo(function RightSidebar(): React.JSX.Element {
           const active = sidebarOpen && tab.id === activeTabId
           return tab.kind === 'ai' ? (
             <AiLookupTab active={active} key={tab.id} tab={tab} />
-          ) : (
+          ) : tab.kind === 'online' ? (
             <EmbedBrowser active={active} key={tab.id} tab={tab} />
+          ) : (
+            <DictionaryNotesSidebar
+              active={active}
+              key={`${tab.id}-${tab.term}-${tab.openRequestVersion}`}
+              tab={tab}
+            />
           )
         })}
         {tabs.length === 0 && (
@@ -161,6 +174,9 @@ function RightSidebarTabIcon({ tab }: { tab: RightSidebarTab }): React.JSX.Eleme
         className="size-3.5 shrink-0 transition-colors group-hover:text-[var(--fg-accent)]"
       />
     )
+  }
+  if (tab.kind === 'notes') {
+    return <NotebookPen aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
   }
   return (
     <span className="relative size-4 shrink-0 overflow-hidden rounded-full bg-background transition-colors group-hover:bg-[var(--surface-selected)]">

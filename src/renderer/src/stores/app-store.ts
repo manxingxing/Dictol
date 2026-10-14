@@ -9,7 +9,7 @@ export const RIGHT_SIDEBAR_MAX_SIZE = '50'
 export const APP_PREFERENCES_STORAGE_KEY = 'dictol:app-preferences'
 
 export type ChromeTone = 'neutral' | 'moss'
-export type RightSidebarTab = RightSidebarAiTab | RightSidebarOnlineTab
+export type RightSidebarTab = RightSidebarAiTab | RightSidebarOnlineTab | RightSidebarNotesTab
 export type RightSidebarAiTab = {
   id: string
   kind: 'ai'
@@ -31,6 +31,13 @@ export type RightSidebarOnlineTab = {
   searchTerm: string
   navigationVersion: number
 }
+export type RightSidebarNotesTab = {
+  id: 'notes'
+  kind: 'notes'
+  title: string
+  term: string
+  openRequestVersion: number
+}
 type ResizablePanelSize = number | string | undefined
 
 interface AppState {
@@ -46,6 +53,8 @@ interface AppState {
   rightSidebarOpen: boolean
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
+  dictionaryNotesButtonFlashVersion: number
+  flashDictionaryNotesButton: () => void
   rightSidebarTabs: RightSidebarTab[]
   activeRightSidebarTabId: string | null
   followRightSidebarSearch: boolean
@@ -54,6 +63,7 @@ interface AppState {
     term: string
   ) => void
   openAiLookupTab: (term: string) => void
+  openDictionaryNotesTab: (term: string) => void
   activateRightSidebarTab: (id: string) => void
   closeRightSidebarTab: (id: string) => void
   navigateOnlineDictionaryTab: (id: string, url: string, searchTerm: string) => void
@@ -94,6 +104,11 @@ export const useAppStore = create<AppState>()(
       rightSidebarOpen: false,
       toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),
       setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
+      dictionaryNotesButtonFlashVersion: 0,
+      flashDictionaryNotesButton: () =>
+        set((state) => ({
+          dictionaryNotesButtonFlashVersion: state.dictionaryNotesButtonFlashVersion + 1
+        })),
       rightSidebarTabs: [],
       activeRightSidebarTabId: null,
       followRightSidebarSearch: false,
@@ -179,6 +194,38 @@ export const useAppStore = create<AppState>()(
           }
         })
       },
+      openDictionaryNotesTab: (term) => {
+        const normalizedTerm = term.trim()
+        if (!normalizedTerm) return
+        set((state) => {
+          const existing = state.rightSidebarTabs.find(
+            (tab): tab is RightSidebarNotesTab => tab.kind === 'notes'
+          )
+          const tab: RightSidebarNotesTab = existing
+            ? {
+                ...existing,
+                title: '笔记',
+                term: normalizedTerm,
+                openRequestVersion: existing.openRequestVersion + 1
+              }
+            : {
+                id: 'notes',
+                kind: 'notes',
+                title: '笔记',
+                term: normalizedTerm,
+                openRequestVersion: 0
+              }
+          return {
+            rightSidebarTabs: existing
+              ? state.rightSidebarTabs.map((currentTab) =>
+                  currentTab.id === existing.id ? tab : currentTab
+                )
+              : [...state.rightSidebarTabs, tab],
+            activeRightSidebarTabId: tab.id,
+            rightSidebarOpen: true
+          }
+        })
+      },
       activateRightSidebarTab: (activeRightSidebarTabId) =>
         set({ activeRightSidebarTabId, rightSidebarOpen: true }),
       closeRightSidebarTab: (id) =>
@@ -230,6 +277,16 @@ export const useAppStore = create<AppState>()(
                     followUpVersion: tab.followUpVersion + 1
                   }
             }
+            if (tab.kind === 'notes') {
+              return tab.term === normalizedTerm
+                ? tab
+                : {
+                    ...tab,
+                    term: normalizedTerm,
+                    openRequestVersion: tab.openRequestVersion + 1
+                  }
+            }
+            if (tab.kind !== 'online') return tab
             if (tab.searchTerm === normalizedTerm) return tab
             const url = tab.urlTemplate
               ? fillDictionaryUrlTemplate(tab.urlTemplate, normalizedTerm)
