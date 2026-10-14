@@ -16,6 +16,8 @@ use napi::bindgen_prelude::{AsyncTask, BigInt, Buffer};
 use napi::{Env, Error, Result, Status, Task};
 use napi_derive::napi;
 
+mod macos_selection_panel;
+
 /// Lingoes LD2 reader; all I/O-heavy operations run in asynchronous native tasks.
 #[napi]
 pub struct Ld2 {

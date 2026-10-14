@@ -1,11 +1,7 @@
 import { app, BrowserWindow } from 'electron'
+import { NativeSelectionPanel } from './native-selection-panel'
 
-/**
- * Shared native-window behavior for the two cross-application selection surfaces.
- *
- * These windows are deliberately independent from the main window: presenting one
- * must not restore, show, or focus the main application window.
- */
+/** Apply ordinary Electron-window behavior to floating BrowserWindow surfaces. */
 export function applySelectionWindowBehavior(window: BrowserWindow): void {
   window.setAlwaysOnTop(true, 'screen-saver')
 }
@@ -13,38 +9,19 @@ export function applySelectionWindowBehavior(window: BrowserWindow): void {
 /**
  * Show a selection surface without activating Dictol or focusing its main window.
  *
- * `type: 'panel'` and `showInactive()` provide the normal non-main-window path.
- * The short-lived toolbar additionally opts into Cherry Studio's focus guard,
- * because its first button click must not activate Dictol.
+ * Native selection panels and Electron's non-activating explanation panel can
+ * be shown without activating Dictol. Other platforms use Electron's normal
+ * inactive presentation.
  */
 export function showSelectionWindowInactive(
-  window: BrowserWindow,
-  options: {
-    preventActivationOnClick?: boolean
-    mainWindowToKeepHidden?: BrowserWindow
-  } = {}
+  window: BrowserWindow | NativeSelectionPanel,
+  options: { mainWindowToKeepHidden?: BrowserWindow } = {}
 ): void {
   if (window.isDestroyed()) return
 
-  if (process.platform === 'darwin') {
-    // Cmd+H hides the whole application, not only the main BrowserWindow. On
-    // macOS, showing a panel can implicitly unhide the application and reveal
-    // the main window as a side effect. Preserve the user's hidden state by
-    // hiding the main window again after the auxiliary surface is shown.
+  if (window instanceof NativeSelectionPanel) {
     const appWasHidden = app.isHidden()
-    if (options.preventActivationOnClick) {
-      // `showInactive()` only prevents activation while showing. A subsequent
-      // first click can still activate the application, making the main window
-      // jump forward. Temporarily making the toolbar non-focusable preserves
-      // that click for its renderer without letting macOS activate Dictol.
-      // This mirrors Cherry Studio's SelectionToolbar path.
-      window.setFocusable(false)
-    }
     window.showInactive()
-    // macOS can lower a panel's level after hide/show. Reassert it after showing,
-    // as a localized alternative to monkey-patching BrowserWindow.showInactive().
-    window.setAlwaysOnTop(true, 'screen-saver')
-    if (options.preventActivationOnClick) window.setFocusable(true)
     const mainWindow = options.mainWindowToKeepHidden
     if (appWasHidden && mainWindow && !mainWindow.isDestroyed()) mainWindow.hide()
     return
@@ -56,13 +33,10 @@ export function showSelectionWindowInactive(
 /**
  * Hide a floating selection window without allowing macOS to promote Dictol's
  * main window as the replacement frontmost window.
- *
- * The native focus guard is intentionally limited to the hide transition and
- * only changes other visible Dictol windows. This is Cherry Studio's
- * `macRestoreFocusOnHide` quirk, expressed explicitly rather than by
- * monkey-patching every BrowserWindow.hide call.
  */
-export function hideSelectionWindow(window: BrowserWindow | undefined): void {
+export function hideSelectionWindow(
+  window: BrowserWindow | NativeSelectionPanel | undefined
+): void {
   if (!window || window.isDestroyed()) return
 
   if (process.platform !== 'darwin') {
@@ -70,9 +44,10 @@ export function hideSelectionWindow(window: BrowserWindow | undefined): void {
     return
   }
 
+  const nativeHost = window instanceof NativeSelectionPanel ? window.host : window
   const focusableWindows = BrowserWindow.getAllWindows().filter(
     (candidate) =>
-      candidate !== window &&
+      candidate !== nativeHost &&
       !candidate.isDestroyed() &&
       candidate.isVisible() &&
       candidate.isFocusable()

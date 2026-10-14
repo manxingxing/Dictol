@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeTheme, screen, systemPreferences } from 'electron'
+import { BrowserWindow, nativeTheme, screen } from 'electron'
 
 import icon from '../../resources/icon.png?asset'
 import {
@@ -9,7 +9,11 @@ import { getSelectionToolbarWindowSize } from '../shared/selection-toolbar'
 import { MAIN_WINDOW_TITLEBAR_HEIGHT } from '../shared/window-chrome'
 import { DICTIONARY_SESSION_PARTITION, EMBED_BROWSER_SESSION_PARTITION } from './entry-assets'
 import { resolvePreloadPath } from './output-path'
-import { applySelectionWindowBehavior, hideSelectionWindow } from './selection-window-behavior'
+import { applySelectionWindowBehavior } from './selection-window-behavior'
+import { NativeSelectionPanel } from './native-selection-panel'
+import { configureElectronPanel } from '@dictol/mdict-native'
+
+export type SelectionSurfaceWindow = BrowserWindow | NativeSelectionPanel
 import { WebContentsViewManager } from './web-contents-view-manager'
 
 const getMainWindowBackgroundColor = (useDarkColors: boolean): string =>
@@ -21,7 +25,7 @@ export class WindowManager {
   aggregateDictionaryView: WebContentsViewManager | undefined
   readonly embedBrowserViews = new Map<string, WebContentsViewManager>()
   searchPopoverView: WebContentsViewManager | undefined
-  selectionToolbarWindow: BrowserWindow | undefined
+  selectionToolbarWindow: SelectionSurfaceWindow | undefined
   selectionExplanationWindow: BrowserWindow | undefined
   selectionExplanationView: WebContentsViewManager | undefined
   findBarView: WebContentsViewManager | undefined
@@ -29,7 +33,6 @@ export class WindowManager {
   browseWindow: BrowserWindow | undefined
   private browseDictionaryId: number | undefined
   customCssEditorPreviewView: WebContentsViewManager | undefined
-  private activeSpaceSubscriptionId: number | undefined
   private observingNativeAppearance = false
   private selectionExplanationSwitcherVisible = false
   private updateSelectionExplanationViewBounds: (() => void) | undefined
@@ -215,7 +218,7 @@ export class WindowManager {
     return findBarView
   }
 
-  createSelectionToolbarWindow(): BrowserWindow {
+  createSelectionToolbarWindow(): SelectionSurfaceWindow {
     if (this.selectionToolbarWindow && !this.selectionToolbarWindow.isDestroyed()) {
       return this.selectionToolbarWindow
     }
@@ -242,13 +245,14 @@ export class WindowManager {
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
+      // On macOS the visible native surface is Electron's panel window; the
+      // hidden BrowserWindow only owns Chromium's renderer tree.
       focusable: true,
       acceptFirstMouse: true,
-      ...(process.platform === 'darwin'
-        ? { type: 'panel' as const, hiddenInMissionControl: true }
-        : {}),
+      // `type: 'panel'` is deliberately avoided because Electron forces
+      // `CanJoinAllSpaces` on that window type. macOS presents the renderer in
+      // a separate AppKit NSPanel created below.
       skipTaskbar: true,
-      alwaysOnTop: true,
       // Windows DWM can add a thin non-client border without producing a useful
       // shadow for transparent frameless windows. CSS owns that shadow instead.
       hasShadow: process.platform !== 'win32',
@@ -259,13 +263,16 @@ export class WindowManager {
         sandbox: true
       }
     })
-    applySelectionWindowBehavior(window)
-    this.ensureActiveSpaceSubscription()
-    window.on('closed', () => {
-      if (this.selectionToolbarWindow === window) this.selectionToolbarWindow = undefined
+    const surface: SelectionSurfaceWindow =
+      process.platform === 'darwin'
+        ? new NativeSelectionPanel(window, 'toolbar', { resizable: false, movable: false })
+        : window
+    if (!(surface instanceof NativeSelectionPanel)) applySelectionWindowBehavior(surface)
+    surface.on('closed', () => {
+      if (this.selectionToolbarWindow === surface) this.selectionToolbarWindow = undefined
     })
-    this.selectionToolbarWindow = window
-    return window
+    this.selectionToolbarWindow = surface
+    return surface
   }
 
   createSelectionExplanationWindow(): BrowserWindow {
@@ -286,11 +293,10 @@ export class WindowManager {
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
-      ...(process.platform === 'darwin'
-        ? { type: 'panel' as const, hiddenInMissionControl: true }
-        : {}),
+      ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
+      focusable: true,
+      acceptFirstMouse: true,
       skipTaskbar: true,
-      alwaysOnTop: true,
       webPreferences: {
         preload: resolvePreloadPath('selection-explanation.js'),
         contextIsolation: true,
@@ -298,8 +304,13 @@ export class WindowManager {
         sandbox: true
       }
     })
-    applySelectionWindowBehavior(window)
-    this.ensureActiveSpaceSubscription()
+    if (process.platform === 'darwin') {
+      // Keep Chromium's content view in its owning Electron window.
+      // Configure only this Electron panel's Spaces policy.
+      configureElectronPanel(window.getNativeWindowHandle())
+    } else {
+      applySelectionWindowBehavior(window)
+    }
 
     const view = new WebContentsViewManager(window, {
       backgroundColor: darkMode ? '#232323' : '#ffffff',
@@ -459,6 +470,12 @@ export class WindowManager {
     this.updateSelectionExplanationViewBounds?.()
   }
 
+  hasVisibleSelectionSurface(): boolean {
+    return [this.selectionToolbarWindow, this.selectionExplanationWindow].some(
+      (window) => window && !window.isDestroyed() && window.isVisible()
+    )
+  }
+
   focusMainWindowRenderer(): void {
     const mainWindow = this.mainWindow
     if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
@@ -471,10 +488,6 @@ export class WindowManager {
     if (this.observingNativeAppearance) {
       nativeTheme.off('updated', this.updateNativeAppearance)
       this.observingNativeAppearance = false
-    }
-    if (this.activeSpaceSubscriptionId !== undefined) {
-      systemPreferences.unsubscribeWorkspaceNotification(this.activeSpaceSubscriptionId)
-      this.activeSpaceSubscriptionId = undefined
     }
     this.dictionaryView?.dispose()
     this.aggregateDictionaryView?.dispose()
@@ -543,18 +556,6 @@ export class WindowManager {
         }
       }
     })
-  }
-
-  private ensureActiveSpaceSubscription(): void {
-    if (process.platform !== 'darwin' || this.activeSpaceSubscriptionId !== undefined) return
-
-    this.activeSpaceSubscriptionId = systemPreferences.subscribeWorkspaceNotification(
-      'NSWorkspaceActiveSpaceDidChangeNotification',
-      () => {
-        hideSelectionWindow(this.selectionToolbarWindow)
-        hideSelectionWindow(this.selectionExplanationWindow)
-      }
-    )
   }
 
   private readonly updateNativeAppearance = (): void => {

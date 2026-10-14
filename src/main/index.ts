@@ -101,7 +101,13 @@ function startPrimaryInstance(initialDeepLink: DeepLinkIntent | null): void {
       }
 
       app.on('activate', (_event, hasVisibleWindows) => {
-        if (!hasVisibleWindows) showAndFocusMainWindow()
+        // Native selection panels are visible AppKit windows, but their hidden
+        // Electron BrowserWindow hosts are intentionally absent from Electron's
+        // visible-window count. Activating one of those panels must not treat
+        // the application as freshly reopened and raise the obscured main window.
+        if (!hasVisibleWindows && !runtime.windowManager.hasVisibleSelectionSurface()) {
+          showAndFocusMainWindow()
+        }
       })
 
       app.on('window-all-closed', () => {

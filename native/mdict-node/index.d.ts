@@ -153,6 +153,13 @@ export declare class MdxKeyScanner {
   nextBatch(batchSize?: number | undefined | null): Promise<KeyBatch>
 }
 
+/** Configure an Electron-managed panel window without moving its Chromium content view. */
+export declare function configureElectronPanel(nativeWindowHandle: Buffer): void
+
+export declare function createSelectionPanel(panelId: number, nativeWindowHandle: Buffer, resizable: boolean, movable: boolean, callback: PanelCallback): void
+
+export declare function destroySelectionPanel(panelId: number): void
+
 /** 一个 MDX key 以及其 record 地址范围。 */
 export interface DictionaryEntry {
   keyText: string
@@ -229,8 +236,12 @@ export interface EntryBatch {
   done: boolean
 }
 
+export declare function getSelectionPanelBounds(panelId: number): SelectionPanelBounds
+
 /** 使用 XXH3-128 计算文件 checksum。小文件读取全部内容，大文件读取头、中、尾各 64 KiB。 */
 export declare function hashFile(path: string): Promise<string>
+
+export declare function hideSelectionPanel(panelId: number): void
 
 /** 一批 key 扫描结果。 */
 export interface KeyBatch {
@@ -275,3 +286,18 @@ export interface OpenOptions {
   regCode?: string
   keyFile?: string
 }
+
+export interface SelectionPanelBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export declare function selectionPanelState(panelId: number): number
+
+export declare function setSelectionPanelBounds(panelId: number, bounds: SelectionPanelBounds): void
+
+export declare function showSelectionPanel(panelId: number, focus: boolean): void
+
+export declare function showSelectionPanelDisableMenu(panelId: number, enabled: boolean): void

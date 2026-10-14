@@ -32,6 +32,8 @@ import { createDictionaryEntryUrl, parseDictionaryEntryNavigation } from '../dic
 import { resolveEntryLinkWithAnchor } from '../resolve-entry-link'
 import { resolveRendererUrl } from '../output-path'
 import { hideSelectionWindow, showSelectionWindowInactive } from '../selection-window-behavior'
+import { NativeSelectionPanel } from '../native-selection-panel'
+import type { SelectionSurfaceWindow } from '../window-manager'
 import { BaseController } from './base-controller'
 
 const MAX_SELECTION_LENGTH = 200
@@ -93,6 +95,7 @@ export class SelectionToolbarController extends BaseController {
   private appliedExplanationSize: ExplanationSize | undefined
   private inactivityTimer: ReturnType<typeof setTimeout> | undefined
   private nativeMenu: Menu | undefined
+  private nativeMenuOpen = false
   private activeAiRequestId: string | undefined
   private toolbarDismissSubscriptions: Array<() => void> = []
   private globalMouseDownUnsubscribe: (() => void) | undefined
@@ -129,7 +132,7 @@ export class SelectionToolbarController extends BaseController {
       return
     }
     // 在应用内部选择文本，不触发toolbar
-    if (capture.source !== 'selection' || BrowserWindow.getFocusedWindow()) return
+    if (capture.source !== 'selection' || BrowserWindow.getFocusedWindow() || this.currentToolbarWindow?.isFocused()) return
 
     this.currentCapture = capture
     this.pendingToolbarCapture = capture
@@ -145,13 +148,14 @@ export class SelectionToolbarController extends BaseController {
   }
 
   private readonly handleGlobalMouseDown: MouseDownListener = (event): void => {
-    if (this.nativeMenu) return
+    if (this.nativeMenu || this.nativeMenuOpen) return
 
     const point = toDisplayPoint(event)
     this.hideSelectionWindowsOutside(point)
   }
 
   private readonly handleGlobalKeyDown: KeyDownListener = (): void => {
+    if (this.nativeMenu || this.nativeMenuOpen) return
     this.hideToolbar()
   }
 
@@ -222,27 +226,47 @@ export class SelectionToolbarController extends BaseController {
   }
 
   private readonly openNativeMenu = (event: IpcMainEvent): void => {
-    if (!this.acceptsToolbarSender(event) || !this.currentCapture || this.nativeMenu) return
-    const window = this.currentToolbarWindow
-    if (!window) return
+    if (
+      !this.acceptsToolbarSender(event) ||
+      !this.currentCapture ||
+      this.nativeMenu ||
+      this.nativeMenuOpen
+    )
+      return
+    const surface = this.currentToolbarWindow
+    if (!surface) return
 
     const programName = this.currentCapture.selection.programName.trim()
+    this.clearToolbarAutoHide()
+
+    if (surface instanceof NativeSelectionPanel) {
+      this.nativeMenuOpen = true
+      try {
+        surface.showDisableSelectionMenu(Boolean(programName))
+      } catch (error) {
+        console.error('Failed to show selection toolbar native menu', error)
+      } finally {
+        this.nativeMenuOpen = false
+        this.hideToolbar()
+      }
+      return
+    }
+
     const menu = Menu.buildFromTemplate([
       {
-        label: '在此应用禁用',
+        label: '在此应用禁用划词',
         enabled: Boolean(programName),
         click: () => this.disableCurrentApp()
       }
     ])
     this.nativeMenu = menu
-    this.clearToolbarAutoHide()
     const cursorPoint = screen.getCursorScreenPoint()
-    const toolbarBounds = window.getBounds()
+    const toolbarBounds = surface.getBounds()
     const toolbarShadowMargin = getToolbarShadowMargin()
 
     try {
       menu.popup({
-        window,
+        window: surface,
         x: clamp(cursorPoint.x - toolbarBounds.x - 6, 0, toolbarBounds.width),
         y: toolbarBounds.height - toolbarShadowMargin + NATIVE_MENU_GAP,
         callback: () => {
@@ -383,11 +407,15 @@ export class SelectionToolbarController extends BaseController {
     clipboard.writeText(text)
   }
 
-  private initializeToolbarWindow(): BrowserWindow {
+  private initializeToolbarWindow(): SelectionSurfaceWindow {
     const window = this.runtime.windowManager.createSelectionToolbarWindow()
     if (this.toolbarWebContentsId === window.webContents.id) return window
 
     this.toolbarWebContentsId = window.webContents.id
+
+    if (window instanceof NativeSelectionPanel) {
+      window.on('disable-selection', () => this.disableCurrentApp())
+    }
 
     this.toolbarLoaded = false
     window.webContents.on('did-finish-load', () => {
@@ -405,7 +433,7 @@ export class SelectionToolbarController extends BaseController {
     return window
   }
 
-  private showPendingToolbar(window: BrowserWindow): void {
+  private showPendingToolbar(window: SelectionSurfaceWindow): void {
     const capture = this.pendingToolbarCapture
     if (!capture || window.isDestroyed()) return
     this.pendingToolbarCapture = undefined
@@ -434,8 +462,7 @@ export class SelectionToolbarController extends BaseController {
     }
 
     showSelectionWindowInactive(window, {
-      mainWindowToKeepHidden: this.runtime.mainWindow,
-      preventActivationOnClick: true
+      mainWindowToKeepHidden: this.runtime.mainWindow
     })
     this.completeToolbarShow()
   }
@@ -449,7 +476,7 @@ export class SelectionToolbarController extends BaseController {
 
   // 计算toolbar window的大小
   private syncToolbarSize(
-    window: BrowserWindow,
+    window: SelectionSurfaceWindow,
     aiEnabled: boolean
   ): { width: number; height: number } {
     const size = getSelectionToolbarWindowSize(aiEnabled, process.platform)
@@ -928,7 +955,7 @@ export class SelectionToolbarController extends BaseController {
     window.webContents.send('selection-explanation:update', this.explanationPayload)
   }
 
-  private positionToolbar(window: BrowserWindow, height: number): void {
+  private positionToolbar(window: SelectionSurfaceWindow, height: number): void {
     const anchor = this.anchor ?? createCursorAnchor()
     const shadowMargin = getToolbarShadowMargin()
     const bounds = fitNearSelection(
@@ -1071,7 +1098,7 @@ export class SelectionToolbarController extends BaseController {
     return Boolean(view && !view.isDestroyed && view.acceptsSender(event.sender.id))
   }
 
-  private get currentToolbarWindow(): BrowserWindow | undefined {
+  private get currentToolbarWindow(): SelectionSurfaceWindow | undefined {
     const window = this.runtime.windowManager.selectionToolbarWindow
     return window && !window.isDestroyed() ? window : undefined
   }
