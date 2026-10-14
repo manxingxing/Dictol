@@ -11,6 +11,7 @@ import { AppController } from './app'
 import { QueryHistoryController } from './query-history'
 import { SearchPopoverController } from './search-popover'
 import { SelectionToolbarController } from './selection-toolbar'
+import { TtsController } from './tts'
 import { WordCaptureController } from './word-capture'
 import { WordLookupController } from './word-lookup'
 import { WordbookController } from './wordbook'
@@ -22,6 +23,7 @@ import { TouchBarController } from './touch-bar'
 export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
   const controllers = [
     new AiController(appRuntime),
+    new TtsController(appRuntime),
     new AppController(appRuntime),
     new DictionaryEntryController(appRuntime),
     new DictionaryNoteController(appRuntime),

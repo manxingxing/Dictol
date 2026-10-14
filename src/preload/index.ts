@@ -1,4 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { createTtsPlayback, getSystemTtsVoices, onSystemTtsVoicesChanged } from './tts'
+import type { TtsConfig } from '../shared/tts'
 
 import type {
   AiChatRequest,
@@ -489,6 +491,14 @@ const api = Object.freeze({
       ipcRenderer.on('notification:toast', listener)
       return () => ipcRenderer.removeListener('notification:toast', listener)
     }
+  }),
+  tts: Object.freeze({
+    ...createTtsPlayback(),
+    getConfig: (): Promise<TtsConfig | null> => ipcRenderer.invoke('tts:get-config'),
+    saveConfig: (config: TtsConfig): Promise<TtsConfig | null> =>
+      ipcRenderer.invoke('tts:save-config', config),
+    getVoices: getSystemTtsVoices,
+    onVoicesChanged: onSystemTtsVoicesChanged
   }),
   aiLookup: Object.freeze({
     getConfig: (): Promise<AiLookupPublicConfig | null> =>

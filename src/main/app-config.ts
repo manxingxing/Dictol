@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
 import type { ThemeMode } from '../shared/theme-mode'
+import type { TtsConfig } from '../shared/tts'
 
 export type AppConfig = {
   themeMode: ThemeMode
@@ -29,6 +30,7 @@ export type AppConfig = {
     baseUrl: string
     model: string
   }
+  tts: TtsConfig
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -53,6 +55,10 @@ const DEFAULT_CONFIG: AppConfig = {
     provider: 'openai-compatible',
     baseUrl: 'https://api.openai.com/v1',
     model: ''
+  },
+  tts: {
+    engine: 'system',
+    systemVoiceUri: null
   }
 }
 
@@ -141,6 +147,7 @@ function parseConfig(value: unknown): AppConfig {
       baseUrl?: unknown
       model?: unknown
     }
+    tts?: { engine?: unknown; systemVoiceUri?: unknown }
   }
 
   return {
@@ -193,6 +200,14 @@ function parseConfig(value: unknown): AppConfig {
         500
       ),
       model: normalizeConfigString(candidate.aiLookup?.model, DEFAULT_CONFIG.aiLookup.model, 200)
+    },
+    tts: {
+      engine: 'system',
+      systemVoiceUri:
+        typeof candidate.tts?.systemVoiceUri === 'string' &&
+        candidate.tts.systemVoiceUri.length <= 500
+          ? candidate.tts.systemVoiceUri
+          : null
     }
   }
 }
@@ -211,7 +226,8 @@ function cloneConfig(config: AppConfig): AppConfig {
     },
     aiLookup: {
       ...config.aiLookup
-    }
+    },
+    tts: { ...config.tts }
   }
 }
 

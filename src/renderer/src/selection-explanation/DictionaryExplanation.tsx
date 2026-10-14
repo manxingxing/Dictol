@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink, LoaderCircle, Star } from 'lucide-react'
+import { LoaderCircle, Square, Star, Volume2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
@@ -19,6 +19,11 @@ export function DictionaryExplanation({ payload }: Props): React.JSX.Element {
   const [starStatus, setStarStatus] = useState<{ key: string; starred: boolean } | undefined>()
   const [togglingStar, setTogglingStar] = useState(false)
   const wordKey = payload.word.trim()
+  const [pronunciation, setPronunciation] = useState<{
+    word: string
+    state: 'waiting' | 'playing'
+  } | null>(null)
+  const pronunciationState = pronunciation?.word === wordKey ? pronunciation.state : 'idle'
   const starStatusReady = Boolean(wordKey) && starStatus?.key === wordKey
   const isStarred = starStatusReady && starStatus.starred
   const showStar = payload.state === 'content' || starStatusReady
@@ -43,6 +48,7 @@ export function DictionaryExplanation({ payload }: Props): React.JSX.Element {
     if (payload.state !== 'loading' || payload.requestId === 0) return
     window.dictolSelectionExplanation.loadingReady(payload.requestId)
   }, [payload.requestId, payload.state])
+  useEffect(() => () => window.dictolSelectionExplanation.tts.stop(), [wordKey])
 
   const toggleStar = async (): Promise<void> => {
     if (payload.state !== 'content' || !starStatusReady || togglingStar) return
@@ -56,6 +62,17 @@ export function DictionaryExplanation({ payload }: Props): React.JSX.Element {
     } finally {
       setTogglingStar(false)
     }
+  }
+
+  const togglePronunciation = (): void => {
+    if (pronunciationState !== 'idle') {
+      window.dictolSelectionExplanation.tts.stop()
+      return
+    }
+    window.dictolSelectionExplanation.tts.speak(wordKey, (state, message) => {
+      setPronunciation(state === 'waiting' || state === 'playing' ? { word: wordKey, state } : null)
+      if (state === 'error') window.alert(message || '朗读失败。')
+    })
   }
 
   const actions = (
@@ -79,15 +96,22 @@ export function DictionaryExplanation({ payload }: Props): React.JSX.Element {
         </Button>
       )}
       <Button
-        aria-label="在主窗口中打开"
+        aria-label={pronunciationState === 'idle' ? '发音' : '停止发音'}
         className="no-drag size-7 shrink-0"
-        onClick={() => window.dictolSelectionExplanation.openInMain()}
+        disabled={payload.state !== 'content' || !wordKey}
+        onClick={togglePronunciation}
         size="icon"
-        title="在主窗口中打开"
+        title={pronunciationState === 'idle' ? '发音' : '停止发音'}
         type="button"
         variant="ghost"
       >
-        <ExternalLink />
+        {pronunciationState === 'waiting' ? (
+          <LoaderCircle className="animate-spin" />
+        ) : pronunciationState === 'playing' ? (
+          <Square />
+        ) : (
+          <Volume2 />
+        )}
       </Button>
     </>
   )

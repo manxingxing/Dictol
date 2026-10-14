@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { createTtsPlayback } from './tts'
 
 window.addEventListener(
   'pointerdown',
@@ -11,6 +12,7 @@ window.addEventListener(
 contextBridge.exposeInMainWorld(
   'dictolEntry',
   Object.freeze({
+    tts: createTtsPlayback(),
     lookupWord: (word: string): void => ipcRenderer.send('dictionary-view:lookup-word', word),
     canExplainWithAi: (): Promise<boolean> =>
       ipcRenderer.invoke('dictionary-view:can-explain-with-ai'),

@@ -48,6 +48,53 @@
     }
     window.dictolShowToast = showShadowToast
 
+    /**
+     * 使用应用配置的系统音色朗读。保留旧版 voice 参数供词典脚本兼容。
+     * @param {string} text
+     * @param {string} [_voice]
+     * @param {object} [options]
+     * @param {(state: 'waiting' | 'playing' | 'completed' | 'aborted' | 'error', error?: Error) => void} [options.onStateChange]
+     * @param {AbortSignal} [options.signal]
+     * @returns {void}
+     */
+    window.playTTS = (text, _voice, { onStateChange, signal } = {}) => {
+      if (signal?.aborted) {
+        onStateChange?.('aborted')
+        return
+      }
+
+      const tts = window.dictolEntry?.tts
+      let finished = false
+      const stop = () => {
+        if (!finished) tts?.stop()
+      }
+      const onPlaybackState = (state, message) => {
+        if (state === 'completed' || state === 'aborted' || state === 'error') {
+          finished = true
+          signal?.removeEventListener('abort', stop)
+        }
+        if (state === 'error') {
+          const error = new Error(message || '朗读失败。')
+          if (window.dictolEntry?.showToast) {
+            window.dictolEntry.showToast({ type: 'error', message: error.message })
+          } else {
+            showShadowToast(error.message)
+          }
+          onStateChange?.(state, error)
+          return
+        }
+        onStateChange?.(state)
+      }
+
+      if (!tts) {
+        onPlaybackState('error', '当前页面不支持语音朗读。')
+        return
+      }
+      signal?.addEventListener('abort', stop, { once: true })
+      tts.speak(text, onPlaybackState)
+      if (signal?.aborted) stop()
+    }
+
     // sound:// 音源播放拦截
     const soundAudio = new Audio()
     // 与主进程 resource-protocol.ts getMimeType 的音频类型保持一致。

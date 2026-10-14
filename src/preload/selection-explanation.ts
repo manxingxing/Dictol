@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { createTtsPlayback } from './tts'
 
 import type { SelectionExplanationPayload } from '../shared/selection-explanation'
 
@@ -17,6 +18,7 @@ ipcRenderer.on('selection-explanation:update', (_event, payload: SelectionExplan
 contextBridge.exposeInMainWorld(
   'dictolSelectionExplanation',
   Object.freeze({
+    tts: createTtsPlayback(),
     onUpdate: (callback: Subscriber): (() => void) => {
       subscribers.add(callback)
       if (latestPayload) callback(latestPayload)

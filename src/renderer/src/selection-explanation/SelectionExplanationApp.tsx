@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 
 import { useAppChrome } from '@/hooks/use-app-chrome'
 import type { SelectionExplanationPayload } from '../../../shared/selection-explanation'
+import type { TtsPlayback } from '../../../shared/tts'
 import { AiExplanation } from './AiExplanation'
 import { DictionaryExplanation } from './DictionaryExplanation'
 
 declare global {
   interface Window {
     dictolSelectionExplanation: {
+      tts: TtsPlayback
       onUpdate: (callback: (payload: SelectionExplanationPayload) => void) => () => void
       loadingReady: (requestId: number) => void
       selectDictionary: (dictionaryId: string) => void

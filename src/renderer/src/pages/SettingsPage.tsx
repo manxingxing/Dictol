@@ -1,4 +1,5 @@
 import { AiLookupSettingsCard } from '@/components/AiLookupSettingsCard'
+import { TtsSettingsCard } from '@/components/TtsSettingsCard'
 import { AboutSettingsCard } from '@/components/AboutSettingsCard'
 import { AppearanceSettingsCard } from '@/components/AppearanceSettingsCard'
 import { KeyboardSettingsCard } from '@/components/KeyboardSettingsCard'
@@ -14,6 +15,7 @@ export function SettingsPage(): React.JSX.Element {
         <AppearanceSettingsCard />
         <WordCaptureSettingsCard />
         <AiLookupSettingsCard />
+        <TtsSettingsCard />
         <KeyboardSettingsCard />
         <StorageSettingsCard />
         <AboutSettingsCard />

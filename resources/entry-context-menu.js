@@ -9,15 +9,18 @@
 
     const contextMenuHost = document.createElement('div')
     contextMenuHost.id = 'dictol-context-menu'
-    contextMenuHost.style.cssText = 'position:fixed;display:none;z-index:2147483647;'
+    contextMenuHost.style.cssText =
+      'position:fixed;display:none;z-index:2147483647;width:max-content;'
 
     const contextMenuRoot = contextMenuHost.attachShadow({ mode: 'closed' })
     const contextMenuStyle = document.createElement('style')
     contextMenuStyle.textContent = `
     :host { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     .menu {
+      box-sizing: border-box;
       display: flex;
       flex-direction: row;
+      flex-wrap: nowrap;
       gap: 2px;
       padding: 4px;
       border: 1px solid rgba(34, 40, 34, .2);
@@ -31,6 +34,7 @@
     }
     button {
       display: flex;
+      flex-shrink: 0;
       align-items: center;
       justify-content: center;
       width: 30px;
@@ -41,7 +45,7 @@
       background: transparent;
       color: #242824;
       font: 500 13px/1 inherit;
-      cursor: pointer;
+      cursor: default;
     }
     button:hover { background: rgba(255, 255, 255, .52); }
     button:active { background: rgba(218, 224, 217, .62); }
@@ -54,6 +58,17 @@
       stroke-width: 1.8;
       stroke-linecap: round;
       stroke-linejoin: round;
+    }
+    svg[data-state="waiting"] {
+      transform-origin: 50% 50%;
+      transform-box: fill-box;
+      animation: dictol-read-aloud-spin .8s linear infinite;
+    }
+    @keyframes dictol-read-aloud-spin {
+      to { transform: rotate(360deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      svg[data-state="waiting"] { animation: none; }
     }
     @media (prefers-color-scheme: dark) {
       :host .menu {
@@ -71,6 +86,19 @@
     const contextMenu = document.createElement('div')
     contextMenu.className = 'menu'
 
+    let menuPosition = null
+    const positionContextMenu = () => {
+      if (!menuPosition || contextMenuHost.style.display === 'none') return
+      const { x, y, centered, aboveY } = menuPosition
+      const bounds = contextMenuHost.getBoundingClientRect()
+      const left = centered ? x - bounds.width / 2 : x
+      const top = y + bounds.height > innerHeight - 8 ? aboveY - bounds.height : y
+      contextMenuHost.style.left = `${Math.max(8, Math.min(left, innerWidth - bounds.width - 8))}px`
+      contextMenuHost.style.top = `${Math.max(8, Math.min(top, innerHeight - bounds.height - 8))}px`
+    }
+    new ResizeObserver(positionContextMenu).observe(contextMenuHost)
+    addEventListener('resize', positionContextMenu)
+
     const hideContextMenu = () => {
       contextMenuHost.style.display = 'none'
     }
@@ -78,7 +106,9 @@
     const createMenuButton = (label, icon, action, { hideAfterAction = true } = {}) => {
       const button = document.createElement('button')
       button.type = 'button'
-      button.innerHTML = `${icon}<span>${label}</span>`
+      button.innerHTML = icon
+      button.title = label
+      button.setAttribute('aria-label', label)
       button.addEventListener('pointerdown', (event) => event.preventDefault())
       button.addEventListener('click', async () => {
         await Promise.resolve(action())
@@ -99,6 +129,43 @@
       () => lookup(contextMenuText)
     )
 
+    let readAloudState = 'idle'
+    let readAloudController = null
+    const readAloudIcons = {
+      idle: '<svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5Z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M18.5 5.5a9 9 0 0 1 0 13"></path></svg>',
+      waiting:
+        '<svg data-state="waiting" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" opacity=".28"></circle><path d="M12 4a8 8 0 0 1 8 8"></path></svg>',
+      playing:
+        '<svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1"></rect></svg>'
+    }
+    const readAloudButton = createMenuButton(
+      '朗读',
+      readAloudIcons.idle,
+      () => {
+        if (readAloudState !== 'idle') {
+          readAloudController?.abort()
+          return
+        }
+        const controller = new AbortController()
+        readAloudController = controller
+        window.playTTS(contextMenuText, undefined, {
+          onStateChange: (state) => {
+            setReadAloudState(state === 'waiting' || state === 'playing' ? state : 'idle')
+            if (state !== 'waiting' && state !== 'playing') readAloudController = null
+            if (state === 'completed' || state === 'error') hideContextMenu()
+          },
+          signal: controller.signal
+        })
+      },
+      { hideAfterAction: false }
+    )
+    const setReadAloudState = (state) => {
+      readAloudState = state
+      readAloudButton.querySelector('svg').outerHTML = readAloudIcons[state]
+      readAloudButton.title = state === 'idle' ? '朗读' : '停止朗读'
+      readAloudButton.setAttribute('aria-label', readAloudButton.title)
+    }
+
     const explainWithAiButton = createMenuButton(
       'AI 解释',
       '<svg viewBox="0 0 24 24"><path d="m12 3-1.9 5.1L5 10l5.1 1.9L12 17l1.9-5.1L19 10l-5.1-1.9L12 3Z"></path><path d="m19 15 .7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7L19 15Z"></path></svg>',
@@ -113,28 +180,24 @@
       if (!availability) return
       availability.then(setAiExplanationEnabled).catch(() => setAiExplanationEnabled(false))
     }
-    contextMenu.append(copyButton, lookupButton, explainWithAiButton)
+    contextMenu.append(copyButton, lookupButton, readAloudButton, explainWithAiButton)
     contextMenuRoot.append(contextMenuStyle, contextMenu)
 
     refreshAiExplanationAvailability()
     window.dictolEntry?.onAiExplanationAvailabilityChanged?.(setAiExplanationEnabled)
 
     const showContextMenu = (x, y, text, centered = false, aboveY = y) => {
+      menuPosition = { x, y, centered, aboveY }
       contextMenuText = text
       lookupButton.disabled = text.length > 200
+      readAloudButton.disabled = readAloudState === 'idle' && text.length > 200
       explainWithAiButton.disabled = text.length > maxAiExplanationTextLength
       refreshAiExplanationAvailability()
       if (!contextMenuHost.isConnected) document.documentElement.append(contextMenuHost)
       contextMenuHost.style.left = `${x}px`
       contextMenuHost.style.top = `${y}px`
       contextMenuHost.style.display = 'block'
-      requestAnimationFrame(() => {
-        const bounds = contextMenuHost.getBoundingClientRect()
-        const left = centered ? x - bounds.width / 2 : x
-        const top = y + bounds.height > innerHeight - 8 ? aboveY - bounds.height : y
-        contextMenuHost.style.left = `${Math.max(8, Math.min(left, innerWidth - bounds.width - 8))}px`
-        contextMenuHost.style.top = `${Math.max(8, Math.min(top, innerHeight - bounds.height - 8))}px`
-      })
+      positionContextMenu()
     }
     const showContextMenuForSelection = () => {
       const selection = window.getSelection()

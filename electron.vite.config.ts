@@ -1,4 +1,4 @@
-import { resolve } from 'path'
+import { basename, resolve } from 'path'
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -22,6 +22,20 @@ export default defineConfig({
     }
   },
   preload: {
+    plugins: [
+      {
+        name: 'inline-tts-in-sandboxed-preloads',
+        enforce: 'pre',
+        resolveId(source, importer) {
+          // Sandboxed Electron preloads cannot require a Rollup shared chunk.
+          // Give each preload its own copy while keeping one TTS source module.
+          if (source === './tts' && importer?.startsWith(resolve('src/preload/'))) {
+            return `${resolve('src/preload/tts.ts')}?preload=${basename(importer)}`
+          }
+          return null
+        }
+      }
+    ],
     build: {
       rollupOptions: {
         input: {
