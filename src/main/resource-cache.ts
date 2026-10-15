@@ -66,7 +66,7 @@ export class ResourceCache {
           : 'other'
 
     const digest = createHash('sha256').update(`${dictionaryId}\0${resourcePath}`).digest('hex')
-    const shard = digest.slice(0, 6)
+    const shard = digest.slice(0, 2)
     const extension = extname(resourcePath)
       .toLowerCase()
       .replace(/[^.a-z0-9]/g, '')

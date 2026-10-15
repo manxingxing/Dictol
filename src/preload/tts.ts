@@ -2,7 +2,7 @@ import { ipcRenderer } from 'electron'
 
 import type { TtsConfig, TtsPlayback, TtsStateListener, TtsVoice } from '../shared/tts'
 
-const MAX_TEXT_LENGTH = 200
+const MAX_TEXT_LENGTH = 500
 const SUPPORTED_LANGUAGE_CODES = new Set(['zh', 'en', 'ja', 'ko', 'fr', 'de'])
 
 function isSupportedSystemVoice(voice: SpeechSynthesisVoice): boolean {
@@ -84,7 +84,7 @@ export function createTtsPlayback(): TtsPlayback {
       active?.cancel()
       const value = typeof text === 'string' ? text.trim() : ''
       if (!value || value.length > MAX_TEXT_LENGTH) {
-        onStateChange('error', '朗读文本须为 1–200 个字符。')
+        onStateChange('error', '朗读文本须为 1–500 个字符。')
         return
       }
 

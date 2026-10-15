@@ -34,8 +34,8 @@ const initialPayload: SelectionToolbarPayload = {
 
 export function SelectionToolbarApp(): React.JSX.Element {
   const [payload, setPayload] = useState(initialPayload)
-  const [openingExcerpt, setOpeningExcerpt] = useState(false)
-  const openingExcerptRef = useRef(false)
+  const [savingExcerpt, setSavingExcerpt] = useState(false)
+  const savingExcerptRef = useRef(false)
   const lastActivityAt = useRef(Number.NEGATIVE_INFINITY)
 
   const notifyActivity = useCallback((): void => {
@@ -46,19 +46,21 @@ export function SelectionToolbarApp(): React.JSX.Element {
   }, [])
 
   const captureExcerpt = async (): Promise<void> => {
-    if (openingExcerptRef.current || !payload.canCaptureExcerpt) return
-    openingExcerptRef.current = true
-    setOpeningExcerpt(true)
+    if (savingExcerptRef.current || !payload.canCaptureExcerpt) return
+    savingExcerptRef.current = true
+    setSavingExcerpt(true)
     try {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
       await window.dictolSelectionToolbar.captureExcerpt()
     } finally {
-      openingExcerptRef.current = false
-      setOpeningExcerpt(false)
+      savingExcerptRef.current = false
+      setSavingExcerpt(false)
     }
   }
 
-  useEffect(() => window.dictolSelectionToolbar.onUpdate(setPayload), [])
+  useEffect(() => {
+    return window.dictolSelectionToolbar.onUpdate(setPayload)
+  }, [])
 
   useEffect(() => {
     if (payload.requestId === 0) return
@@ -88,6 +90,7 @@ export function SelectionToolbarApp(): React.JSX.Element {
         <Button
           aria-label="在 Dictol 中查询"
           className="selection-action selection-action-logo"
+          disabled={savingExcerpt}
           onClick={() => window.dictolSelectionToolbar.lookupInMain()}
           size="icon"
           title={payload.word ? `在 Dictol 中查询“${payload.word}”` : '在 Dictol 中查询'}
@@ -98,18 +101,8 @@ export function SelectionToolbarApp(): React.JSX.Element {
         </Button>
         <Separator className="selection-action-separator" orientation="vertical" />
         <Button
-          className="selection-action selection-action-primary"
-          disabled={!payload.word || payload.word.length > 200}
-          onClick={() => window.dictolSelectionToolbar.explain()}
-          size="sm"
-          type="button"
-          variant="ghost"
-        >
-          <BookOpen />
-          查词
-        </Button>
-        <Button
           className="selection-action"
+          disabled={savingExcerpt}
           onClick={() => window.dictolSelectionToolbar.copy()}
           size="sm"
           type="button"
@@ -120,7 +113,18 @@ export function SelectionToolbarApp(): React.JSX.Element {
         </Button>
         <Button
           className="selection-action selection-action-primary"
-          disabled={!payload.canTranslate}
+          disabled={savingExcerpt || !payload.word || payload.word.length > 200}
+          onClick={() => window.dictolSelectionToolbar.explain()}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <BookOpen />
+          查词
+        </Button>
+        <Button
+          className="selection-action selection-action-primary"
+          disabled={savingExcerpt || !payload.canTranslate}
           onClick={() => window.dictolSelectionToolbar.translate()}
           size="sm"
           type="button"
@@ -131,23 +135,23 @@ export function SelectionToolbarApp(): React.JSX.Element {
         </Button>
         <Button
           aria-label="摘抄选中文本"
-          aria-busy={openingExcerpt}
-          className="selection-action"
-          disabled={!payload.canCaptureExcerpt || openingExcerpt}
+          aria-busy={savingExcerpt}
+          className="selection-action selection-action-primary"
+          disabled={!payload.canCaptureExcerpt || savingExcerpt}
           onClick={() => void captureExcerpt()}
           size="sm"
-          title="摘抄选中文本"
+          title={savingExcerpt ? '正在保存摘抄…' : '摘抄选中文本'}
           type="button"
           variant="ghost"
         >
-          {openingExcerpt ? <LoaderCircle className="animate-spin" /> : <Quote />}
-          摘抄
+          {savingExcerpt ? <LoaderCircle className="animate-spin" /> : <Quote />}
+          {savingExcerpt ? '正在保存…' : '摘抄'}
         </Button>
         <Separator className="selection-action-separator" orientation="vertical" />
         <Button
           aria-label="更多划词操作"
           className="selection-action selection-action-more"
-          disabled={!payload.canExclude}
+          disabled={savingExcerpt || !payload.canExclude}
           onClick={() => window.dictolSelectionToolbar.openMenu()}
           size="icon"
           type="button"

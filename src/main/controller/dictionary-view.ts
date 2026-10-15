@@ -457,7 +457,7 @@ export class DictionaryViewController extends BaseController {
     if (params.hasImageContents) {
       const menuItems: Electron.MenuItemConstructorOptions[] = [
         {
-          label: '复制',
+          label: '复制图片',
           click: () => void this.copyImageToClipboard(view, params)
         }
       ]
