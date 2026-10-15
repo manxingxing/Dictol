@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BookOpen, Copy, MoreHorizontal, Search } from 'lucide-react'
+import { BookOpen, Copy, LoaderCircle, MoreHorizontal, Quote } from 'lucide-react'
 
 import appIcon from '@/assets/icon_32x32.png'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ declare global {
       lookupInMain: () => void
       explain: () => void
       copy: () => void
-      google: () => void
+      captureExcerpt: () => Promise<void>
       openMenu: () => void
       activity: () => void
       rendered: (requestId: number) => void
@@ -26,11 +26,14 @@ const initialPayload: SelectionToolbarPayload = {
   requestId: 0,
   word: '',
   programName: '',
-  canExclude: false
+  canExclude: false,
+  canCaptureExcerpt: false
 }
 
 export function SelectionToolbarApp(): React.JSX.Element {
   const [payload, setPayload] = useState(initialPayload)
+  const [openingExcerpt, setOpeningExcerpt] = useState(false)
+  const openingExcerptRef = useRef(false)
   const lastActivityAt = useRef(Number.NEGATIVE_INFINITY)
 
   const notifyActivity = useCallback((): void => {
@@ -39,6 +42,19 @@ export function SelectionToolbarApp(): React.JSX.Element {
     lastActivityAt.current = now
     window.dictolSelectionToolbar.activity()
   }, [])
+
+  const captureExcerpt = async (): Promise<void> => {
+    if (openingExcerptRef.current || !payload.canCaptureExcerpt) return
+    openingExcerptRef.current = true
+    setOpeningExcerpt(true)
+    try {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      await window.dictolSelectionToolbar.captureExcerpt()
+    } finally {
+      openingExcerptRef.current = false
+      setOpeningExcerpt(false)
+    }
+  }
 
   useEffect(() => window.dictolSelectionToolbar.onUpdate(setPayload), [])
 
@@ -101,14 +117,18 @@ export function SelectionToolbarApp(): React.JSX.Element {
           复制
         </Button>
         <Button
+          aria-label="摘抄选中文本"
+          aria-busy={openingExcerpt}
           className="selection-action"
-          onClick={() => window.dictolSelectionToolbar.google()}
+          disabled={!payload.canCaptureExcerpt || openingExcerpt}
+          onClick={() => void captureExcerpt()}
           size="sm"
+          title="摘抄选中文本"
           type="button"
           variant="ghost"
         >
-          <Search />
-          Google
+          {openingExcerpt ? <LoaderCircle className="animate-spin" /> : <Quote />}
+          摘抄
         </Button>
         <Separator className="selection-action-separator" orientation="vertical" />
         <Button

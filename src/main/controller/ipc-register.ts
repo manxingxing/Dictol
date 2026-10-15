@@ -8,6 +8,7 @@ import { EmbedBrowserController } from './embed-browser'
 import { OnlineDictionaryController } from './online-dictionary'
 import { AiController } from './ai'
 import { AppController } from './app'
+import { ExternalExcerptController } from './external-excerpt'
 import { QueryHistoryController } from './query-history'
 import { SearchPopoverController } from './search-popover'
 import { SelectionToolbarController } from './selection-toolbar'
@@ -26,6 +27,7 @@ export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
 
   const controllers = [
     new AiController(appRuntime),
+    new ExternalExcerptController(appRuntime),
     new TtsController(appRuntime),
     new AppController(appRuntime),
     new DictionaryEntryController(appRuntime),

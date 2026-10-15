@@ -6,9 +6,10 @@ import type {
   AiSaveConfigRequest,
   AiStreamEvent
 } from '../shared/ai-ipc'
+import { randomUUID } from 'node:crypto'
 import { AppConfigStore } from './app-config'
 import { AiCredentialStore } from './ai-credentials'
-import { getLookupSystemPrompt, prepareLookupMessages } from './language-task-prompts'
+import { getExcerptNoteSystemPrompt, getLookupSystemPrompt, prepareLookupMessages } from './language-task-prompts'
 import { createAiCompletionBody } from './ai-model-adapter'
 
 const MAX_MESSAGES = 100
@@ -16,8 +17,10 @@ const MAX_MESSAGE_LENGTH = 20_000
 const REQUEST_TIMEOUT_MS = 120_000
 
 export type AiStreamHandler = (event: AiStreamEvent) => void
-export type AiPromptTarget = 'sidebar' | 'selection-toolbar' | 'translation'
-type AiLookupContext = NonNullable<AiChatRequest['lookupContext']>
+export type AiPromptTarget = 'sidebar' | 'selection-toolbar' | 'translation' | 'excerpt'
+type AiLookupContext = NonNullable<AiChatRequest['lookupContext']> & {
+  hasRelatedTerms?: boolean
+}
 
 export class AiLookupService {
   private readonly credentials: AiCredentialStore
@@ -88,6 +91,10 @@ export class AiLookupService {
       if (promptTarget === 'translation') {
         systemPrompt = getTranslationSystemPrompt(translation)
         if (!systemPrompt) throw new Error('翻译语言设置无效。')
+      } else if (promptTarget === 'excerpt') {
+        systemPrompt = getExcerptNoteSystemPrompt(lookupContext?.hasRelatedTerms ?? true)
+        if (!lookupContext) throw new Error('摘抄上下文缺失。')
+        requestMessages = prepareLookupMessages(lookupContext.sourceText, bodyMessages)
       } else {
         if (!lookupContext) throw new Error('查词上下文缺失。')
         const followUp = bodyMessages.some((message) => message.role === 'assistant')
@@ -179,6 +186,34 @@ export class AiLookupService {
     lookupContext?: AiLookupContext
   ): void {
     void this.consume(requestId, messages, promptTarget, translation, lookupContext, onEvent)
+  }
+
+  async generateExcerptNote(excerpt: string, relatedTerms: string[]): Promise<string> {
+    const hasRelatedTerms = relatedTerms.length > 0
+    const sourceText = JSON.stringify(
+      hasRelatedTerms ? { 原句: excerpt, 词语: relatedTerms } : { 原句: excerpt }
+    )
+    let responseText = ''
+    for await (const event of this.stream(
+      randomUUID(),
+      [
+        {
+          role: 'user',
+          content: hasRelatedTerms
+            ? '请先解释整句话，再着重解释指定词语在句子里的含义。'
+            : '请解释整句话的意思，并直接给出适合保存为笔记的内容。'
+        }
+      ],
+      'excerpt',
+      undefined,
+      { sourceText, hasRelatedTerms }
+    )) {
+      if (event.type === 'delta') responseText += event.text
+      if (event.type === 'error') throw new Error(event.message)
+    }
+    const note = responseText.trim()
+    if (!note) throw new Error('AI 没有生成笔记内容。')
+    return note
   }
 
   cancel(requestId: string): void {

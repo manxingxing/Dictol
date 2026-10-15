@@ -1,5 +1,7 @@
 export type AiProvider = 'openai-compatible'
 
+export const AI_LOOKUP_MAX_SOURCE_TEXT_LENGTH = 20_000
+
 export type AiLookupConfig = {
   enabled: boolean
   provider: AiProvider

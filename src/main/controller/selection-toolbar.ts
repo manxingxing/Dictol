@@ -3,9 +3,10 @@ import {
   BrowserWindow,
   ipcMain,
   Menu,
+  Notification,
   screen,
-  shell,
   type IpcMainEvent,
+  type IpcMainInvokeEvent,
   type Point,
   type WebContents
 } from 'electron'
@@ -13,6 +14,7 @@ import type { AppRuntime } from '../app-runtime'
 import {
   getSelectionToolbarWindowSize,
   SELECTION_TOOLBAR_WINDOWS_SHADOW_MARGIN,
+  type ExternalExcerptCapture,
   type SelectionToolbarPayload
 } from '../../shared/selection-toolbar'
 import type {
@@ -77,7 +79,7 @@ export class SelectionToolbarController extends BaseController {
     ipcMain.on('selection-toolbar:lookup-in-main', this.lookupInMain)
     ipcMain.on('selection-toolbar:explain', this.explain)
     ipcMain.on('selection-toolbar:copy', this.copy)
-    ipcMain.on('selection-toolbar:google', this.google)
+    ipcMain.handle('selection-toolbar:capture-excerpt', this.captureExcerpt)
     ipcMain.on('selection-toolbar:open-menu', this.openNativeMenu)
     ipcMain.on('selection-toolbar:activity', this.handleToolbarActivity)
     ipcMain.on('selection-toolbar:rendered', this.handleToolbarRendered)
@@ -196,17 +198,51 @@ export class SelectionToolbarController extends BaseController {
     this.hideToolbar()
   }
 
-  private readonly google = (event: IpcMainEvent): void => {
-    if (!this.acceptsToolbarSender(event)) return
-    const word = this.currentCapture?.selection.text.trim()
-    if (!word || word.length > MAX_SELECTION_LENGTH) return
+  private readonly captureExcerpt = (event: IpcMainInvokeEvent): void => {
+    if (!this.acceptsToolbarSender(event) || !this.currentCapture) return
+    const text = this.currentCapture.selection.text
+    if (!text.trim() || text.length > 100_000) return
+    const sourceApp = this.currentCapture.selection.programName.trim()
 
-    this.hideToolbar()
-    void shell
-      .openExternal(`https://www.google.com/search?q=${encodeURIComponent(word)}`)
-      .catch((error: unknown) => {
-        console.error('Failed to open Google search for selected text', { word, error })
+    try {
+      this.openExcerptCapture({
+        text,
+        sourceApp,
+        aiEnabled: this.runtime.appConfig.load().aiLookup.enabled
       })
+      this.hideToolbar()
+    } catch (error) {
+      console.error('Failed to open excerpt capture', error)
+      this.notifyExcerptCaptureError(error instanceof Error ? error.message : '无法打开摘抄窗口')
+    }
+  }
+
+  private openExcerptCapture(payload: ExternalExcerptCapture): void {
+    const window = this.runtime.windowManager.createExcerptCaptureWindow()
+    window.webContents.on('will-navigate', (event) => event.preventDefault())
+    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    void window
+      .loadURL(resolveRendererUrl('external-excerpt.html'))
+      .then(() => {
+        if (window.isDestroyed()) return
+        window.webContents.send('external-excerpt:update', payload)
+        window.show()
+        window.focus()
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to load excerpt capture', error)
+        if (!window.isDestroyed()) window.close()
+        this.notifyExcerptCaptureError('无法打开摘抄窗口')
+      })
+  }
+
+  private notifyExcerptCaptureError(message: string): void {
+    const mainWindow = this.runtime.mainWindow
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+      mainWindow.webContents.send('notification:toast', { type: 'error', message })
+      return
+    }
+    new Notification({ title: '摘抄窗口无法打开', body: message }).show()
   }
 
   private disableCurrentApp(): void {
@@ -339,7 +375,9 @@ export class SelectionToolbarController extends BaseController {
       requestId,
       word: capture.selection.text.trim(),
       programName,
-      canExclude: Boolean(programName)
+      canExclude: Boolean(programName),
+      canCaptureExcerpt:
+        capture.selection.text.trim().length > 0 && capture.selection.text.length <= 100_000
     }
     const toolbarSize = this.syncToolbarSize(window)
     this.positionToolbar(window, toolbarSize)

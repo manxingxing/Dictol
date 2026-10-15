@@ -27,6 +27,7 @@ export class WindowManager {
   searchPopoverView: WebContentsViewManager | undefined
   selectionToolbarWindow: SelectionSurfaceWindow | undefined
   selectionExplanationWindow: BrowserWindow | undefined
+  readonly excerptCaptureWindows = new Set<BrowserWindow>()
   selectionExplanationView: WebContentsViewManager | undefined
   findBarView: WebContentsViewManager | undefined
   customCssEditorWindow: BrowserWindow | undefined
@@ -359,6 +360,28 @@ export class WindowManager {
     return window
   }
 
+  createExcerptCaptureWindow(): BrowserWindow {
+    const window = new BrowserWindow({
+      width: 520,
+      height: 600,
+      minWidth: 420,
+      minHeight: 360,
+      show: false,
+      title: '摘抄与笔记',
+      backgroundColor: nativeTheme.shouldUseDarkColors ? '#232323' : '#faf9f7',
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: resolvePreloadPath('external-excerpt.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    })
+    this.excerptCaptureWindows.add(window)
+    window.on('closed', () => this.excerptCaptureWindows.delete(window))
+    return window
+  }
+
   createCustomCssEditorWindow(): BrowserWindow {
     if (this.customCssEditorWindow && !this.customCssEditorWindow.isDestroyed()) {
       return this.customCssEditorWindow
@@ -485,7 +508,11 @@ export class WindowManager {
   }
 
   hasVisibleSelectionSurface(): boolean {
-    return [this.selectionToolbarWindow, this.selectionExplanationWindow].some(
+    return [
+      this.selectionToolbarWindow,
+      this.selectionExplanationWindow,
+      ...this.excerptCaptureWindows
+    ].some(
       (window) => window && !window.isDestroyed() && window.isVisible()
     )
   }
@@ -516,6 +543,9 @@ export class WindowManager {
     if (this.selectionExplanationWindow && !this.selectionExplanationWindow.isDestroyed()) {
       this.selectionExplanationWindow.destroy()
     }
+    this.excerptCaptureWindows.forEach((window) => {
+      if (!window.isDestroyed()) window.destroy()
+    })
     if (this.customCssEditorWindow && !this.customCssEditorWindow.isDestroyed()) {
       this.customCssEditorWindow.destroy()
     }
@@ -528,6 +558,7 @@ export class WindowManager {
     this.searchPopoverView = undefined
     this.selectionToolbarWindow = undefined
     this.selectionExplanationWindow = undefined
+    this.excerptCaptureWindows.clear()
     this.selectionExplanationView = undefined
     this.selectionExplanationSwitcherVisible = false
     this.updateSelectionExplanationViewBounds = undefined

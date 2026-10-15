@@ -18,4 +18,11 @@ export type SelectionToolbarPayload = {
   word: string
   programName: string
   canExclude: boolean
+  canCaptureExcerpt: boolean
+}
+
+export type ExternalExcerptCapture = {
+  text: string
+  sourceApp: string
+  aiEnabled: boolean
 }
