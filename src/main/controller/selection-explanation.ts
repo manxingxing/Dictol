@@ -69,6 +69,7 @@ export class SelectionExplanationController extends BaseController {
     ipcMain.on('selection-explanation:create-note', this.createNote)
     ipcMain.handle('selection-explanation:is-starred', this.isWordStarred)
     ipcMain.handle('selection-explanation:toggle-star', this.toggleWordStar)
+    ipcMain.handle('selection-explanation:save-ai-explanation', this.saveAiExplanationAsNote)
   }
 
   setAnchor(anchor: SelectionAnchor): void {
@@ -118,6 +119,31 @@ export class SelectionExplanationController extends BaseController {
       return
     }
     this.showAiExplanation(payload.word)
+  }
+  private readonly saveAiExplanationAsNote = async (
+    event: IpcMainInvokeEvent,
+    commentRich: unknown
+  ): Promise<void> => {
+    const payload = this.explanationPayload
+    if (
+      !this.acceptsExplanationSender(event) ||
+      payload?.mode !== 'ai' ||
+      payload.state !== 'content' ||
+      payload.complete !== true ||
+      this.activeAiRequestId ||
+      typeof commentRich !== 'string'
+    ) {
+      throw new Error('AI 解释尚未完成，暂时无法保存。')
+    }
+
+    const word = payload.word.trim()
+    if (!word || !payload.content?.trim()) throw new Error('没有可保存的单词或 AI 解释。')
+
+    await this.db.createDictionaryNote({
+      relatedTerms: [word],
+      commentRich
+    })
+    this.notifyNoteCreated([word])
   }
 
   markLoadingReady(requestId: number): void {

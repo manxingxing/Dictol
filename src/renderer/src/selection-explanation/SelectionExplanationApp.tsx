@@ -19,6 +19,7 @@ declare global {
       close: () => void
       togglePin: () => void
       openInMain: () => void
+      saveAiExplanationAsNote: (commentRich: string) => Promise<void>
       isStarred: (word: string) => Promise<boolean>
       toggleStar: (word: string) => Promise<void>
     }

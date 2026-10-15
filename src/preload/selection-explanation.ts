@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld(
     close: (): void => ipcRenderer.send('selection-explanation:close'),
     togglePin: (): void => ipcRenderer.send('selection-explanation:toggle-pin'),
     openInMain: (): void => ipcRenderer.send('selection-explanation:open-in-main'),
+    saveAiExplanationAsNote: (commentRich: string): Promise<void> =>
+      ipcRenderer.invoke('selection-explanation:save-ai-explanation', commentRich),
     isStarred: (word: string): Promise<boolean> =>
       ipcRenderer.invoke('selection-explanation:is-starred', word),
     toggleStar: (word: string): Promise<void> =>

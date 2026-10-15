@@ -1,16 +1,37 @@
-import { BookOpen, LoaderCircle } from 'lucide-react'
+import { useState } from 'react'
+import { BookOpen, Check, LoaderCircle, Quote } from 'lucide-react'
+import StarterKit from '@tiptap/starter-kit'
+import { MarkdownManager } from '@tiptap/markdown'
 
 import { AiRichText } from '@/components/AiRichText'
 import { Button } from '@/components/ui/button'
 import type { SelectionExplanationPayload } from '../../../shared/selection-explanation'
-import { SelectionExplanationHeader } from './SelectionExplanationHeader'
 import { ExplanationWordActions } from './ExplanationWordActions'
+import { SelectionExplanationHeader } from './SelectionExplanationHeader'
 
 type Props = {
   payload: SelectionExplanationPayload
 }
 
 export function AiExplanation({ payload }: Props): React.JSX.Element {
+  const [saveAttempt, setSaveAttempt] = useState<{
+    requestId: number
+    state: 'saving' | 'saved' | 'error'
+  } | null>(null)
+  const saveState = saveAttempt?.requestId === payload.requestId ? saveAttempt.state : 'idle'
+  const saveExplanation = async (): Promise<void> => {
+    setSaveAttempt({ requestId: payload.requestId, state: 'saving' })
+    try {
+      const markdown = new MarkdownManager({ extensions: [StarterKit] })
+      const commentRich = JSON.stringify(markdown.parse(payload.content ?? ''))
+      await window.dictolSelectionExplanation.saveAiExplanationAsNote(commentRich)
+      setSaveAttempt({ requestId: payload.requestId, state: 'saved' })
+    } catch (error) {
+      console.error('Failed to save AI explanation as note', error)
+      setSaveAttempt({ requestId: payload.requestId, state: 'error' })
+    }
+  }
+
   return (
     <>
       <SelectionExplanationHeader
@@ -18,6 +39,36 @@ export function AiExplanation({ payload }: Props): React.JSX.Element {
         onSearch={(word) => window.dictolSelectionExplanation.lookupWord(word)}
         pinned={payload.pinned}
       >
+        <Button
+          aria-label={saveState === 'saved' ? '已保存到摘抄与笔记' : '保存到摘抄与笔记'}
+          className="no-drag size-7 shrink-0 disabled:opacity-100"
+          disabled={
+            payload.state !== 'content' ||
+            payload.complete !== true ||
+            !payload.content?.trim() ||
+            saveState === 'saving' ||
+            saveState === 'saved'
+          }
+          onClick={() => void saveExplanation()}
+          size="icon"
+          title={
+            saveState === 'saved'
+              ? '已保存到摘抄与笔记'
+              : saveState === 'error'
+                ? '保存失败，点击重试'
+                : '保存到摘抄与笔记'
+          }
+          type="button"
+          variant="ghost"
+        >
+          {saveState === 'saving' ? (
+            <LoaderCircle className="animate-spin" />
+          ) : saveState === 'saved' ? (
+            <Check />
+          ) : (
+            <Quote className={saveState === 'error' ? 'text-destructive' : ''} />
+          )}
+        </Button>
         <Button
           aria-label="返回词典解释"
           className="no-drag size-7 shrink-0"
