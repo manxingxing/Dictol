@@ -9,6 +9,7 @@ import {
 import {
   SELECTION_TRANSLATION_INITIAL_HEIGHT,
   SELECTION_TRANSLATION_MAX_HEIGHT,
+  SELECTION_TRANSLATION_WIDTH,
   TRANSLATION_LANGUAGES,
   TRANSLATION_MAX_TEXT_LENGTH,
   type SelectionTranslationPayload,
@@ -88,12 +89,11 @@ export class TranslationController extends BaseController {
       })
     }
     if (!this.pinned) {
-      window.setBounds(
-        fitExplanationNearSelection(this.anchor ?? createCursorAnchor(), {
-          width: 520,
-          height: SELECTION_TRANSLATION_INITIAL_HEIGHT
-        })
-      )
+      const bounds = fitExplanationNearSelection(this.anchor ?? createCursorAnchor(), {
+        width: SELECTION_TRANSLATION_WIDTH,
+        height: SELECTION_TRANSLATION_INITIAL_HEIGHT
+      })
+      window.setBounds(bounds)
     }
     if (this.loaded) this.flush(window)
   }
@@ -149,8 +149,8 @@ export class TranslationController extends BaseController {
     )
     const y = clamp(bounds.y, workArea.y + margin, workArea.y + workArea.height - margin - height)
     if (height !== bounds.height || y !== bounds.y) {
-      // Only resize vertically; resubmitting getBounds().width can make frameless windows grow on Windows.
-      window.setBounds({ y, height }, false)
+      const width = Math.min(SELECTION_TRANSLATION_WIDTH, Math.max(1, workArea.width - margin * 2))
+      window.setBounds({ y, width, height }, false)
     }
   }
 

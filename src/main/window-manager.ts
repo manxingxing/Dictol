@@ -8,7 +8,8 @@ import {
 import { getSelectionToolbarWindowSize } from '../shared/selection-toolbar'
 import {
   SELECTION_TRANSLATION_INITIAL_HEIGHT,
-  SELECTION_TRANSLATION_MAX_HEIGHT
+  SELECTION_TRANSLATION_MAX_HEIGHT,
+  SELECTION_TRANSLATION_WIDTH
 } from '../shared/translation'
 import { MAIN_WINDOW_TITLEBAR_HEIGHT } from '../shared/window-chrome'
 import { DICTIONARY_SESSION_PARTITION, EMBED_BROWSER_SESSION_PARTITION } from './entry-assets'
@@ -392,16 +393,15 @@ export class WindowManager {
       return this.selectionTranslationWindow
     }
     const window = new BrowserWindow({
-      width: 520,
+      width: SELECTION_TRANSLATION_WIDTH,
       height: SELECTION_TRANSLATION_INITIAL_HEIGHT,
-      minWidth: 380,
       minHeight: SELECTION_TRANSLATION_INITIAL_HEIGHT,
       maxHeight: SELECTION_TRANSLATION_MAX_HEIGHT,
       show: false,
       frame: false,
       ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
       backgroundColor: nativeTheme.shouldUseDarkColors ? '#232323' : '#faf9f7',
-      resizable: true,
+      resizable: false,
       minimizable: false,
       maximizable: false,
       fullscreenable: false,

@@ -184,7 +184,7 @@ export function SelectionTranslationWorkbench({
           </Button>
         </div>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className="selection-translation-results min-h-0 flex-1 overflow-y-auto p-2">
         <div className="space-y-1.5" ref={contentRef}>
           {loading ? (
             <p className="py-4 text-center text-xs text-muted-foreground">正在读取翻译设置…</p>

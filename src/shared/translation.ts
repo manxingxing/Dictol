@@ -13,6 +13,7 @@ export const TRANSLATION_LANGUAGE_NAMES: Record<TranslationLanguage, string> = {
 
 export const SYSTEM_TRANSLATION_PROVIDER_ID = 'system-translation'
 export const TRANSLATION_MAX_TEXT_LENGTH = 10000
+export const SELECTION_TRANSLATION_WIDTH = 520
 export const SELECTION_TRANSLATION_INITIAL_HEIGHT = 264
 export const SELECTION_TRANSLATION_MAX_HEIGHT = 760
 

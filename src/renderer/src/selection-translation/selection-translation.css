@@ -6,6 +6,14 @@ body,
   min-height: 0;
 }
 
+.selection-translation-results {
+  scrollbar-width: none;
+}
+
+.selection-translation-results::-webkit-scrollbar {
+  display: none;
+}
+
 .selection-translation-input {
   field-sizing: content;
   min-height: 48px;
