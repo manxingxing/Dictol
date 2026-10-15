@@ -247,20 +247,6 @@
     }
 
     document.addEventListener(
-      'contextmenu',
-      (event) => {
-        const text = window.getSelection()?.toString().trim() ?? ''
-        if (!text) {
-          hideContextMenu()
-          return
-        }
-        event.preventDefault()
-        event.stopImmediatePropagation()
-        showContextMenu(event.clientX, event.clientY, text)
-      },
-      true
-    )
-    document.addEventListener(
       'pointerdown',
       (event) => {
         if (event.target !== contextMenuHost) hideContextMenu()
@@ -270,7 +256,9 @@
     document.addEventListener(
       'pointerup',
       (event) => {
-        if (event.target !== contextMenuHost) setTimeout(showContextMenuForSelection, 0)
+        if (event.button === 0 && event.target !== contextMenuHost) {
+          setTimeout(showContextMenuForSelection, 0)
+        }
       },
       true
     )

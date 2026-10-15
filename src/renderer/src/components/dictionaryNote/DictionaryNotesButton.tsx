@@ -1,32 +1,45 @@
-import { useEffect } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useCallback } from 'react'
 import { NotebookPen } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
-import { dictionaryNoteCountQueryKey, useDictionaryNoteCount } from '@/hooks/use-dictionary-note'
+import {
+  useDictionaryNoteCount,
+  useDictionaryNoteCreationResult
+} from '@/hooks/use-dictionary-note'
 import { useAppStore } from '@/stores/app-store'
 
 export function DictionaryNotesButton({ term }: { term: string }): React.JSX.Element {
-  const queryClient = useQueryClient()
   const openDictionaryNotesTab = useAppStore((state) => state.openDictionaryNotesTab)
   const flashVersion = useAppStore((state) => state.dictionaryNotesButtonFlashVersion)
   const flashDictionaryNotesButton = useAppStore((state) => state.flashDictionaryNotesButton)
   const noteCount = useDictionaryNoteCount(term)
   const hasNotes = (noteCount.data ?? 0) > 0
 
-  useEffect(() => {
-    return window.dictol.dictionaryNotes.onCreationResult((result) => {
-      if (result.status === 'success') {
-        void queryClient.invalidateQueries({ queryKey: ['dictionary-notes'] })
-        void queryClient.invalidateQueries({ queryKey: dictionaryNoteCountQueryKey(result.term) })
-        flashDictionaryNotesButton()
-        toast.success('摘抄已保存')
-      } else {
-        toast.error(`保存摘抄失败：${result.message}`)
-      }
-    })
-  }, [flashDictionaryNotesButton, queryClient])
+  const isCurrentTerm = useCallback(
+    (relatedTerms: string[]): boolean =>
+      relatedTerms.some(
+        (relatedTerm) => relatedTerm.toLocaleLowerCase() === term.toLocaleLowerCase()
+      ),
+    [term]
+  )
+
+  const onNoteCreated = useCallback(
+    (relatedTerms: string[]): void => {
+      if (!isCurrentTerm(relatedTerms)) return
+      flashDictionaryNotesButton()
+      toast.success('摘抄已保存')
+    },
+    [flashDictionaryNotesButton, isCurrentTerm]
+  )
+  const onNoteCreationFailed = useCallback(
+    (relatedTerms: string[], message: string): void => {
+      if (!isCurrentTerm(relatedTerms)) return
+      toast.error(`保存摘抄失败：${message}`)
+    },
+    [isCurrentTerm]
+  )
+  useDictionaryNoteCreationResult(onNoteCreated, onNoteCreationFailed)
 
   return (
     <Button

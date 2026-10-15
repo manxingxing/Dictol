@@ -1,6 +1,9 @@
 import {
+  BrowserWindow,
   clipboard,
   ipcMain,
+  Menu,
+  nativeImage,
   shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
@@ -12,7 +15,14 @@ import type {
   SelectionExplanationPayload
 } from '../../shared/selection-explanation'
 import type { WebContentsViewManager } from '../web-contents-view-manager'
-import { createDictionaryEntryUrl, parseDictionaryEntryNavigation } from '../dictionary-entry-url'
+import { readDictionaryContextImage } from '../lib/dictionary-context-image'
+import { createDictionaryNoteWithImages } from '../service/dictionary-note-image'
+import type { DictionaryNoteCreationResultEvent } from '../../shared/dictionary-note'
+import {
+  createDictionaryEntryUrl,
+  parseDictionaryEntryNavigation,
+  parseDictionaryEntryUrl
+} from '../dictionary-entry-url'
 import { resolveEntryLinkWithAnchor } from '../resolve-entry-link'
 import { resolveRendererUrl } from '../output-path'
 import { hideSelectionWindow, showSelectionWindowInactive } from '../selection-window-behavior'
@@ -55,6 +65,8 @@ export class SelectionExplanationController extends BaseController {
     ipcMain.on('selection-explanation:lookup-word', this.lookupFromExplanation)
     ipcMain.on('selection-explanation:show-ai', this.showAiFromExplanation)
     ipcMain.on('selection-explanation:copy-text', this.copyFromExplanation)
+    ipcMain.handle('selection-explanation:can-create-note', this.canCreateNote)
+    ipcMain.on('selection-explanation:create-note', this.createNote)
     ipcMain.handle('selection-explanation:is-starred', this.isWordStarred)
     ipcMain.handle('selection-explanation:toggle-star', this.toggleWordStar)
   }
@@ -195,6 +207,142 @@ export class SelectionExplanationController extends BaseController {
     clipboard.writeText(text)
   }
 
+  private readonly canCreateNote = (event: IpcMainInvokeEvent): boolean =>
+    this.acceptsExplanationViewSender(event) && this.getCurrentNoteContext() !== null
+
+  private readonly createNote = (event: IpcMainEvent, text: unknown): void => {
+    if (!this.acceptsExplanationViewSender(event)) return
+    void this.createTextNote(text)
+  }
+
+  private getCurrentNoteContext(): { term: string; dictionaryId: number; url: string } | null {
+    const payload = this.explanationPayload
+    const view = this.runtime.windowManager.selectionExplanationView
+    if (
+      payload?.mode !== 'dictionary' ||
+      payload.state !== 'content' ||
+      !this.currentWindow?.isVisible() ||
+      !view?.isVisible ||
+      view.isDestroyed
+    ) {
+      return null
+    }
+    const url = view.getURL()
+    const entry = parseDictionaryEntryUrl(url)
+    if (
+      !entry ||
+      entry.term !== payload.word ||
+      String(entry.dictionaryId) !== payload.activeDictionaryId ||
+      String(entry.dictionaryId) !== this.loadedExplanationDictionaryId
+    ) {
+      return null
+    }
+    return { term: entry.term, dictionaryId: entry.dictionaryId, url }
+  }
+
+  private async createTextNote(text: unknown): Promise<void> {
+    const excerpt = typeof text === 'string' ? text.trim() : ''
+    const context = this.getCurrentNoteContext()
+    if (!context || !excerpt || excerpt.length > 100_000) return
+    try {
+      await this.db.createDictionaryNote({
+        relatedTerms: [context.term],
+        sourceDictionaryId: String(context.dictionaryId),
+        sourceEntryTerm: context.term,
+        excerpt
+      })
+      this.notifyNoteCreated([context.term])
+      this.showEntryToast(context.url, '摘抄已保存')
+    } catch (error) {
+      console.error('Failed to create a selection explanation text note', error)
+      this.showEntryToast(context.url, '摘抄保存失败')
+    }
+  }
+
+  private async createImageNote(
+    view: WebContentsViewManager,
+    params: Electron.ContextMenuParams
+  ): Promise<void> {
+    const context = this.getCurrentNoteContext()
+    if (!context) return
+    try {
+      const bytes = await readDictionaryContextImage(view.webContents, params)
+      if (!bytes) throw new Error('无法读取词典图片')
+      await createDictionaryNoteWithImages(this.db, {
+        relatedTerms: [context.term],
+        sourceDictionaryId: String(context.dictionaryId),
+        sourceEntryTerm: context.term,
+        imageBytes: [new Uint8Array(bytes)]
+      })
+      this.notifyNoteCreated([context.term])
+      this.showEntryToast(context.url, '摘抄已保存')
+    } catch (error) {
+      console.error('Failed to create a selection explanation image note', error)
+      this.showEntryToast(context.url, '摘抄保存失败')
+    }
+  }
+
+  private notifyNoteCreated(relatedTerms: string[]): void {
+    const payload: DictionaryNoteCreationResultEvent = { status: 'success', relatedTerms }
+    this.runtime.mainWindow?.webContents.send('note-creation-result', payload)
+  }
+
+  private showEntryToast(url: string, message: string): void {
+    const view = this.runtime.windowManager.selectionExplanationView
+    if (!view || view.isDestroyed || !view.isVisible || view.getURL() !== url) return
+    void view.webContents
+      .executeJavaScript(`window.dictolShowToast?.(${JSON.stringify(message)})`)
+      .catch((error: unknown) => console.error('Failed to show entry toast', error))
+  }
+
+  private showContextMenu(view: WebContentsViewManager, params: Electron.ContextMenuParams): void {
+    const window = this.currentWindow
+    if (!(window instanceof BrowserWindow)) return
+    const context = this.getCurrentNoteContext()
+    if (!context) return
+    let items: Electron.MenuItemConstructorOptions[]
+    if (params.hasImageContents) {
+      items = [
+        {
+          label: '复制',
+          click: () => void this.copyImageToClipboard(view, params)
+        },
+        {
+          label: '摘抄',
+          click: () => void this.createImageNote(view, params)
+        }
+      ]
+    } else {
+      const text = params.selectionText.trim()
+      if (!text || text.length > 100_000) return
+      items = [
+        { label: '复制', click: () => clipboard.writeText(text) },
+        {
+          label: '查词',
+          enabled: text.length <= MAX_SELECTION_LENGTH,
+          click: () =>
+            void this.showExplanation(text, String(context.dictionaryId), undefined, false)
+        },
+        { label: '摘抄', click: () => void this.createTextNote(text) }
+      ]
+    }
+    const bounds = view.getBounds()
+    Menu.buildFromTemplate(items).popup({
+      window,
+      x: Math.round(bounds.x + params.x),
+      y: Math.round(bounds.y + params.y)
+    })
+  }
+
+  private async copyImageToClipboard(
+    view: WebContentsViewManager,
+    params: Electron.ContextMenuParams
+  ): Promise<void> {
+    const bytes = await readDictionaryContextImage(view.webContents, params)
+    if (bytes) clipboard.writeImage(nativeImage.createFromBuffer(bytes))
+    else view.webContents.copyImageAt(params.x, params.y)
+  }
+
   private initializeExplanationWindow(): SelectionSurfaceWindow {
     const window = this.runtime.windowManager.createSelectionExplanationWindow()
     if (this.explanationWebContentsId === window.webContents.id) return window
@@ -253,6 +401,11 @@ export class SelectionExplanationController extends BaseController {
 
   private configureExplanationView(): void {
     const view = this.explanationView
+    view.webContents.on('context-menu', (event, params) => {
+      if (!params.hasImageContents && !params.selectionText.trim()) return
+      event.preventDefault()
+      this.showContextMenu(view, params)
+    })
     view.webContents.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown' || input.key !== 'Escape') return
       event.preventDefault()

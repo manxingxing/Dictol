@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DataTablePagination } from '@/components/data-table-pagination'
 import {
+  useDictionaryNoteCreationResult,
   useSearchDictionaryNotes,
   useSearchDictionaryNotesByWord
 } from '@/hooks/use-dictionary-note'
@@ -33,6 +34,8 @@ export function ExcerptsPage(): React.JSX.Element {
 
   const notes = useSearchDictionaryNotes(query, page, PAGE_SIZE, view === 'records')
   const wordGroups = useSearchDictionaryNotesByWord(query, page, PAGE_SIZE, view === 'words')
+
+  useDictionaryNoteCreationResult()
 
   const openSearchExplanation = (term: string): void => {
     window.dictol.selectionExplanation.show(term)

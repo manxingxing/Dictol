@@ -54,4 +54,5 @@ export type UpdateDictionaryNoteContentRequest = {
 }
 
 export type DictionaryNoteCreationResultEvent =
-  { status: 'success'; term: string } | { status: 'fail'; term: string; message: string }
+  | { status: 'success'; relatedTerms: string[] }
+  | { status: 'fail'; relatedTerms: string[]; message: string }

@@ -5,7 +5,12 @@ import {
   type UseMutationResult,
   type UseQueryResult
 } from '@tanstack/react-query'
-import type { DictionaryNoteItem } from '../../../shared/dictionary-note'
+import { useEffect } from 'react'
+import type {
+  DictionaryNoteItem,
+  DictionaryNoteSearchResult,
+  DictionaryNoteWordGroupSearchResult
+} from '../../../shared/dictionary-note'
 
 export type DictionaryNote = DictionaryNoteItem
 export type DictionaryNoteContent = Parameters<
@@ -21,6 +26,24 @@ export const dictionaryNotesQueryKey = (term: string) =>
   ['dictionary-notes', 'term', term.toLocaleLowerCase()] as const
 export const dictionaryNoteCountQueryKey = (term: string) =>
   ['dictionary-note-count', term.toLocaleLowerCase()] as const
+
+export function useDictionaryNoteCreationResult(
+  onSuccess?: (relatedTerms: string[]) => void,
+  onFail?: (relatedTerms: string[], message: string) => void
+): void {
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    return window.dictol.dictionaryNotes.onCreationResult((result) => {
+      if (result.status === 'success') {
+        void queryClient.invalidateQueries({ queryKey: ['dictionary-notes'] })
+        void queryClient.invalidateQueries({ queryKey: ['dictionary-note-count'] })
+        onSuccess?.(result.relatedTerms)
+      } else {
+        onFail?.(result.relatedTerms, result.message)
+      }
+    })
+  }, [onSuccess, onFail, queryClient])
+}
 
 export function useDictionaryNotes(
   term: string,
@@ -47,7 +70,7 @@ export function useSearchDictionaryNotes(
   page: number,
   pageSize: number,
   enabled: boolean
-) {
+): UseQueryResult<DictionaryNoteSearchResult, Error> {
   return useQuery({
     queryKey: ['dictionary-notes', 'search', query, page, pageSize],
     queryFn: () => window.dictol.dictionaryNotes.search(query, page, pageSize),
@@ -60,7 +83,7 @@ export function useSearchDictionaryNotesByWord(
   page: number,
   pageSize: number,
   enabled: boolean
-) {
+): UseQueryResult<DictionaryNoteWordGroupSearchResult, Error> {
   return useQuery({
     queryKey: ['dictionary-notes', 'search-by-word', query, page, pageSize],
     queryFn: () => window.dictol.dictionaryNotes.searchByWord(query, page, pageSize),
@@ -89,9 +112,7 @@ export function useCreateDictionaryNote(
   })
 }
 
-export function useDeleteNoteForTerm(
-  term: string
-): UseMutationResult<void, Error, string> {
+export function useDeleteNoteForTerm(term: string): UseMutationResult<void, Error, string> {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (noteId) => window.dictol.dictionaryNotes.delete(noteId),
@@ -126,11 +147,9 @@ export function useDeleteNote(): UseMutationResult<void, Error, string> {
   })
 }
 
-export function useUpdateNoteContent(onSaved: () => void): UseMutationResult<
-  void,
-  Error,
-  { noteId: string; content: DictionaryNoteContent }
-> {
+export function useUpdateNoteContent(
+  onSaved: () => void
+): UseMutationResult<void, Error, { noteId: string; content: DictionaryNoteContent }> {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ noteId, content }) =>

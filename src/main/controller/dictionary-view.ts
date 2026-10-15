@@ -222,19 +222,19 @@ export class DictionaryViewController extends BaseController {
       this.notifyNoteCreated(context.term)
     } catch (error) {
       console.error('Failed to create a dictionary text note', error)
-      this.notifyNoteCreationFailed(context.term, error)
+      this.notifyNoteCreationFailed(error, [context.term])
     }
   }
 
   private notifyNoteCreated(term: string): void {
-    const payload: DictionaryNoteCreationResultEvent = { status: 'success', term }
+    const payload: DictionaryNoteCreationResultEvent = { status: 'success', relatedTerms: [term] }
     this.notifyNoteCreationResult(payload)
   }
 
-  private notifyNoteCreationFailed(term: string, error: unknown): void {
+  private notifyNoteCreationFailed(error: unknown, relatedTerms: string[]): void {
     const payload: DictionaryNoteCreationResultEvent = {
       status: 'fail',
-      term,
+      relatedTerms,
       message: error instanceof Error ? error.message : '摘抄保存失败'
     }
     this.notifyNoteCreationResult(payload)
@@ -541,7 +541,7 @@ export class DictionaryViewController extends BaseController {
     } catch (error) {
       console.error('Failed to create a dictionary image note', error)
       if (term) {
-        this.notifyNoteCreationFailed(term, error)
+        this.notifyNoteCreationFailed(error, [term])
       }
     }
   }
@@ -554,7 +554,7 @@ export class DictionaryViewController extends BaseController {
       await this.createTextNote(text, selectedDictionaryId)
     } catch (error) {
       console.error('Failed to resolve the source dictionary for a text note', error)
-      this.notifyNoteCreationFailed(context.term, error)
+      this.notifyNoteCreationFailed(error, [context.term])
     }
   }
 
