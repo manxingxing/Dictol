@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { LoaderCircle, Square, Star, Volume2 } from 'lucide-react'
+import { LoaderCircle, Square, Volume2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
@@ -9,6 +9,7 @@ import {
   SELECTION_EXPLANATION_DICTIONARY_SWITCHER_HEIGHT,
   type SelectionExplanationPayload
 } from '../../../shared/selection-explanation'
+import { ExplanationWordActions } from './ExplanationWordActions'
 import { SelectionExplanationHeader } from './SelectionExplanationHeader'
 
 type Props = {
@@ -16,53 +17,19 @@ type Props = {
 }
 
 export function DictionaryExplanation({ payload }: Props): React.JSX.Element {
-  const [starStatus, setStarStatus] = useState<{ key: string; starred: boolean } | undefined>()
-  const [togglingStar, setTogglingStar] = useState(false)
   const wordKey = payload.word.trim()
   const [pronunciation, setPronunciation] = useState<{
     word: string
     state: 'waiting' | 'playing'
   } | null>(null)
   const pronunciationState = pronunciation?.word === wordKey ? pronunciation.state : 'idle'
-  const starStatusReady = Boolean(wordKey) && starStatus?.key === wordKey
-  const isStarred = starStatusReady && starStatus.starred
-  const showStar = payload.state === 'content' || starStatusReady
   const dictionaries = payload.dictionaries ?? []
   const hasDictionarySwitcher = dictionaries.length > 1
-  useEffect(() => {
-    if (payload.state !== 'content' || !payload.word || starStatusReady) return
-    let active = true
-    void window.dictolSelectionExplanation
-      .isStarred(payload.word)
-      .then((starred) => {
-        if (active) setStarStatus({ key: wordKey, starred })
-      })
-      .catch((error: unknown) => {
-        console.error('Failed to query word star status', error)
-      })
-    return () => {
-      active = false
-    }
-  }, [payload.state, payload.word, starStatusReady, wordKey])
   useEffect(() => {
     if (payload.state !== 'loading' || payload.requestId === 0) return
     window.dictolSelectionExplanation.loadingReady(payload.requestId)
   }, [payload.requestId, payload.state])
   useEffect(() => () => window.dictolSelectionExplanation.tts.stop(), [wordKey])
-
-  const toggleStar = async (): Promise<void> => {
-    if (payload.state !== 'content' || !starStatusReady || togglingStar) return
-    const nextStarred = !starStatus.starred
-    setTogglingStar(true)
-    try {
-      await window.dictolSelectionExplanation.toggleStar(payload.word)
-      setStarStatus({ key: wordKey, starred: nextStarred })
-    } catch (error) {
-      console.error('Failed to toggle word star status', error)
-    } finally {
-      setTogglingStar(false)
-    }
-  }
 
   const togglePronunciation = (): void => {
     if (pronunciationState !== 'idle') {
@@ -77,24 +44,6 @@ export function DictionaryExplanation({ payload }: Props): React.JSX.Element {
 
   const actions = (
     <>
-      {showStar && (
-        <Button
-          aria-label={isStarred ? '取消标星' : '加入默认生词本'}
-          className="no-drag size-7 shrink-0 disabled:opacity-100"
-          disabled={payload.state !== 'content' || !starStatusReady || togglingStar}
-          onClick={() => void toggleStar()}
-          size="icon"
-          title={isStarred ? '取消标星' : '加入默认生词本'}
-          type="button"
-          variant="ghost"
-        >
-          {togglingStar ? (
-            <LoaderCircle className="animate-spin" />
-          ) : (
-            <Star className={isStarred ? 'fill-amber-400 text-amber-400' : ''} />
-          )}
-        </Button>
-      )}
       <Button
         aria-label={pronunciationState === 'idle' ? '发音' : '停止发音'}
         className="no-drag size-7 shrink-0"
@@ -113,6 +62,20 @@ export function DictionaryExplanation({ payload }: Props): React.JSX.Element {
           <Volume2 />
         )}
       </Button>
+      {payload.aiEnabled && Boolean(wordKey) && (
+        <Button
+          aria-label="AI 解释当前词"
+          className="no-drag size-7 shrink-0 p-0 text-[11px] font-semibold"
+          onClick={() => window.dictolSelectionExplanation.showAi()}
+          size="xs"
+          title="AI 解释当前词"
+          type="button"
+          variant="ghost"
+        >
+          AI
+        </Button>
+      )}
+      <ExplanationWordActions payload={payload} />
     </>
   )
 
@@ -120,6 +83,8 @@ export function DictionaryExplanation({ payload }: Props): React.JSX.Element {
     <>
       <SelectionExplanationHeader
         title={payload.word || '词典解释'}
+        onSearch={(word) => window.dictolSelectionExplanation.lookupWord(word)}
+        pinned={payload.pinned}
         subtitle={
           payload.dictionaryName && !hasDictionarySwitcher ? payload.dictionaryName : undefined
         }

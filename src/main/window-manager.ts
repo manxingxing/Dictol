@@ -35,6 +35,7 @@ export class WindowManager {
   customCssEditorPreviewView: WebContentsViewManager | undefined
   private observingNativeAppearance = false
   private selectionExplanationSwitcherVisible = false
+  private selectionExplanationPinned = false
   private updateSelectionExplanationViewBounds: (() => void) | undefined
 
   createMainWindow(): BrowserWindow {
@@ -223,7 +224,7 @@ export class WindowManager {
       return this.selectionToolbarWindow
     }
 
-    const initialSize = getSelectionToolbarWindowSize(false, process.platform)
+    const initialSize = getSelectionToolbarWindowSize(process.platform)
     const window = new BrowserWindow({
       ...initialSize,
       show: false,
@@ -468,6 +469,19 @@ export class WindowManager {
     if (this.selectionExplanationSwitcherVisible === visible) return
     this.selectionExplanationSwitcherVisible = visible
     this.updateSelectionExplanationViewBounds?.()
+  }
+
+  isSelectionExplanationPinned(): boolean {
+    return this.selectionExplanationPinned
+  }
+
+  toggleSelectionExplanationPinned(): boolean {
+    this.selectionExplanationPinned = !this.selectionExplanationPinned
+    return this.selectionExplanationPinned
+  }
+
+  resetSelectionExplanationPinned(): void {
+    this.selectionExplanationPinned = false
   }
 
   hasVisibleSelectionSurface(): boolean {

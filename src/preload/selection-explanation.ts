@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld(
   'dictolSelectionExplanation',
   Object.freeze({
     tts: createTtsPlayback(),
+    nativeRoundedWindow: process.platform === 'darwin',
     onUpdate: (callback: Subscriber): (() => void) => {
       subscribers.add(callback)
       if (latestPayload) callback(latestPayload)
@@ -26,9 +27,12 @@ contextBridge.exposeInMainWorld(
     },
     loadingReady: (requestId: number): void =>
       ipcRenderer.send('selection-explanation:loading-ready', requestId),
+    lookupWord: (word: string): void => ipcRenderer.send('selection-explanation:lookup-word', word),
+    showAi: (): void => ipcRenderer.send('selection-explanation:show-ai'),
     selectDictionary: (dictionaryId: string): void =>
       ipcRenderer.send('selection-explanation:select-dictionary', dictionaryId),
     close: (): void => ipcRenderer.send('selection-explanation:close'),
+    togglePin: (): void => ipcRenderer.send('selection-explanation:toggle-pin'),
     openInMain: (): void => ipcRenderer.send('selection-explanation:open-in-main'),
     isStarred: (word: string): Promise<boolean> =>
       ipcRenderer.invoke('selection-explanation:is-starred', word),

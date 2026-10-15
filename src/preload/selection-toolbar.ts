@@ -23,7 +23,6 @@ contextBridge.exposeInMainWorld(
     },
     lookupInMain: (): void => ipcRenderer.send('selection-toolbar:lookup-in-main'),
     explain: (): void => ipcRenderer.send('selection-toolbar:explain'),
-    aiExplain: (): void => ipcRenderer.send('selection-toolbar:ai-explain'),
     copy: (): void => ipcRenderer.send('selection-toolbar:copy'),
     google: (): void => ipcRenderer.send('selection-toolbar:google'),
     openMenu: (): void => ipcRenderer.send('selection-toolbar:open-menu'),

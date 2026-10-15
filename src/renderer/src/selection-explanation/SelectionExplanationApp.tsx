@@ -10,10 +10,14 @@ declare global {
   interface Window {
     dictolSelectionExplanation: {
       tts: TtsPlayback
+      nativeRoundedWindow: boolean
       onUpdate: (callback: (payload: SelectionExplanationPayload) => void) => () => void
       loadingReady: (requestId: number) => void
+      lookupWord: (word: string) => void
+      showAi: () => void
       selectDictionary: (dictionaryId: string) => void
       close: () => void
+      togglePin: () => void
       openInMain: () => void
       isStarred: (word: string) => Promise<boolean>
       toggleStar: (word: string) => Promise<void>
@@ -35,7 +39,9 @@ export function SelectionExplanationApp(): React.JSX.Element {
   useEffect(() => window.dictolSelectionExplanation.onUpdate(setPayload), [])
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden rounded-xl border border-border bg-background text-foreground shadow-xl">
+    <div
+      className={`selection-explanation-window${window.dictolSelectionExplanation.nativeRoundedWindow ? ' native-rounded-window' : ''}`}
+    >
       {payload.mode === 'ai' ? (
         <AiExplanation payload={payload} />
       ) : (

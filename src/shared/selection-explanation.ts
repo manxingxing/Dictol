@@ -13,10 +13,13 @@ export type SelectionExplanationPayload = {
   mode: 'dictionary' | 'ai'
   requestId: number
   word: string
+  aiEnabled?: boolean
+  pinned?: boolean
   dictionaryName?: string
   dictionaries?: SelectionExplanationDictionary[]
   activeDictionaryId?: string
   state: 'loading' | 'refreshing' | 'empty' | 'content' | 'error'
   content?: string
+  complete?: boolean
   message?: string
 }

@@ -6,15 +6,10 @@ import {
   screen,
   shell,
   type IpcMainEvent,
-  type IpcMainInvokeEvent,
   type Point,
-  type Rectangle
+  type WebContents
 } from 'electron'
-import type { DictionaryMatch } from '../db-service'
-import type {
-  SelectionExplanationDictionary,
-  SelectionExplanationPayload
-} from '../../shared/selection-explanation'
+import type { AppRuntime } from '../app-runtime'
 import {
   getSelectionToolbarWindowSize,
   SELECTION_TOOLBAR_WINDOWS_SHADOW_MARGIN,
@@ -27,97 +22,104 @@ import type {
   MouseWheelListener,
   SelectionListener
 } from '../selection-hook-service'
-import type { WebContentsViewManager } from '../web-contents-view-manager'
-import { createDictionaryEntryUrl, parseDictionaryEntryNavigation } from '../dictionary-entry-url'
-import { resolveEntryLinkWithAnchor } from '../resolve-entry-link'
 import { resolveRendererUrl } from '../output-path'
 import { hideSelectionWindow, showSelectionWindowInactive } from '../selection-window-behavior'
 import { NativeSelectionPanel } from '../native-selection-panel'
 import type { SelectionSurfaceWindow } from '../window-manager'
 import { BaseController } from './base-controller'
+import type { SelectionExplanationController } from './selection-explanation'
+import {
+  clamp,
+  containsPoint,
+  createCursorAnchor,
+  fitNearSelection,
+  insetRectangle,
+  toDisplayAnchor,
+  toDisplayPoint,
+  type SelectionAnchor
+} from '../lib/selection-position'
 
 const MAX_SELECTION_LENGTH = 200
-const MOUSE_ANCHOR_GAP = 16
-const SELECTION_ANCHOR_GAP = 4
-const EXPLANATION_SELECTION_GAP = 8
-const EXPLANATION_POINTER_OFFSET = 12
-const EXPLANATION_SCREEN_MARGIN = 12
-const EXPLANATION_MIN_WIDTH = 360
-const EXPLANATION_MIN_HEIGHT = 300
 const NATIVE_MENU_GAP = 6
 const TOOLBAR_INACTIVITY_TIMEOUT = 5_000
-const INVALID_COORDINATE = -99_999
-const POSITION_LEVEL = {
-  NONE: 0,
-  MOUSE_SINGLE: 1,
-  MOUSE_DUAL: 2,
-  SEL_FULL: 3,
-  SEL_DETAILED: 4
-} as const
-
-type SelectionAnchor = {
-  centerX: number
-  top: number
-  bottom: number
-  gap: number
-  posLevel: CapturedSelection['selection']['posLevel']
-}
-
-type ExplanationSize = {
-  width: number
-  height: number
-}
-
-type PendingExplanationLoading = {
-  requestId: number
-  resolve: () => void
-}
-
 export class SelectionToolbarController extends BaseController {
+  constructor(
+    runtime: AppRuntime,
+    private readonly explanation: SelectionExplanationController
+  ) {
+    super(runtime)
+  }
+
+  private dismissForMainExplanation(): void {
+    this.currentCapture = undefined
+    this.hideToolbar()
+  }
+
   private currentCapture: CapturedSelection | undefined
   private pendingToolbarCapture: CapturedSelection | undefined
   private anchor: SelectionAnchor | undefined
   private toolbarWebContentsId: number | undefined
-  private explanationWebContentsId: number | undefined
   private toolbarLoaded = false
   // Windows keeps the transparent native window shown at zero opacity to avoid
   // DWM flicker, so native isVisible() is not the toolbar's logical visibility.
   private toolbarVisible = false
   private toolbarRenderRequestId = 0
   private pendingToolbarRenderRequestId: number | undefined
-  private explanationLoaded = false
-  private explanationPayload: SelectionExplanationPayload | undefined
-  private explanationDictionaryMatches: DictionaryMatch[] = []
-  private loadedExplanationDictionaryId: string | undefined
-  private pendingExplanationLoading: PendingExplanationLoading | undefined
-  private lookupVersion = 0
-  private preferredExplanationSize: ExplanationSize = { width: 520, height: 600 }
-  private appliedExplanationSize: ExplanationSize | undefined
   private inactivityTimer: ReturnType<typeof setTimeout> | undefined
   private nativeMenu: Menu | undefined
   private nativeMenuOpen = false
-  private activeAiRequestId: string | undefined
   private toolbarDismissSubscriptions: Array<() => void> = []
   private globalMouseDownUnsubscribe: (() => void) | undefined
 
   override mount(): void {
+    this.explanation.setOnVisibilityChange(this.refreshDismissSubscription)
     this.runtime.selectionHookService.onSelection(this.handleSelection)
     ipcMain.on('selection-toolbar:lookup-in-main', this.lookupInMain)
     ipcMain.on('selection-toolbar:explain', this.explain)
-    ipcMain.on('selection-toolbar:ai-explain', this.aiExplain)
     ipcMain.on('selection-toolbar:copy', this.copy)
     ipcMain.on('selection-toolbar:google', this.google)
     ipcMain.on('selection-toolbar:open-menu', this.openNativeMenu)
     ipcMain.on('selection-toolbar:activity', this.handleToolbarActivity)
     ipcMain.on('selection-toolbar:rendered', this.handleToolbarRendered)
+    ipcMain.on('selection-explanation:show-from-main', this.showExplanationFromMain)
     ipcMain.on('selection-explanation:close', this.closeExplanation)
-    ipcMain.on('selection-explanation:loading-ready', this.handleExplanationLoadingReady)
-    ipcMain.on('selection-explanation:select-dictionary', this.selectExplanationDictionary)
+    ipcMain.on('selection-explanation:toggle-pin', this.toggleExplanationPin)
     ipcMain.on('selection-explanation:open-in-main', this.openExplanationInMain)
-    ipcMain.on('selection-explanation:lookup-word', this.lookupFromExplanation)
-    ipcMain.on('selection-explanation:copy-text', this.copyFromExplanation)
-    ipcMain.handle('selection-explanation:is-starred', this.isWordStarred)
-    ipcMain.handle('selection-explanation:toggle-star', this.toggleWordStar)
+    ipcMain.on('selection-explanation:loading-ready', this.explanationLoadingReady)
+  }
+
+  private readonly showExplanationFromMain = (event: IpcMainEvent, word: unknown): void => {
+    const mainWindow = this.runtime.mainWindow
+    if (!mainWindow || mainWindow.webContents.id !== event.sender.id || typeof word !== 'string') {
+      return
+    }
+    const normalizedWord = word.trim()
+    if (!normalizedWord || normalizedWord.length > MAX_SELECTION_LENGTH) return
+
+    this.explanation.setAnchor(createCursorAnchor())
+    this.dismissForMainExplanation()
+    void this.explanation.showExplanation(normalizedWord)
+  }
+
+  private readonly closeExplanation = (event: IpcMainEvent): void => {
+    if (this.acceptsExplanationSender(event)) this.explanation.hideExplanation()
+  }
+
+  private readonly toggleExplanationPin = (event: IpcMainEvent): void => {
+    if (!this.acceptsExplanationSender(event)) return
+    this.explanation.setPinned(this.runtime.windowManager.toggleSelectionExplanationPinned())
+  }
+
+  private readonly openExplanationInMain = (event: IpcMainEvent): void => {
+    if (!this.acceptsExplanationSender(event)) return
+    const lookup = this.explanation.currentLookup
+    if (!lookup) return
+    this.explanation.hideExplanation()
+    this.openWordInMain(lookup.word, lookup.dictionaryId)
+  }
+
+  private readonly explanationLoadingReady = (event: IpcMainEvent, requestId: number): void => {
+    if (this.acceptsExplanationSender(event)) this.explanation.markLoadingReady(requestId)
   }
 
   private readonly handleSelection: SelectionListener = (capture): void => {
@@ -127,29 +129,34 @@ export class SelectionToolbarController extends BaseController {
     if (capture.source === 'shortcut') {
       this.currentCapture = capture
       this.anchor = toDisplayAnchor(capture)
+      this.explanation.setAnchor(this.anchor)
       this.hideToolbar()
-      void this.showExplanation(word)
+      void this.explanation.showExplanation(word)
       return
     }
     // 在应用内部选择文本，不触发toolbar
-    if (capture.source !== 'selection' || BrowserWindow.getFocusedWindow() || this.currentToolbarWindow?.isFocused()) return
+    if (
+      capture.source !== 'selection' ||
+      BrowserWindow.getFocusedWindow() ||
+      this.hasFocusedSelectionWindow()
+    ) {
+      return
+    }
 
     this.currentCapture = capture
     this.pendingToolbarCapture = capture
     this.anchor = toDisplayAnchor(capture)
-    this.hideExplanation()
+    this.explanation.setAnchor(this.anchor)
 
     const window = this.initializeToolbarWindow()
-    // 根据AI是否启用，决定是否显示“AI解释”按钮，并计算toolbar尺寸
-    const toolbarSize = this.syncToolbarSize(window, this.runtime.appConfig.load().aiLookup.enabled)
-    this.positionToolbar(window, toolbarSize.height)
+    const toolbarSize = this.syncToolbarSize(window)
+    this.positionToolbar(window, toolbarSize)
     if (this.toolbarLoaded) this.showPendingToolbar(window)
-    this.prewarmExplanationWindow()
+    this.explanation.prewarmExplanationWindow()
   }
 
   private readonly handleGlobalMouseDown: MouseDownListener = (event): void => {
     if (this.nativeMenu || this.nativeMenuOpen) return
-
     const point = toDisplayPoint(event)
     this.hideSelectionWindowsOutside(point)
   }
@@ -169,16 +176,7 @@ export class SelectionToolbarController extends BaseController {
     if (!this.acceptsToolbarSender(event) || !this.currentCapture) return
     const word = this.currentCapture.selection.text.trim()
     this.hideToolbar()
-    void this.showExplanation(word)
-  }
-
-  private readonly aiExplain = (event: IpcMainEvent): void => {
-    if (!this.acceptsToolbarSender(event) || !this.currentCapture) return
-    if (!this.runtime.appConfig.load().aiLookup.enabled) return
-    const word = this.currentCapture.selection.text.trim()
-    if (!word) return
-    this.hideToolbar()
-    void this.showAiExplanation(word)
+    void this.explanation.showExplanation(word)
   }
 
   private readonly lookupInMain = (event: IpcMainEvent): void => {
@@ -186,7 +184,7 @@ export class SelectionToolbarController extends BaseController {
     const word = this.currentCapture?.selection.text.trim()
     if (!word || word.length > MAX_SELECTION_LENGTH) return
 
-    this.hideToolbar()
+    this.hideToolbar({ activateMainWindow: true })
     this.openWordInMain(word)
   }
 
@@ -305,108 +303,6 @@ export class SelectionToolbarController extends BaseController {
     this.completeToolbarShow()
   }
 
-  private readonly closeExplanation = (event: IpcMainEvent): void => {
-    if (this.acceptsExplanationSender(event)) this.hideExplanation()
-  }
-
-  private readonly handleExplanationLoadingReady = (
-    event: IpcMainEvent,
-    requestId: number
-  ): void => {
-    if (
-      !this.acceptsExplanationSender(event) ||
-      !Number.isSafeInteger(requestId) ||
-      requestId !== this.lookupVersion ||
-      requestId !== this.pendingExplanationLoading?.requestId
-    ) {
-      return
-    }
-
-    const pending = this.pendingExplanationLoading
-    this.pendingExplanationLoading = undefined
-    pending.resolve()
-  }
-
-  private readonly openExplanationInMain = (event: IpcMainEvent): void => {
-    if (!this.acceptsExplanationSender(event)) return
-    const word = this.explanationPayload?.word.trim()
-    if (!word) return
-    const dictionaryId =
-      this.explanationPayload?.mode === 'dictionary'
-        ? this.explanationPayload.activeDictionaryId
-        : undefined
-    this.hideExplanation()
-    this.openWordInMain(word, dictionaryId)
-  }
-
-  private readonly selectExplanationDictionary = (
-    event: IpcMainEvent,
-    dictionaryId: string
-  ): void => {
-    if (
-      !this.acceptsExplanationSender(event) ||
-      typeof dictionaryId !== 'string' ||
-      this.explanationPayload?.mode !== 'dictionary'
-    ) {
-      return
-    }
-
-    const match = this.explanationDictionaryMatches.find(
-      (dictionary) => dictionary.dictionaryId === dictionaryId
-    )
-    if (!match) return
-    if (
-      this.explanationPayload.activeDictionaryId === dictionaryId &&
-      (this.explanationPayload.state === 'loading' ||
-        this.explanationPayload.state === 'refreshing' ||
-        this.explanationPayload.state === 'content')
-    ) {
-      return
-    }
-    void this.showExplanationDictionary(match)
-  }
-
-  private readonly isWordStarred = async (
-    event: IpcMainInvokeEvent,
-    word: string
-  ): Promise<boolean> => {
-    const normalizedWord = this.getCurrentExplanationWord(event, word)
-    if (!normalizedWord) return false
-    return await this.db.isWordStarred(normalizedWord)
-  }
-
-  private readonly toggleWordStar = async (
-    event: IpcMainInvokeEvent,
-    word: string
-  ): Promise<void> => {
-    const normalizedWord = this.getCurrentExplanationWord(event, word)
-    if (!normalizedWord) return
-    await this.db.toggleStarWord(normalizedWord)
-  }
-
-  private readonly lookupFromExplanation = (event: IpcMainEvent, word: string): void => {
-    if (!this.acceptsExplanationViewSender(event) || typeof word !== 'string') return
-    const normalizedWord = word.trim()
-    if (!normalizedWord || normalizedWord.length > MAX_SELECTION_LENGTH) return
-    const sourceDictionaryId =
-      this.explanationPayload?.mode === 'dictionary'
-        ? this.explanationPayload.activeDictionaryId
-        : undefined
-    void this.showExplanation(normalizedWord, sourceDictionaryId)
-  }
-
-  private readonly copyFromExplanation = (event: IpcMainEvent, text: string): void => {
-    if (
-      !this.acceptsExplanationViewSender(event) ||
-      typeof text !== 'string' ||
-      !text ||
-      text.length > 100_000
-    ) {
-      return
-    }
-    clipboard.writeText(text)
-  }
-
   private initializeToolbarWindow(): SelectionSurfaceWindow {
     const window = this.runtime.windowManager.createSelectionToolbarWindow()
     if (this.toolbarWebContentsId === window.webContents.id) return window
@@ -443,11 +339,10 @@ export class SelectionToolbarController extends BaseController {
       requestId,
       word: capture.selection.text.trim(),
       programName,
-      canExclude: Boolean(programName),
-      aiEnabled: this.runtime.appConfig.load().aiLookup.enabled
+      canExclude: Boolean(programName)
     }
-    const toolbarSize = this.syncToolbarSize(window, payload.aiEnabled)
-    this.positionToolbar(window, toolbarSize.height)
+    const toolbarSize = this.syncToolbarSize(window)
+    this.positionToolbar(window, toolbarSize)
     window.webContents.send('selection-toolbar:update', payload)
 
     if (process.platform === 'win32') {
@@ -470,16 +365,13 @@ export class SelectionToolbarController extends BaseController {
   private completeToolbarShow(): void {
     this.toolbarVisible = true
     this.subscribeToolbarDismissEvents()
-    this.syncGlobalMouseDownSubscription()
+    this.refreshDismissSubscription()
     this.scheduleToolbarAutoHide()
   }
 
   // 计算toolbar window的大小
-  private syncToolbarSize(
-    window: SelectionSurfaceWindow,
-    aiEnabled: boolean
-  ): { width: number; height: number } {
-    const size = getSelectionToolbarWindowSize(aiEnabled, process.platform)
+  private syncToolbarSize(window: SelectionSurfaceWindow): { width: number; height: number } {
+    const size = getSelectionToolbarWindowSize(process.platform)
     if (window.isDestroyed()) return size
     const [currentWidth, currentHeight] = window.getSize()
     if (currentWidth !== size.width || currentHeight !== size.height) {
@@ -523,12 +415,14 @@ export class SelectionToolbarController extends BaseController {
     this.toolbarVisible = false
     this.clearToolbarAutoHide()
     this.unsubscribeToolbarDismissEvents()
-    this.syncGlobalMouseDownSubscription()
+    this.refreshDismissSubscription()
   }
 
   // 在toolbar，弹窗外的点击事件会关闭toolbar
-  private readonly syncGlobalMouseDownSubscription = (): void => {
-    const shouldListen = Boolean(this.toolbarVisible || this.currentExplanationWindow?.isVisible())
+  refreshDismissSubscription = (): void => {
+    const shouldListen = Boolean(
+      this.toolbarVisible || this.explanation.isVisible
+    )
     if (shouldListen && !this.globalMouseDownUnsubscribe) {
       this.globalMouseDownUnsubscribe = this.runtime.selectionHookService.onMouseDown(
         this.handleGlobalMouseDown
@@ -540,449 +434,18 @@ export class SelectionToolbarController extends BaseController {
     this.globalMouseDownUnsubscribe = undefined
   }
 
-  private initializeExplanationWindow(): BrowserWindow {
-    const window = this.runtime.windowManager.createSelectionExplanationWindow()
-    if (this.explanationWebContentsId === window.webContents.id) return window
-    this.explanationWebContentsId = window.webContents.id
-    this.explanationLoaded = false
-
-    window.webContents.on('before-input-event', (event, input) => {
-      if (input.type !== 'keyDown' || input.key !== 'Escape') return
-      event.preventDefault()
-      this.hideExplanation()
-    })
-    window.on('resize', () => this.rememberExplanationSize(window))
-    window.on('hide', this.syncGlobalMouseDownSubscription)
-    window.on('closed', this.syncGlobalMouseDownSubscription)
-    window.webContents.on('did-finish-load', () => {
-      this.explanationLoaded = true
-      this.flushExplanationPayload()
-      if (
-        this.explanationPayload?.mode === 'ai' &&
-        this.explanationPayload.requestId === this.lookupVersion
-      ) {
-        this.showExplanationWindow(window)
-      }
-    })
-    window.webContents.on('will-navigate', (event) => event.preventDefault())
-    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-    this.configureExplanationView()
-
-    const load = window.loadURL(resolveRendererUrl('selection-explanation.html'))
-    void load.catch((error: unknown) =>
-      console.error('Failed to load selection explanation shell', error)
-    )
-    return window
-  }
-
-  private prewarmExplanationWindow(): void {
-    if (this.currentExplanationWindow) return
-    setImmediate(() => {
-      try {
-        this.initializeExplanationWindow()
-      } catch (error) {
-        console.error('Failed to prewarm selection explanation window', error)
-      }
-    })
-  }
-
-  private showExplanationWindow(window: BrowserWindow): void {
-    showSelectionWindowInactive(window, {
-      mainWindowToKeepHidden: this.runtime.mainWindow
-    })
-    this.syncGlobalMouseDownSubscription()
-  }
-
-  private configureExplanationView(): void {
-    const view = this.explanationView
-    view.webContents.on('before-input-event', (event, input) => {
-      if (input.type !== 'keyDown' || input.key !== 'Escape') return
-      event.preventDefault()
-      this.hideExplanation()
-    })
-    view.webContents.setWindowOpenHandler(({ url }) => {
-      if (url.startsWith('https://') || url.startsWith('http://')) {
-        void shell.openExternal(url).catch((error: unknown) => {
-          console.error('Failed to open dictionary external URL', { url, error })
-        })
-      }
-      return { action: 'deny' }
-    })
-    view.webContents.on('will-navigate', (event) => {
-      if (event.url.startsWith('dictol-entry://')) return
-      event.preventDefault()
-      const navigation = parseDictionaryEntryNavigation(event.url)
-      if (navigation) {
-        const version = ++this.lookupVersion
-        void resolveEntryLinkWithAnchor(navigation, (dictionaryId, term) =>
-          this.db.lookupDictionaryEntry(dictionaryId, term)
-        ).then(({ request }) => {
-          if (version === this.lookupVersion) {
-            this.showExplanation(request.word, request.sourceDictionaryId, request.anchor)
-          }
-        })
-      }
-    })
-  }
-
-  private async showExplanation(
-    word: string,
-    sourceDictionaryId?: string,
-    anchor?: string
-  ): Promise<void> {
-    const normalizedWord = word.trim()
-    if (!normalizedWord || normalizedWord.length > MAX_SELECTION_LENGTH) return
-
-    this.cancelAiExplanation()
-    this.explanationDictionaryMatches = []
-    this.loadedExplanationDictionaryId = undefined
-    this.runtime.windowManager.setSelectionExplanationSwitcherVisible(false)
-    const version = ++this.lookupVersion
-    const window = this.initializeExplanationWindow()
-    const keepWindowVisible = window.isVisible()
-    this.resolvePendingExplanationLoading()
-    const loadingReady = this.waitForExplanationLoading(version)
-    this.explanationView.hide()
-    this.updateExplanation({
-      mode: 'dictionary',
-      requestId: version,
-      word: normalizedWord,
-      state: 'loading'
-    })
-    this.positionExplanation(window)
-
-    try {
-      const startedAt = performance.now()
-      const lookupPromise = this.db
-        .lookupDictionaryEntryGroup(normalizedWord, this.runtime.selectionDictionaryGroupId)
-        .then(
-          (group) => {
-            console.debug('[DictionaryLookup] selection popup', {
-              term: normalizedWord,
-              takeMs: performance.now() - startedAt,
-              matched: Boolean(group)
-            })
-            return group
-          },
-          (error: unknown) => {
-            console.debug('[DictionaryLookup] selection popup', {
-              term: normalizedWord,
-              takeMs: performance.now() - startedAt,
-              matched: false,
-              failed: true
-            })
-            throw error
-          }
-        )
-      await loadingReady
-      if (version !== this.lookupVersion) return
-      if (!keepWindowVisible) this.showExplanationWindow(window)
-
-      const group = await lookupPromise
-      if (version !== this.lookupVersion) return
-      const matches = group?.dictionaries ?? []
-      const firstMatch =
-        matches.find((match) => match.dictionaryId === sourceDictionaryId) ?? matches[0]
-      if (!firstMatch) {
-        const hasReadyDictionary = (await this.db.listReadyDictionaries()).length > 0
-        if (version !== this.lookupVersion) return
-        this.explanationView.hide()
-        this.updateExplanation({
-          mode: 'dictionary',
-          requestId: version,
-          word: normalizedWord,
-          state: 'empty',
-          message: hasReadyDictionary
-            ? `所有词典中都没有找到“${normalizedWord}”的解释。`
-            : '还没有可用词典，请先在主应用中导入词典。'
-        })
-        return
-      }
-
-      this.explanationDictionaryMatches = matches
-      const dictionaries = this.getExplanationDictionaryOptions()
-      this.runtime.windowManager.setSelectionExplanationSwitcherVisible(dictionaries.length > 1)
-      this.updateExplanation({
-        mode: 'dictionary',
-        requestId: version,
-        word: normalizedWord,
-        dictionaryName: firstMatch.dictionaryName,
-        dictionaries,
-        activeDictionaryId: firstMatch.dictionaryId,
-        state: 'loading'
-      })
-      if (version !== this.lookupVersion) return
-      await this.loadExplanationEntry(
-        firstMatch.dictionaryId,
-        firstMatch.dictionaryName,
-        normalizedWord,
-        version,
-        dictionaries,
-        true,
-        anchor
-      )
-    } catch (error) {
-      if (version !== this.lookupVersion || isNavigationAborted(error)) return
-      console.error('Failed to show selection explanation', { word: normalizedWord, error })
-      this.explanationView.hide()
-      const dictionaries = this.getExplanationDictionaryOptions()
-      const activeDictionaryId = this.explanationPayload?.activeDictionaryId
-      this.updateExplanation({
-        mode: 'dictionary',
-        requestId: version,
-        word: normalizedWord,
-        dictionaryName: this.explanationPayload?.dictionaryName,
-        dictionaries: dictionaries.length > 0 ? dictionaries : undefined,
-        activeDictionaryId,
-        state: 'error',
-        message: '词条内容加载失败，请稍后再试。'
-      })
-    }
-  }
-
-  private showAiExplanation(word: string): void {
-    const normalizedWord = word.trim()
-    if (!normalizedWord) return
-
-    this.resolvePendingExplanationLoading()
-    this.explanationDictionaryMatches = []
-    this.loadedExplanationDictionaryId = undefined
-    this.runtime.windowManager.setSelectionExplanationSwitcherVisible(false)
-    const version = ++this.lookupVersion
-    const requestId = `selection-${version}`
-    this.cancelAiExplanation()
-    this.activeAiRequestId = requestId
-    const window = this.initializeExplanationWindow()
-    this.explanationView.hide()
-    this.updateExplanation({
-      mode: 'ai',
-      requestId: version,
-      word: normalizedWord,
-      state: 'loading'
-    })
-    this.positionExplanation(window)
-    if (this.explanationLoaded) this.showExplanationWindow(window)
-
-    let content = ''
-    this.runtime.aiLookupService.start(
-      requestId,
-      [{ role: 'user', content: normalizedWord }],
-      'selection-toolbar',
-      (event) => {
-        if (
-          (event.type === 'done' || event.type === 'error') &&
-          this.activeAiRequestId === requestId
-        ) {
-          this.activeAiRequestId = undefined
-        }
-        if (version !== this.lookupVersion) return
-        if (event.type === 'delta') {
-          content += event.text
-          this.updateExplanation({
-            mode: 'ai',
-            requestId: version,
-            word: normalizedWord,
-            state: 'content',
-            content
-          })
-        } else if (event.type === 'done') {
-          this.updateExplanation({
-            mode: 'ai',
-            requestId: version,
-            word: normalizedWord,
-            state: 'content',
-            content
-          })
-        } else {
-          this.updateExplanation({
-            mode: 'ai',
-            requestId: version,
-            word: normalizedWord,
-            state: 'error',
-            message: event.message
-          })
-        }
-      },
-      undefined,
-      { sourceText: normalizedWord }
-    )
-  }
-
-  private async showExplanationDictionary(match: DictionaryMatch): Promise<void> {
-    const word = this.explanationPayload?.word.trim()
-    if (!word) return
-
-    const version = ++this.lookupVersion
-    this.resolvePendingExplanationLoading()
-    this.cancelAiExplanation()
-    const dictionaries = this.getExplanationDictionaryOptions()
-    this.updateExplanation({
-      mode: 'dictionary',
-      requestId: version,
-      word,
-      dictionaryName: match.dictionaryName,
-      dictionaries,
-      activeDictionaryId: match.dictionaryId,
-      state: 'refreshing'
-    })
-
-    try {
-      if (version !== this.lookupVersion) return
-      await this.loadExplanationEntry(
-        match.dictionaryId,
-        match.dictionaryName,
-        word,
-        version,
-        dictionaries,
-        false
-      )
-    } catch (error) {
-      if (version !== this.lookupVersion || isNavigationAborted(error)) return
-      console.error('Failed to switch selection explanation dictionary', {
-        word,
-        dictionaryId: match.dictionaryId,
-        error
-      })
-      const loadedDictionary = this.explanationDictionaryMatches.find(
-        (dictionary) => dictionary.dictionaryId === this.loadedExplanationDictionaryId
-      )
-      this.updateExplanation(
-        loadedDictionary
-          ? {
-              mode: 'dictionary',
-              requestId: version,
-              word,
-              dictionaryName: loadedDictionary.dictionaryName,
-              dictionaries,
-              activeDictionaryId: loadedDictionary.dictionaryId,
-              state: 'content'
-            }
-          : {
-              mode: 'dictionary',
-              requestId: version,
-              word,
-              dictionaryName: match.dictionaryName,
-              dictionaries,
-              activeDictionaryId: match.dictionaryId,
-              state: 'error',
-              message: '该词典的词条内容加载失败，请稍后再试。'
-            }
-      )
-    }
-  }
-
-  private async loadExplanationEntry(
-    dictionaryId: string,
-    dictionaryName: string,
-    word: string,
-    version: number,
-    dictionaries: SelectionExplanationDictionary[],
-    recordQuery: boolean,
-    anchor?: string
-  ): Promise<void> {
-    const view = this.explanationView
-    const url = createDictionaryEntryUrl(dictionaryId, word, { anchor })
-    let shown = false
-    const showLoadedEntry = (): void => {
-      if (shown || version !== this.lookupVersion || view.webContents.getURL() !== url) return
-      shown = true
-      this.updateExplanation({
-        mode: 'dictionary',
-        requestId: version,
-        word,
-        dictionaryName,
-        dictionaries,
-        activeDictionaryId: dictionaryId,
-        state: 'content'
-      })
-      view.show()
-      this.loadedExplanationDictionaryId = dictionaryId
-      if (recordQuery) this.recordSuccessfulQuery(word)
-    }
-    const handleDomReady = (): void => showLoadedEntry()
-    view.webContents.on('dom-ready', handleDomReady)
-
-    try {
-      await view.loadURL(url)
-      showLoadedEntry()
-    } finally {
-      view.webContents.off('dom-ready', handleDomReady)
-    }
-  }
-
-  private recordSuccessfulQuery(word: string): void {
-    void this.db
-      .recordQueryHistory(word)
-      .then(() => {
-        const mainWindow = this.runtime.mainWindow
-        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
-          mainWindow.webContents.send('query-history:changed')
-        }
-      })
-      .catch((error: unknown) => {
-        console.error('Failed to record selection query history', { word, error })
-      })
-  }
-
-  private getExplanationDictionaryOptions(): SelectionExplanationDictionary[] {
-    return this.explanationDictionaryMatches.map((dictionary) => ({
-      dictionaryId: dictionary.dictionaryId,
-      dictionaryName: dictionary.dictionaryName,
-      dictionaryIconUrl: dictionary.dictionaryIconUrl
-    }))
-  }
-
-  private updateExplanation(payload: SelectionExplanationPayload): void {
-    this.explanationPayload = payload
-    this.flushExplanationPayload()
-  }
-
-  private waitForExplanationLoading(requestId: number): Promise<void> {
-    return new Promise((resolve) => {
-      this.pendingExplanationLoading = { requestId, resolve }
-    })
-  }
-
-  private resolvePendingExplanationLoading(): void {
-    const pending = this.pendingExplanationLoading
-    this.pendingExplanationLoading = undefined
-    pending?.resolve()
-  }
-
-  private flushExplanationPayload(): void {
-    const window = this.currentExplanationWindow
-    if (!window || !this.explanationLoaded || !this.explanationPayload) return
-    window.webContents.send('selection-explanation:update', this.explanationPayload)
-  }
-
-  private positionToolbar(window: SelectionSurfaceWindow, height: number): void {
+  private positionToolbar(
+    window: SelectionSurfaceWindow,
+    size: { width: number; height: number }
+  ): void {
     const anchor = this.anchor ?? createCursorAnchor()
     const shadowMargin = getToolbarShadowMargin()
     const bounds = fitNearSelection(
       { ...anchor, gap: anchor.gap - shadowMargin },
-      window.getBounds().width,
-      height
+      size.width,
+      size.height
     )
     window.setBounds(bounds, false)
-  }
-
-  private positionExplanation(window: BrowserWindow): void {
-    const anchor = this.anchor ?? createCursorAnchor()
-    const bounds = fitExplanationNearSelection(anchor, this.preferredExplanationSize)
-    this.appliedExplanationSize = { width: bounds.width, height: bounds.height }
-    window.setBounds(bounds, false)
-  }
-
-  private rememberExplanationSize(window: BrowserWindow): void {
-    if (window.isDestroyed()) return
-    const [width, height] = window.getSize()
-    const appliedSize = this.appliedExplanationSize
-    this.appliedExplanationSize = undefined
-    if (appliedSize?.width === width && appliedSize.height === height) return
-    this.preferredExplanationSize = {
-      width: Math.max(EXPLANATION_MIN_WIDTH, width),
-      height: Math.max(EXPLANATION_MIN_HEIGHT, height)
-    }
   }
 
   private hideSelectionWindowsOutside(point: Point): void {
@@ -995,53 +458,7 @@ export class SelectionToolbarController extends BaseController {
       this.hideToolbar()
     }
 
-    const explanation = this.currentExplanationWindow
-    if (explanation?.isVisible() && !containsPoint(explanation.getBounds(), point)) {
-      this.hideExplanation()
-    }
-  }
-
-  private acceptsToolbarSender(event: IpcMainEvent): boolean {
-    const window = this.currentToolbarWindow
-    return Boolean(window && window.webContents.id === event.sender.id)
-  }
-
-  private hideToolbar(): void {
-    this.pendingToolbarCapture = undefined
-    this.pendingToolbarRenderRequestId = undefined
-    const window = this.currentToolbarWindow
-    if (process.platform === 'win32' && window?.isVisible()) {
-      // Keep the native surface alive and click-through; the next renderer frame
-      // can be revealed by opacity without another hide/show compositor cycle.
-      window.setIgnoreMouseEvents(true)
-      window.setOpacity(0)
-      this.handleToolbarHidden()
-    } else if (window?.isVisible()) {
-      hideSelectionWindow(window)
-    } else {
-      this.handleToolbarHidden()
-    }
-  }
-
-  private hideExplanation(): void {
-    this.lookupVersion += 1
-    this.cancelAiExplanation()
-    this.resolvePendingExplanationLoading()
-    this.explanationDictionaryMatches = []
-    this.loadedExplanationDictionaryId = undefined
-    this.runtime.windowManager.setSelectionExplanationSwitcherVisible(false)
-    const window = this.currentExplanationWindow
-    if (window?.isVisible()) {
-      hideSelectionWindow(window)
-    } else {
-      this.syncGlobalMouseDownSubscription()
-    }
-  }
-
-  private cancelAiExplanation(): void {
-    if (!this.activeAiRequestId) return
-    this.runtime.aiLookupService.cancel(this.activeAiRequestId)
-    this.activeAiRequestId = undefined
+    this.explanation.hideIfOutside(point)
   }
 
   private openWordInMain(word: string, dictionaryId?: string): void {
@@ -1052,7 +469,6 @@ export class SelectionToolbarController extends BaseController {
 
     this.runtime.activateMainWindow()
     const mainWindow = this.runtime.mainWindow
-
     if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
 
     const sendLookup = (): void => {
@@ -1060,7 +476,7 @@ export class SelectionToolbarController extends BaseController {
         mainWindow.webContents.send('app:search-request', {
           term: word,
           source: 'selection',
-          ...(dictionaryId ? { dictionaryId: dictionaryId } : {})
+          ...(dictionaryId ? { dictionaryId } : {})
         })
       }
     }
@@ -1071,31 +487,31 @@ export class SelectionToolbarController extends BaseController {
     }
   }
 
-  private acceptsExplanationSender(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
-    const window = this.currentExplanationWindow
+  private acceptsExplanationSender(event: IpcMainEvent): boolean {
+    return Boolean(this.explanation.currentWindow?.webContents.id === event.sender.id)
+  }
+
+  private acceptsToolbarSender(event: { sender: WebContents }): boolean {
+    const window = this.currentToolbarWindow
     return Boolean(window && window.webContents.id === event.sender.id)
   }
 
-  private getCurrentExplanationWord(
-    event: IpcMainEvent | IpcMainInvokeEvent,
-    word: unknown
-  ): string | undefined {
-    if (!this.acceptsExplanationSender(event) || typeof word !== 'string') return undefined
-    const normalizedWord = word.trim()
-    if (!normalizedWord || normalizedWord.length > MAX_SELECTION_LENGTH) return undefined
-    if (
-      this.explanationPayload?.mode !== 'dictionary' ||
-      this.explanationPayload.state !== 'content' ||
-      this.explanationPayload.word.trim() !== normalizedWord
-    ) {
-      return undefined
+  private hideToolbar(options: { activateMainWindow?: boolean } = {}): void {
+    this.pendingToolbarCapture = undefined
+    this.pendingToolbarRenderRequestId = undefined
+    const window = this.currentToolbarWindow
+    if (process.platform === 'win32' && window?.isVisible()) {
+      // Keep the native surface alive and click-through; the next renderer frame
+      // can be revealed by opacity without another hide/show compositor cycle.
+      window.setIgnoreMouseEvents(true)
+      window.setOpacity(0)
+      this.handleToolbarHidden()
+    } else if (window?.isVisible()) {
+      if (options.activateMainWindow) window.hide()
+      else hideSelectionWindow(window)
+    } else {
+      this.handleToolbarHidden()
     }
-    return normalizedWord
-  }
-
-  private acceptsExplanationViewSender(event: IpcMainEvent): boolean {
-    const view = this.runtime.windowManager.selectionExplanationView
-    return Boolean(view && !view.isDestroyed && view.acceptsSender(event.sender.id))
   }
 
   private get currentToolbarWindow(): SelectionSurfaceWindow | undefined {
@@ -1103,181 +519,14 @@ export class SelectionToolbarController extends BaseController {
     return window && !window.isDestroyed() ? window : undefined
   }
 
-  private get currentExplanationWindow(): BrowserWindow | undefined {
-    const window = this.runtime.windowManager.selectionExplanationWindow
-    return window && !window.isDestroyed() ? window : undefined
-  }
-
-  private get explanationView(): WebContentsViewManager {
-    const view = this.runtime.windowManager.selectionExplanationView
-    if (!view || view.isDestroyed) throw new Error('SelectionExplanationView 尚未初始化')
-    return view
-  }
-}
-
-function toDisplayAnchor(capture: CapturedSelection): SelectionAnchor {
-  const selection = capture.selection
-
-  switch (selection.posLevel) {
-    case POSITION_LEVEL.MOUSE_SINGLE:
-    case POSITION_LEVEL.MOUSE_DUAL:
-      return createMouseAnchor(selection)
-    case POSITION_LEVEL.SEL_FULL:
-    case POSITION_LEVEL.SEL_DETAILED:
-      return createSelectionAnchor(selection)
-    case POSITION_LEVEL.NONE:
-    default:
-      return createCursorAnchor()
-  }
-}
-
-function createMouseAnchor(selection: CapturedSelection['selection']): SelectionAnchor {
-  return isValidPoint(selection.mousePosEnd)
-    ? toDisplayCoordinates(
-        pointToAnchor(selection.mousePosEnd, MOUSE_ANCHOR_GAP, selection.posLevel)
-      )
-    : createCursorAnchor()
-}
-
-function createSelectionAnchor(selection: CapturedSelection['selection']): SelectionAnchor {
-  if (!isValidPoint(selection.endBottom)) return createMouseAnchor(selection)
-
-  const top = isValidPoint(selection.endTop) ? selection.endTop.y : selection.endBottom.y
-  return toDisplayCoordinates({
-    centerX: selection.endBottom.x,
-    top: Math.min(top, selection.endBottom.y),
-    bottom: Math.max(top, selection.endBottom.y),
-    gap: SELECTION_ANCHOR_GAP,
-    posLevel: selection.posLevel
-  })
-}
-
-function createCursorAnchor(): SelectionAnchor {
-  return pointToAnchor(screen.getCursorScreenPoint(), MOUSE_ANCHOR_GAP, POSITION_LEVEL.NONE)
-}
-
-function isValidPoint(point: Point): boolean {
-  return (
-    Number.isFinite(point.x) &&
-    Number.isFinite(point.y) &&
-    point.x !== INVALID_COORDINATE &&
-    point.y !== INVALID_COORDINATE
-  )
-}
-
-function toDisplayCoordinates(anchor: SelectionAnchor): SelectionAnchor {
-  if (process.platform === 'darwin') {
-    return {
-      centerX: Math.round(anchor.centerX),
-      top: Math.round(anchor.top),
-      bottom: Math.round(anchor.bottom),
-      gap: anchor.gap,
-      posLevel: anchor.posLevel
-    }
-  }
-
-  const top = screen.screenToDipPoint({ x: Math.round(anchor.centerX), y: Math.round(anchor.top) })
-  const bottom = screen.screenToDipPoint({
-    x: Math.round(anchor.centerX),
-    y: Math.round(anchor.bottom)
-  })
-  return {
-    centerX: bottom.x,
-    top: Math.min(top.y, bottom.y),
-    bottom: Math.max(top.y, bottom.y),
-    gap: anchor.gap,
-    posLevel: anchor.posLevel
-  }
-}
-
-function toDisplayPoint(point: Point): Point {
-  if (!isValidPoint(point)) return screen.getCursorScreenPoint()
-
-  const roundedPoint = { x: Math.round(point.x), y: Math.round(point.y) }
-  return process.platform === 'darwin' ? roundedPoint : screen.screenToDipPoint(roundedPoint)
-}
-
-function pointToAnchor(
-  point: Point,
-  gap = SELECTION_ANCHOR_GAP,
-  posLevel: CapturedSelection['selection']['posLevel'] = POSITION_LEVEL.NONE
-): SelectionAnchor {
-  return { centerX: point.x, top: point.y, bottom: point.y, gap, posLevel }
-}
-
-function fitNearSelection(anchor: SelectionAnchor, width: number, height: number): Rectangle {
-  const anchorPoint = { x: anchor.centerX, y: anchor.bottom }
-  const workArea = screen.getDisplayNearestPoint(anchorPoint).workArea
-  const workAreaBottom = workArea.y + workArea.height
-  const preferredX = Math.round(anchor.centerX - width / 2)
-  const belowY = Math.round(anchor.bottom + anchor.gap)
-  const aboveY = Math.round(anchor.top - height - anchor.gap)
-  const x = clamp(preferredX, workArea.x, workArea.x + workArea.width - width)
-  const spaceBelow = workAreaBottom - belowY
-  const spaceAbove = anchor.top - anchor.gap - workArea.y
-  const preferredY = spaceBelow >= height || spaceBelow >= spaceAbove ? belowY : aboveY
-  const y = clamp(preferredY, workArea.y, workAreaBottom - height)
-  return { x, y, width, height }
-}
-
-function fitExplanationNearSelection(
-  anchor: SelectionAnchor,
-  preferredSize: ExplanationSize
-): Rectangle {
-  const anchorPoint = { x: anchor.centerX, y: anchor.bottom }
-  const workArea = screen.getDisplayNearestPoint(anchorPoint).workArea
-  const safeLeft = workArea.x + EXPLANATION_SCREEN_MARGIN
-  const safeTop = workArea.y + EXPLANATION_SCREEN_MARGIN
-  const safeRight = workArea.x + workArea.width - EXPLANATION_SCREEN_MARGIN
-  const safeBottom = workArea.y + workArea.height - EXPLANATION_SCREEN_MARGIN
-  const availableWidth = Math.max(1, safeRight - safeLeft)
-  const availableHeight = Math.max(1, safeBottom - safeTop)
-  const width = Math.min(Math.max(preferredSize.width, EXPLANATION_MIN_WIDTH), availableWidth)
-  const height = Math.min(Math.max(preferredSize.height, EXPLANATION_MIN_HEIGHT), availableHeight)
-  const usesSelectionPosition = hasSelectionPosition(anchor.posLevel)
-  const gap = usesSelectionPosition ? EXPLANATION_SELECTION_GAP : MOUSE_ANCHOR_GAP
-  const preferredX = Math.round(
-    anchor.centerX + (usesSelectionPosition ? 0 : EXPLANATION_POINTER_OFFSET)
-  )
-  const preferredY = Math.round(anchor.bottom + gap)
-  const x = clamp(preferredX, safeLeft, safeRight - width)
-  const y = clamp(preferredY, safeTop, safeBottom - height)
-  return { x, y, width, height }
-}
-
-function hasSelectionPosition(posLevel: CapturedSelection['selection']['posLevel']): boolean {
-  return posLevel === POSITION_LEVEL.SEL_FULL || posLevel === POSITION_LEVEL.SEL_DETAILED
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(Math.max(value, minimum), Math.max(minimum, maximum))
-}
-
-function containsPoint(bounds: Rectangle, point: Point): boolean {
-  return (
-    point.x >= bounds.x &&
-    point.x < bounds.x + bounds.width &&
-    point.y >= bounds.y &&
-    point.y < bounds.y + bounds.height
-  )
-}
-
-function insetRectangle(bounds: Rectangle, inset: number): Rectangle {
-  return {
-    x: bounds.x + inset,
-    y: bounds.y + inset,
-    width: Math.max(0, bounds.width - inset * 2),
-    height: Math.max(0, bounds.height - inset * 2)
+  private hasFocusedSelectionWindow(): boolean {
+    return [
+      this.currentToolbarWindow,
+      this.explanation.currentWindow
+    ].some((window) => window && !window.isDestroyed() && window.isFocused())
   }
 }
 
 function getToolbarShadowMargin(): number {
   return process.platform === 'win32' ? SELECTION_TOOLBAR_WINDOWS_SHADOW_MARGIN : 0
-}
-
-function isNavigationAborted(error: unknown): boolean {
-  if (error instanceof Error && error.message.includes('ERR_ABORTED')) return true
-  if (typeof error !== 'object' || error === null) return false
-  const navigationError = error as { code?: unknown; errno?: unknown }
-  return navigationError.code === 'ERR_ABORTED' || navigationError.errno === -3
 }

@@ -1,8 +1,10 @@
-import { LoaderCircle } from 'lucide-react'
+import { BookOpen, LoaderCircle } from 'lucide-react'
 
 import { AiRichText } from '@/components/AiRichText'
+import { Button } from '@/components/ui/button'
 import type { SelectionExplanationPayload } from '../../../shared/selection-explanation'
 import { SelectionExplanationHeader } from './SelectionExplanationHeader'
+import { ExplanationWordActions } from './ExplanationWordActions'
 
 type Props = {
   payload: SelectionExplanationPayload
@@ -11,7 +13,24 @@ type Props = {
 export function AiExplanation({ payload }: Props): React.JSX.Element {
   return (
     <>
-      <SelectionExplanationHeader title="AI 查词" subtitle={payload.word} />
+      <SelectionExplanationHeader
+        title={payload.word}
+        onSearch={(word) => window.dictolSelectionExplanation.lookupWord(word)}
+        pinned={payload.pinned}
+      >
+        <Button
+          aria-label="返回词典解释"
+          className="no-drag size-7 shrink-0"
+          onClick={() => window.dictolSelectionExplanation.lookupWord(payload.word)}
+          size="icon"
+          title="返回词典解释"
+          type="button"
+          variant="ghost"
+        >
+          <BookOpen />
+        </Button>
+        <ExplanationWordActions payload={payload} />
+      </SelectionExplanationHeader>
       {payload.state === 'content' ? (
         <main className="min-h-0 flex-1 overflow-y-auto px-4 py-4 text-sm leading-6">
           <AiRichText content={payload.content || 'AI 没有返回解释。'} />
