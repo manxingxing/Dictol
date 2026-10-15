@@ -149,7 +149,8 @@ export class TranslationController extends BaseController {
     )
     const y = clamp(bounds.y, workArea.y + margin, workArea.y + workArea.height - margin - height)
     if (height !== bounds.height || y !== bounds.y) {
-      window.setBounds({ ...bounds, y, height }, false)
+      // Only resize vertically; resubmitting getBounds().width can make frameless windows grow on Windows.
+      window.setBounds({ y, height }, false)
     }
   }
 
