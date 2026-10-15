@@ -29,8 +29,8 @@ export class QueryHistoryRepository {
       })
   }
 
-  /** 列出查询历史，最多 200 条 */
-  async listRecent(limit = 200): Promise<QueryHistoryListItem[]> {
+  /** 列出查询历史，最多 300 条 */
+  async listRecent(limit = 300): Promise<QueryHistoryListItem[]> {
     const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 500)
     return this.db
       .select({
@@ -50,7 +50,7 @@ export class QueryHistoryRepository {
   }
 
   /** 删除超过指定条数的旧记录，保留最近 N 条 */
-  async trimTo(maxRows = 200): Promise<void> {
+  async trimTo(maxRows = 300): Promise<void> {
     const safeMax = Math.max(Math.trunc(maxRows), 1)
 
     // 子查询：找到第 N 条记录的 last_queried_at / id，删除比它更旧的

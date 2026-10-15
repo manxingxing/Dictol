@@ -734,11 +734,11 @@ export class DBService {
     if (!normalizedTerm || normalizedTerm.length > 200) return
 
     await this.queryHistoryRepo.upsert(term.trim(), normalizedTerm)
-    await this.queryHistoryRepo.trimTo(200)
+    await this.queryHistoryRepo.trimTo(300)
   }
 
   async listQueryHistory(): Promise<QueryHistoryItem[]> {
-    const rows = await this.queryHistoryRepo.listRecent(200)
+    const rows = await this.queryHistoryRepo.listRecent(300)
 
     return rows.map((row) => ({
       id: String(row.id),
