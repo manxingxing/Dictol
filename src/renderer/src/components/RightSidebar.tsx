@@ -157,8 +157,8 @@ export const RightSidebar = memo(function RightSidebar(): React.JSX.Element {
         {tabs.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center px-6 text-center text-sm leading-6 text-muted-foreground">
             <Globe2 aria-hidden="true" className="mb-2 size-5" />
-            <strong className="font-medium text-foreground">工作区已清空</strong>
-            <p>点击释义区的在线词典图标或 Sparkle，打开一个标签页。</p>
+            <strong className="font-medium text-foreground">没有打开的标签页</strong>
+            <p>点击在线词典图标、笔记或者AI解释图标，打开一个标签页</p>
           </div>
         )}
       </div>

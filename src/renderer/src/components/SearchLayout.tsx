@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { usePanelCallbackRef } from 'react-resizable-panels'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
@@ -21,6 +21,8 @@ const getPercentValue = (size: string): number => {
   return Number.isFinite(value) ? value : Number(RIGHT_SIDEBAR_DEFAULT_SIZE)
 }
 
+const RIGHT_SIDEBAR_MIN_SIZE = 280
+
 export const SearchLayout = (): React.JSX.Element => {
   useRightSidebarSearchFollow()
   const displayInCompactMode = useAppStore(selectCompactMode)
@@ -35,13 +37,32 @@ export const SearchLayout = (): React.JSX.Element => {
   const rightSidebarResizeRequest = useAppStore((state) => state.rightSidebarResizeRequest)
   const [searchPanel, setSearchPanel] = usePanelCallbackRef()
   const [rightSidebarPanel, setRightSidebarPanel] = usePanelCallbackRef()
+  const rightSidebarGroupRef = useRef<HTMLDivElement>(null)
+  const [rightSidebarGroupWidth, setRightSidebarGroupWidth] = useState(0)
   const rightSidebarPanelSize = getRightSidebarPanelSize(rightSidebarSize)
+  // Leave room for the separator so the pixel minimum stays below the 50% maximum.
+  const rightSidebarMinSize = Math.min(RIGHT_SIDEBAR_MIN_SIZE, rightSidebarGroupWidth * 0.49)
+  const rightSidebarOpenSize = rightSidebarGroupWidth
+    ? `${Math.max(
+        getPercentValue(rightSidebarPanelSize),
+        (rightSidebarMinSize / rightSidebarGroupWidth) * 100
+      )}%`
+    : rightSidebarPanelSize
   const [initialRightSidebarSize] = useState(() =>
     rightSidebarOpen ? rightSidebarPanelSize : '0%'
   )
   const [initialWorkspaceSize] = useState(
     () => `${100 - (rightSidebarOpen ? getPercentValue(rightSidebarPanelSize) : 0)}%`
   )
+
+  useLayoutEffect(() => {
+    const group = rightSidebarGroupRef.current
+    if (!group) return
+
+    const observer = new ResizeObserver(() => setRightSidebarGroupWidth(group.clientWidth))
+    observer.observe(group)
+    return () => observer.disconnect()
+  }, [])
 
   useLayoutEffect(() => {
     if (!searchPanel) return
@@ -60,15 +81,16 @@ export const SearchLayout = (): React.JSX.Element => {
     }
 
     const frame = window.requestAnimationFrame(() => {
-      rightSidebarPanel.resize(rightSidebarPanelSize)
+      rightSidebarPanel.resize(rightSidebarOpenSize)
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [rightSidebarOpen, rightSidebarPanel, rightSidebarPanelSize, rightSidebarResizeRequest])
+  }, [rightSidebarOpen, rightSidebarPanel, rightSidebarOpenSize, rightSidebarResizeRequest])
 
   return (
     <section className="flex h-full min-h-0 flex-col">
       <ResizablePanelGroup
         className="min-h-0 w-full flex-1 border-border"
+        elementRef={rightSidebarGroupRef}
         onLayoutChanged={(layout, { isUserInteraction }) => {
           if (!isUserInteraction) return
           const nextRightSidebarSize = layout['right-sidebar']
@@ -137,7 +159,7 @@ export const SearchLayout = (): React.JSX.Element => {
           inert={!rightSidebarOpen}
           key="right-panel"
           maxSize={RIGHT_SIDEBAR_MAX_SIZE}
-          minSize={280}
+          minSize={rightSidebarMinSize}
           onResize={(size) => {
             const isMaximized = size.asPercentage >= Number(RIGHT_SIDEBAR_MAX_SIZE) - 0.5
             setRightSidebarMaximized(isMaximized)
