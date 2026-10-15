@@ -38,6 +38,13 @@ import type {
   UpdateDictionaryNoteContentRequest
 } from '../shared/dictionary-note'
 import type { TouchBarPage, TouchBarState } from '../shared/touch-bar'
+import type {
+  TranslationEvent,
+  TranslationLanguage,
+  TranslationPublicConfig,
+  TranslationRequest,
+  TranslationSaveProviderRequest
+} from '../shared/translation'
 
 type ReadyDictionary = {
   id: string
@@ -516,6 +523,31 @@ const api = Object.freeze({
         callback(payload)
       ipcRenderer.on('ai-lookup:event', listener)
       return () => ipcRenderer.removeListener('ai-lookup:event', listener)
+    }
+  }),
+  translation: Object.freeze({
+    getConfig: (): Promise<TranslationPublicConfig | null> =>
+      ipcRenderer.invoke('translation:get-config'),
+    saveProvider: (
+      request: TranslationSaveProviderRequest
+    ): Promise<TranslationPublicConfig | null> =>
+      ipcRenderer.invoke('translation:save-provider', request),
+    removeProvider: (id: string): Promise<TranslationPublicConfig | null> =>
+      ipcRenderer.invoke('translation:remove-provider', id),
+    reorderProviders: (order: string[]): Promise<TranslationPublicConfig | null> =>
+      ipcRenderer.invoke('translation:reorder-providers', order),
+    setTargetLanguage: (language: TranslationLanguage): Promise<TranslationPublicConfig | null> =>
+      ipcRenderer.invoke('translation:set-target-language', language),
+    testProvider: (id: string): Promise<void> =>
+      ipcRenderer.invoke('translation:test-provider', id),
+    start: (request: TranslationRequest): Promise<string | null> =>
+      ipcRenderer.invoke('translation:start', request),
+    cancel: (requestId: string): void => ipcRenderer.send('translation:cancel', requestId),
+    onEvent: (callback: (event: TranslationEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: TranslationEvent): void =>
+        callback(payload)
+      ipcRenderer.on('translation:event', listener)
+      return () => ipcRenderer.removeListener('translation:event', listener)
     }
   }),
   searchPopover: Object.freeze({

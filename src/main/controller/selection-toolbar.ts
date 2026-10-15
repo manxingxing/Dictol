@@ -30,6 +30,8 @@ import { NativeSelectionPanel } from '../native-selection-panel'
 import type { SelectionSurfaceWindow } from '../window-manager'
 import { BaseController } from './base-controller'
 import type { SelectionExplanationController } from './selection-explanation'
+import type { TranslationController } from './translation'
+import { TRANSLATION_MAX_TEXT_LENGTH } from '../../shared/translation'
 import {
   clamp,
   containsPoint,
@@ -47,7 +49,8 @@ const TOOLBAR_INACTIVITY_TIMEOUT = 5_000
 export class SelectionToolbarController extends BaseController {
   constructor(
     runtime: AppRuntime,
-    private readonly explanation: SelectionExplanationController
+    private readonly explanation: SelectionExplanationController,
+    private readonly translation: TranslationController
   ) {
     super(runtime)
   }
@@ -75,9 +78,11 @@ export class SelectionToolbarController extends BaseController {
 
   override mount(): void {
     this.explanation.setOnVisibilityChange(this.refreshDismissSubscription)
+    this.translation.setOnVisibilityChange(this.refreshDismissSubscription)
     this.runtime.selectionHookService.onSelection(this.handleSelection)
     ipcMain.on('selection-toolbar:lookup-in-main', this.lookupInMain)
     ipcMain.on('selection-toolbar:explain', this.explain)
+    ipcMain.on('selection-toolbar:translate', this.translate)
     ipcMain.on('selection-toolbar:copy', this.copy)
     ipcMain.handle('selection-toolbar:capture-excerpt', this.captureExcerpt)
     ipcMain.on('selection-toolbar:open-menu', this.openNativeMenu)
@@ -88,6 +93,8 @@ export class SelectionToolbarController extends BaseController {
     ipcMain.on('selection-explanation:toggle-pin', this.toggleExplanationPin)
     ipcMain.on('selection-explanation:open-in-main', this.openExplanationInMain)
     ipcMain.on('selection-explanation:loading-ready', this.explanationLoadingReady)
+    ipcMain.on('selection-translation:close', this.closeTranslation)
+    ipcMain.on('selection-translation:desired-height', this.resizeTranslation)
   }
 
   private readonly showExplanationFromMain = (event: IpcMainEvent, word: unknown): void => {
@@ -122,6 +129,20 @@ export class SelectionToolbarController extends BaseController {
 
   private readonly explanationLoadingReady = (event: IpcMainEvent, requestId: number): void => {
     if (this.acceptsExplanationSender(event)) this.explanation.markLoadingReady(requestId)
+  }
+
+  private readonly closeTranslation = (event: IpcMainEvent): void => {
+    if (this.acceptsTranslationSender(event)) this.translation.hide()
+  }
+
+  private readonly resizeTranslation = (
+    event: IpcMainEvent,
+    version: number,
+    desiredHeight: number
+  ): void => {
+    if (this.acceptsTranslationSender(event)) {
+      this.translation.resizeSelectionWindow(version, desiredHeight)
+    }
   }
 
   private readonly handleSelection: SelectionListener = (capture): void => {
@@ -179,6 +200,15 @@ export class SelectionToolbarController extends BaseController {
     const word = this.currentCapture.selection.text.trim()
     this.hideToolbar()
     void this.explanation.showExplanation(word)
+  }
+
+  private readonly translate = (event: IpcMainEvent): void => {
+    if (!this.acceptsToolbarSender(event) || !this.currentCapture) return
+    const text = this.currentCapture.selection.text.trim()
+    if (!text || text.length > TRANSLATION_MAX_TEXT_LENGTH) return
+    const anchor = this.anchor
+    this.hideToolbar()
+    this.translation.showSelection(text, anchor)
   }
 
   private readonly lookupInMain = (event: IpcMainEvent): void => {
@@ -377,7 +407,10 @@ export class SelectionToolbarController extends BaseController {
       programName,
       canExclude: Boolean(programName),
       canCaptureExcerpt:
-        capture.selection.text.trim().length > 0 && capture.selection.text.length <= 100_000
+        capture.selection.text.trim().length > 0 && capture.selection.text.length <= 100_000,
+      canTranslate:
+        capture.selection.text.trim().length > 0 &&
+        capture.selection.text.trim().length <= TRANSLATION_MAX_TEXT_LENGTH
     }
     const toolbarSize = this.syncToolbarSize(window)
     this.positionToolbar(window, toolbarSize)
@@ -459,7 +492,7 @@ export class SelectionToolbarController extends BaseController {
   // 在toolbar，弹窗外的点击事件会关闭toolbar
   refreshDismissSubscription = (): void => {
     const shouldListen = Boolean(
-      this.toolbarVisible || this.explanation.isVisible
+      this.toolbarVisible || this.explanation.isVisible || this.translation.isVisible
     )
     if (shouldListen && !this.globalMouseDownUnsubscribe) {
       this.globalMouseDownUnsubscribe = this.runtime.selectionHookService.onMouseDown(
@@ -497,6 +530,7 @@ export class SelectionToolbarController extends BaseController {
     }
 
     this.explanation.hideIfOutside(point)
+    this.translation.hideIfOutside(point)
   }
 
   private openWordInMain(word: string, dictionaryId?: string): void {
@@ -527,6 +561,11 @@ export class SelectionToolbarController extends BaseController {
 
   private acceptsExplanationSender(event: IpcMainEvent): boolean {
     return Boolean(this.explanation.currentWindow?.webContents.id === event.sender.id)
+  }
+
+  private acceptsTranslationSender(event: IpcMainEvent): boolean {
+    const window = this.runtime.windowManager.selectionTranslationWindow
+    return Boolean(window && !window.isDestroyed() && window.webContents.id === event.sender.id)
   }
 
   private acceptsToolbarSender(event: { sender: WebContents }): boolean {
@@ -560,7 +599,8 @@ export class SelectionToolbarController extends BaseController {
   private hasFocusedSelectionWindow(): boolean {
     return [
       this.currentToolbarWindow,
-      this.explanation.currentWindow
+      this.explanation.currentWindow,
+      this.runtime.windowManager.selectionTranslationWindow
     ].some((window) => window && !window.isDestroyed() && window.isFocused())
   }
 }

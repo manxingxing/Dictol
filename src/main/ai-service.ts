@@ -1,5 +1,4 @@
 import type {
-  AiTranslationLanguage,
   AiChatMessage,
   AiChatRequest,
   AiLookupPublicConfig,
@@ -17,7 +16,7 @@ const MAX_MESSAGE_LENGTH = 20_000
 const REQUEST_TIMEOUT_MS = 120_000
 
 export type AiStreamHandler = (event: AiStreamEvent) => void
-export type AiPromptTarget = 'sidebar' | 'selection-toolbar' | 'translation' | 'excerpt'
+export type AiPromptTarget = 'sidebar' | 'selection-toolbar' | 'excerpt'
 type AiLookupContext = NonNullable<AiChatRequest['lookupContext']> & {
   hasRelatedTerms?: boolean
 }
@@ -66,10 +65,6 @@ export class AiLookupService {
     requestId: string,
     messages: AiChatMessage[],
     promptTarget: AiPromptTarget,
-    translation?: {
-      sourceLanguage: AiTranslationLanguage
-      targetLanguage: AiTranslationLanguage
-    },
     lookupContext?: AiLookupContext,
     onEvent?: AiStreamHandler
   ): AsyncGenerator<AiStreamEvent, void> {
@@ -88,10 +83,7 @@ export class AiLookupService {
       let systemPrompt: string
       let requestMessages = bodyMessages
 
-      if (promptTarget === 'translation') {
-        systemPrompt = getTranslationSystemPrompt(translation)
-        if (!systemPrompt) throw new Error('翻译语言设置无效。')
-      } else if (promptTarget === 'excerpt') {
+      if (promptTarget === 'excerpt') {
         systemPrompt = getExcerptNoteSystemPrompt(lookupContext?.hasRelatedTerms ?? true)
         if (!lookupContext) throw new Error('摘抄上下文缺失。')
         requestMessages = prepareLookupMessages(lookupContext.sourceText, bodyMessages)
@@ -112,7 +104,7 @@ export class AiLookupService {
           createAiCompletionBody({
             model: config.model,
             stream: true,
-            purpose: promptTarget === 'translation' ? 'translation' : 'lookup',
+            purpose: 'lookup',
             messages: [{ role: 'system', content: systemPrompt }, ...requestMessages]
           })
         ),
@@ -179,13 +171,9 @@ export class AiLookupService {
     messages: AiChatMessage[],
     promptTarget: AiPromptTarget,
     onEvent: AiStreamHandler,
-    translation?: {
-      sourceLanguage: AiTranslationLanguage
-      targetLanguage: AiTranslationLanguage
-    },
     lookupContext?: AiLookupContext
   ): void {
-    void this.consume(requestId, messages, promptTarget, translation, lookupContext, onEvent)
+    void this.consume(requestId, messages, promptTarget, lookupContext, onEvent)
   }
 
   async generateExcerptNote(excerpt: string, relatedTerms: string[]): Promise<string> {
@@ -205,7 +193,6 @@ export class AiLookupService {
         }
       ],
       'excerpt',
-      undefined,
       { sourceText, hasRelatedTerms }
     )) {
       if (event.type === 'delta') responseText += event.text
@@ -230,12 +217,6 @@ export class AiLookupService {
     requestId: string,
     messages: AiChatMessage[],
     promptTarget: AiPromptTarget,
-    translation:
-      | {
-          sourceLanguage: AiTranslationLanguage
-          targetLanguage: AiTranslationLanguage
-        }
-      | undefined,
     lookupContext: AiLookupContext | undefined,
     onEvent: AiStreamHandler
   ): Promise<void> {
@@ -243,7 +224,6 @@ export class AiLookupService {
       requestId,
       messages,
       promptTarget,
-      translation,
       lookupContext,
       onEvent
     )) {
@@ -251,23 +231,6 @@ export class AiLookupService {
       void event
     }
   }
-}
-
-function getTranslationSystemPrompt(translation?: {
-  sourceLanguage: AiTranslationLanguage
-  targetLanguage: AiTranslationLanguage
-}): string {
-  if (!translation) return ''
-  return `你是一名专业、地道的翻译专家。请将用户提供的内容从${translation.sourceLanguage}翻译成${translation.targetLanguage}，达到母语者的表达水准。
-
-## 翻译要求
-1. 忠实传达原意，同时符合目标语言表达习惯，避免翻译腔；主动避免过度使用被动语态、冗余连接词和堆叠抽象名词。
-2. 保留原文的语气、风格、格式和段落结构；专有名词、数字、代码、URL 与 Markdown 标记准确处理，必要时可按目标语言习惯调整标记位置，但不得增删。
-3. 术语使用公认的权威译法；无标准译法的专有名词保留原文，不加注释。
-4. 除非用户明确要求解释，否则只输出译文，不添加前言、注释或语言标签（如"翻译如下："）。
-
-## 内部流程（不要输出）
-先完整理解原文并形成流畅的译文草稿，再静默检查是否有误译、漏译、翻译腔和格式错误，修正后只输出最终译文。`
 }
 
 function validateMessages(messages: AiChatMessage[]): AiChatMessage[] {

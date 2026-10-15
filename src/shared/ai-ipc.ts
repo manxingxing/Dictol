@@ -18,24 +18,9 @@ export type AiChatMessage = {
   content: string
 }
 
-export const AI_TRANSLATION_LANGUAGES = [
-  '中文',
-  'English',
-  '日本語',
-  '한국어',
-  'Français',
-  'Deutsch'
-] as const
-
-export type AiTranslationLanguage = (typeof AI_TRANSLATION_LANGUAGES)[number]
-
 export type AiChatRequest = {
   messages: AiChatMessage[]
-  promptTarget?: 'sidebar' | 'selection-toolbar' | 'translation'
-  translation?: {
-    sourceLanguage: AiTranslationLanguage
-    targetLanguage: AiTranslationLanguage
-  }
+  promptTarget?: 'sidebar'
   lookupContext?: {
     sourceText: string
   }

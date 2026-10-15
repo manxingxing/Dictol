@@ -1,4 +1,4 @@
-export const SELECTION_TOOLBAR_WIDTH = 280
+export const SELECTION_TOOLBAR_WIDTH = 300
 export const SELECTION_TOOLBAR_HEIGHT = 44
 export const SELECTION_TOOLBAR_WINDOWS_SHADOW_MARGIN = 6
 
@@ -19,6 +19,7 @@ export type SelectionToolbarPayload = {
   programName: string
   canExclude: boolean
   canCaptureExcerpt: boolean
+  canTranslate: boolean
 }
 
 export type ExternalExcerptCapture = {

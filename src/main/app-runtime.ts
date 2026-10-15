@@ -3,6 +3,7 @@ import type { BrowserWindow } from 'electron'
 
 import { AppConfigStore, type AppConfig } from './app-config'
 import { AiLookupService } from './ai-service'
+import { TranslationService } from './translation/service'
 import { BuiltInLexiconService } from './built-in-lexicon-service'
 import { initDrizzleDB, type DictolDatabase, type SqliteDatabase } from './db/drizzle'
 import {
@@ -43,6 +44,7 @@ export class AppRuntime {
   builtInLexicon: BuiltInLexiconService | undefined
   appConfig: AppConfigStore = new AppConfigStore()
   aiLookupService: AiLookupService = new AiLookupService(this.appConfig)
+  translationService: TranslationService = new TranslationService(this.appConfig)
   selectionHookService: SelectionHookService = new SelectionHookService()
   shortcutRegister: ShortcutRegister = new ShortcutRegister()
   trayManager: TrayManager = new TrayManager()
@@ -246,6 +248,7 @@ export class AppRuntime {
     this.adBlockService.dispose()
     this.windowManager.dispose()
     this.aiLookupService.dispose()
+    this.translationService.dispose()
     this._mdictResourceManager?.dispose()
     this._mdictResourceManager = undefined
     this._dictionaryIndexManager?.dispose()

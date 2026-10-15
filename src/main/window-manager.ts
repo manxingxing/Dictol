@@ -6,6 +6,10 @@ import {
   SELECTION_EXPLANATION_HEADER_HEIGHT
 } from '../shared/selection-explanation'
 import { getSelectionToolbarWindowSize } from '../shared/selection-toolbar'
+import {
+  SELECTION_TRANSLATION_INITIAL_HEIGHT,
+  SELECTION_TRANSLATION_MAX_HEIGHT
+} from '../shared/translation'
 import { MAIN_WINDOW_TITLEBAR_HEIGHT } from '../shared/window-chrome'
 import { DICTIONARY_SESSION_PARTITION, EMBED_BROWSER_SESSION_PARTITION } from './entry-assets'
 import { resolvePreloadPath } from './output-path'
@@ -28,6 +32,7 @@ export class WindowManager {
   selectionToolbarWindow: SelectionSurfaceWindow | undefined
   selectionExplanationWindow: BrowserWindow | undefined
   readonly excerptCaptureWindows = new Set<BrowserWindow>()
+  selectionTranslationWindow: BrowserWindow | undefined
   selectionExplanationView: WebContentsViewManager | undefined
   findBarView: WebContentsViewManager | undefined
   customCssEditorWindow: BrowserWindow | undefined
@@ -382,6 +387,43 @@ export class WindowManager {
     return window
   }
 
+  createSelectionTranslationWindow(): BrowserWindow {
+    if (this.selectionTranslationWindow && !this.selectionTranslationWindow.isDestroyed()) {
+      return this.selectionTranslationWindow
+    }
+    const window = new BrowserWindow({
+      width: 520,
+      height: SELECTION_TRANSLATION_INITIAL_HEIGHT,
+      minWidth: 380,
+      minHeight: SELECTION_TRANSLATION_INITIAL_HEIGHT,
+      maxHeight: SELECTION_TRANSLATION_MAX_HEIGHT,
+      show: false,
+      frame: false,
+      ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
+      backgroundColor: nativeTheme.shouldUseDarkColors ? '#232323' : '#faf9f7',
+      resizable: true,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      focusable: true,
+      acceptFirstMouse: true,
+      skipTaskbar: true,
+      webPreferences: {
+        preload: resolvePreloadPath('selection-translation.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    })
+    if (process.platform === 'darwin') configureElectronPanel(window.getNativeWindowHandle())
+    else applySelectionWindowBehavior(window)
+    window.on('closed', () => {
+      if (this.selectionTranslationWindow === window) this.selectionTranslationWindow = undefined
+    })
+    this.selectionTranslationWindow = window
+    return window
+  }
+
   createCustomCssEditorWindow(): BrowserWindow {
     if (this.customCssEditorWindow && !this.customCssEditorWindow.isDestroyed()) {
       return this.customCssEditorWindow
@@ -511,6 +553,7 @@ export class WindowManager {
     return [
       this.selectionToolbarWindow,
       this.selectionExplanationWindow,
+      this.selectionTranslationWindow,
       ...this.excerptCaptureWindows
     ].some(
       (window) => window && !window.isDestroyed() && window.isVisible()
@@ -546,6 +589,9 @@ export class WindowManager {
     this.excerptCaptureWindows.forEach((window) => {
       if (!window.isDestroyed()) window.destroy()
     })
+    if (this.selectionTranslationWindow && !this.selectionTranslationWindow.isDestroyed()) {
+      this.selectionTranslationWindow.destroy()
+    }
     if (this.customCssEditorWindow && !this.customCssEditorWindow.isDestroyed()) {
       this.customCssEditorWindow.destroy()
     }
@@ -559,6 +605,7 @@ export class WindowManager {
     this.selectionToolbarWindow = undefined
     this.selectionExplanationWindow = undefined
     this.excerptCaptureWindows.clear()
+    this.selectionTranslationWindow = undefined
     this.selectionExplanationView = undefined
     this.selectionExplanationSwitcherVisible = false
     this.updateSelectionExplanationViewBounds = undefined

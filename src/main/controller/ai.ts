@@ -2,7 +2,6 @@ import { ipcMain, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { randomUUID } from 'node:crypto'
 
 import {
-  AI_TRANSLATION_LANGUAGES,
   type AiChatRequest,
   type AiLookupPublicConfig,
   type AiSaveConfigRequest
@@ -62,7 +61,6 @@ export class AiController extends BaseController {
       (streamEvent) => {
         if (!sender.isDestroyed()) sender.send('ai-lookup:event', { requestId, ...streamEvent })
       },
-      request.translation,
       request.lookupContext
     )
     return requestId
@@ -86,24 +84,10 @@ function isChatRequest(value: unknown): value is AiChatRequest {
   if (!value || typeof value !== 'object') return false
   const request = value as AiChatRequest
   if (!Array.isArray(request.messages) || request.messages.length === 0) return false
-  if (
-    request.promptTarget !== undefined &&
-    request.promptTarget !== 'sidebar' &&
-    request.promptTarget !== 'selection-toolbar' &&
-    request.promptTarget !== 'translation'
-  ) {
+  if (request.promptTarget !== undefined && request.promptTarget !== 'sidebar') {
     return false
   }
-  if (request.promptTarget === 'translation') {
-    return (
-      request.translation !== undefined &&
-      AI_TRANSLATION_LANGUAGES.includes(request.translation.sourceLanguage) &&
-      AI_TRANSLATION_LANGUAGES.includes(request.translation.targetLanguage) &&
-      request.translation.sourceLanguage !== request.translation.targetLanguage &&
-      request.lookupContext === undefined
-    )
-  }
-  if (request.translation !== undefined || !request.lookupContext) return false
+  if (!request.lookupContext) return false
   const sourceText = request.lookupContext.sourceText
   if (typeof sourceText !== 'string' || !sourceText.trim() || sourceText.length > 20_000)
     return false

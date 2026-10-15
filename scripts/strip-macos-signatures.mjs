@@ -67,6 +67,35 @@ function resolveAppBundle(appOutDir) {
   return join(appOutDir, appBundle)
 }
 
+function verifySystemTranslationHelper(appPath, architectures) {
+  const helper = join(
+    appPath,
+    'Contents',
+    'Resources',
+    'app.asar.unpacked',
+    'resources',
+    'system-translation',
+    'dictol-system-translation'
+  )
+  if (!existsSync(helper)) throw new Error(`Missing packaged system translation helper: ${helper}`)
+
+  const stat = lstatSync(helper)
+  if (!stat.isFile() || (stat.mode & 0o111) === 0) {
+    throw new Error(`Packaged system translation helper is not executable: ${helper}`)
+  }
+
+  try {
+    execFileSync('lipo', [helper, '-verify_arch', ...architectures], { stdio: 'ignore' })
+  } catch {
+    throw new Error(
+      `Wrong architecture in packaged system translation helper: ${helper}\n` +
+        `expected=${architectures.join(', ')}, file=${fileArchitecture(helper)}`
+    )
+  }
+
+  console.log(`  • verified system translation helper arch=${architectures.join(', ')}`)
+}
+
 function pruneAndVerifyNativeModules(appPath, arch) {
   const unpacked = join(appPath, 'Contents', 'Resources', 'app.asar.unpacked', 'node_modules')
   const otherArch = arch === 'x64' ? 'arm64' : 'x64'
@@ -179,6 +208,7 @@ export default async function stripMacOSSignatures(context) {
   if (!existsSync(appPath)) throw new Error(`Packaged app does not exist: ${appPath}`)
 
   const arch = targetDarwinArch(context)
+  verifySystemTranslationHelper(appPath, [arch === 'x64' ? 'x86_64' : 'arm64'])
   pruneAndVerifyNativeModules(appPath, arch)
 
   const { bundles, files } = collectCandidates(appPath)

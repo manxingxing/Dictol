@@ -6,6 +6,13 @@ import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
 import type { ThemeMode } from '../shared/theme-mode'
 import type { TtsConfig } from '../shared/tts'
+import {
+  SYSTEM_TRANSLATION_PROVIDER_ID,
+  TRANSLATION_LANGUAGES,
+  type TranslationConfig,
+  type TranslationProviderConfig,
+  type TranslationProviderKind
+} from '../shared/translation'
 
 export type AppConfig = {
   themeMode: ThemeMode
@@ -31,6 +38,7 @@ export type AppConfig = {
     model: string
   }
   tts: TtsConfig
+  translation: TranslationConfig
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -59,6 +67,21 @@ const DEFAULT_CONFIG: AppConfig = {
   tts: {
     engine: 'system',
     systemVoiceUri: null
+  },
+  translation: {
+    targetLanguage: 'zh',
+    providers:
+      process.platform === 'darwin'
+        ? [
+            {
+              id: SYSTEM_TRANSLATION_PROVIDER_ID,
+              kind: 'system',
+              name: '系统翻译',
+              enabled: true,
+              options: {}
+            }
+          ]
+        : []
   }
 }
 
@@ -148,6 +171,7 @@ function parseConfig(value: unknown): AppConfig {
       model?: unknown
     }
     tts?: { engine?: unknown; systemVoiceUri?: unknown }
+    translation?: { targetLanguage?: unknown; providers?: unknown }
   }
 
   return {
@@ -208,6 +232,14 @@ function parseConfig(value: unknown): AppConfig {
         candidate.tts.systemVoiceUri.length <= 500
           ? candidate.tts.systemVoiceUri
           : null
+    },
+    translation: {
+      targetLanguage: TRANSLATION_LANGUAGES.includes(
+        candidate.translation?.targetLanguage as TranslationConfig['targetLanguage']
+      )
+        ? (candidate.translation?.targetLanguage as TranslationConfig['targetLanguage'])
+        : DEFAULT_CONFIG.translation.targetLanguage,
+      providers: normalizeTranslationProviders(candidate.translation?.providers)
     }
   }
 }
@@ -227,8 +259,87 @@ function cloneConfig(config: AppConfig): AppConfig {
     aiLookup: {
       ...config.aiLookup
     },
-    tts: { ...config.tts }
+    tts: { ...config.tts },
+    translation: {
+      targetLanguage: config.translation.targetLanguage,
+      providers: config.translation.providers.map((provider) => ({
+        ...provider,
+        options: { ...provider.options }
+      }))
+    }
   }
+}
+
+function normalizeTranslationProviders(value: unknown): TranslationProviderConfig[] {
+  if (!Array.isArray(value)) return cloneConfig(DEFAULT_CONFIG).translation.providers
+  const providers: TranslationProviderConfig[] = []
+  const seen = new Set<string>()
+  let customCount = 0
+  const kinds: TranslationProviderKind[] = [
+    'system',
+    'google',
+    'microsoft',
+    'volcano',
+    'deepl',
+    'openai-compatible'
+  ]
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue
+    const provider = item as Record<string, unknown>
+    if (typeof provider.id !== 'string' || !provider.id || provider.id.length > 100) continue
+    if (!kinds.includes(provider.kind as TranslationProviderKind)) continue
+    if (provider.kind === 'system' && provider.id !== SYSTEM_TRANSLATION_PROVIDER_ID) continue
+    if (provider.kind !== 'system' && provider.id === SYSTEM_TRANSLATION_PROVIDER_ID) continue
+    if (provider.kind === 'system' && process.platform !== 'darwin') continue
+    if (seen.has(provider.id)) continue
+    if (provider.kind !== 'system') {
+      if (customCount >= 20) continue
+      customCount += 1
+    }
+    seen.add(provider.id)
+    const options: Record<string, string> = {}
+    const allowedOptions: Record<TranslationProviderKind, string[]> = {
+      system: [],
+      google: [],
+      microsoft: ['region', 'endpoint'],
+      volcano: [],
+      deepl: ['plan'],
+      'openai-compatible': ['baseUrl', 'model']
+    }
+    if (provider.options && typeof provider.options === 'object') {
+      for (const [key, option] of Object.entries(provider.options)) {
+        if (
+          allowedOptions[provider.kind as TranslationProviderKind].includes(key) &&
+          typeof option === 'string' &&
+          option.length <= 500
+        ) {
+          options[key] = option.trim()
+        }
+      }
+    }
+    providers.push({
+      id: provider.id,
+      kind: provider.kind as TranslationProviderKind,
+      name:
+        provider.kind === 'system'
+          ? '系统翻译'
+          : typeof provider.name === 'string' && provider.name.trim() && provider.name.length <= 100
+            ? provider.name.trim()
+            : (provider.kind as TranslationProviderKind),
+      enabled: provider.enabled === true,
+      options: provider.kind === 'system' ? {} : options
+    })
+  }
+  if (process.platform === 'darwin' && !seen.has(SYSTEM_TRANSLATION_PROVIDER_ID)) {
+    providers.unshift({
+      id: SYSTEM_TRANSLATION_PROVIDER_ID,
+      kind: 'system',
+      name: '系统翻译',
+      enabled: true,
+      options: {}
+    })
+  }
+  return providers
 }
 
 function normalizeConfigString(value: unknown, fallback: string, maxLength: number): string {

@@ -13,6 +13,7 @@ import { QueryHistoryController } from './query-history'
 import { SearchPopoverController } from './search-popover'
 import { SelectionToolbarController } from './selection-toolbar'
 import { SelectionExplanationController } from './selection-explanation'
+import { TranslationController } from './translation'
 import { TtsController } from './tts'
 import { WordCaptureController } from './word-capture'
 import { WordLookupController } from './word-lookup'
@@ -24,6 +25,7 @@ import { TouchBarController } from './touch-bar'
 
 export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
   const selectionExplanationController = new SelectionExplanationController(appRuntime)
+  const translationController = new TranslationController(appRuntime)
 
   const controllers = [
     new AiController(appRuntime),
@@ -41,7 +43,8 @@ export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
     new KeyboardController(appRuntime),
     new SearchPopoverController(appRuntime),
     selectionExplanationController,
-    new SelectionToolbarController(appRuntime, selectionExplanationController),
+    translationController,
+    new SelectionToolbarController(appRuntime, selectionExplanationController, translationController),
     new WordCaptureController(appRuntime),
     new WordLookupController(appRuntime),
     new WordbookController(appRuntime),

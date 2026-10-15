@@ -62,6 +62,7 @@ win:
     - out/**
     - drizzle/**
     - resources/**
+    - '!resources/system-translation/**'
     - '!resources/ecdict/**'
     - '!**/.vscode/*'
     - '!src/*'
@@ -193,6 +194,8 @@ mac:
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
 linux:
+  files:
+    - '!resources/system-translation/**'
   icon: build/icon.png
   desktop:
     entry:

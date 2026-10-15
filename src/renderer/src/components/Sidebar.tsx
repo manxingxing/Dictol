@@ -3,7 +3,6 @@ import { BookMarked, History, Languages, Library, Quote, Search, Settings } from
 
 import appIcon from '@/assets/icon_320x320.png'
 import { Button } from '@/components/ui/button'
-import { useAiLookupConfig } from '@/hooks/use-ai-lookup'
 import { cn } from '@/lib/utils'
 import { selectCompactMode, useAppStore } from '@/stores/app-store'
 
@@ -17,10 +16,7 @@ const navigation = [
 export function Sidebar(): React.JSX.Element {
   const lastQueryPath = useAppStore((state) => state.lastQueryPath)
   const displayInCompactMode = useAppStore(selectCompactMode)
-  const aiConfig = useAiLookupConfig()
-  const items = aiConfig.data?.enabled
-    ? [...navigation, { label: '翻译', path: '/translation', icon: Languages }]
-    : navigation
+  const items = [...navigation, { label: '翻译', path: '/translation', icon: Languages }]
 
   return (
     <aside

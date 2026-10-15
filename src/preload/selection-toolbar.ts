@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld(
     },
     lookupInMain: (): void => ipcRenderer.send('selection-toolbar:lookup-in-main'),
     explain: (): void => ipcRenderer.send('selection-toolbar:explain'),
+    translate: (): void => ipcRenderer.send('selection-toolbar:translate'),
     copy: (): void => ipcRenderer.send('selection-toolbar:copy'),
     captureExcerpt: (): Promise<void> => ipcRenderer.invoke('selection-toolbar:capture-excerpt'),
     openMenu: (): void => ipcRenderer.send('selection-toolbar:open-menu'),

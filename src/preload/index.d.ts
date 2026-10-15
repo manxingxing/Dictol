@@ -13,6 +13,13 @@ import type {
 } from '../shared/custom-css-editor'
 import type { TouchBarPage, TouchBarState } from '../shared/touch-bar'
 import type {
+  TranslationEvent,
+  TranslationLanguage,
+  TranslationPublicConfig,
+  TranslationRequest,
+  TranslationSaveProviderRequest
+} from '../shared/translation'
+import type {
   CreateDictionaryNoteRequest,
   DictionaryNoteCreationResultEvent,
   DictionaryNoteItem,
@@ -456,11 +463,7 @@ declare global {
         } | null>
         startChat: (request: {
           messages: Array<{ role: 'user' | 'assistant'; content: string }>
-          promptTarget?: 'sidebar' | 'selection-toolbar' | 'translation'
-          translation?: {
-            sourceLanguage: '中文' | 'English' | '日本語' | '한국어' | 'Français' | 'Deutsch'
-            targetLanguage: '中文' | 'English' | '日本語' | '한국어' | 'Français' | 'Deutsch'
-          }
+          promptTarget?: 'sidebar'
           lookupContext?: {
             sourceText: string
           }
@@ -474,6 +477,21 @@ declare global {
             message?: string
           }) => void
         ) => () => void
+      }
+      translation: {
+        getConfig: () => Promise<TranslationPublicConfig | null>
+        saveProvider: (
+          request: TranslationSaveProviderRequest
+        ) => Promise<TranslationPublicConfig | null>
+        removeProvider: (id: string) => Promise<TranslationPublicConfig | null>
+        reorderProviders: (order: string[]) => Promise<TranslationPublicConfig | null>
+        setTargetLanguage: (
+          language: TranslationLanguage
+        ) => Promise<TranslationPublicConfig | null>
+        testProvider: (id: string) => Promise<void>
+        start: (request: TranslationRequest) => Promise<string | null>
+        cancel: (requestId: string) => void
+        onEvent: (callback: (event: TranslationEvent) => void) => () => void
       }
       searchPopover: {
         show: () => void

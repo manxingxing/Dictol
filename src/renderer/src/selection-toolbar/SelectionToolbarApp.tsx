@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BookOpen, Copy, LoaderCircle, MoreHorizontal, Quote } from 'lucide-react'
+import { BookOpen, Copy, Languages, LoaderCircle, MoreHorizontal, Quote } from 'lucide-react'
 
 import appIcon from '@/assets/icon_32x32.png'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ declare global {
       onUpdate: (callback: (payload: SelectionToolbarPayload) => void) => () => void
       lookupInMain: () => void
       explain: () => void
+      translate: () => void
       copy: () => void
       captureExcerpt: () => Promise<void>
       openMenu: () => void
@@ -27,7 +28,8 @@ const initialPayload: SelectionToolbarPayload = {
   word: '',
   programName: '',
   canExclude: false,
-  canCaptureExcerpt: false
+  canCaptureExcerpt: false,
+  canTranslate: false
 }
 
 export function SelectionToolbarApp(): React.JSX.Element {
@@ -115,6 +117,17 @@ export function SelectionToolbarApp(): React.JSX.Element {
         >
           <Copy />
           复制
+        </Button>
+        <Button
+          className="selection-action selection-action-primary"
+          disabled={!payload.canTranslate}
+          onClick={() => window.dictolSelectionToolbar.translate()}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <Languages />
+          翻译
         </Button>
         <Button
           aria-label="摘抄选中文本"

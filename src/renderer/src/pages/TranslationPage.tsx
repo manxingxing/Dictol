@@ -1,260 +1,320 @@
-import { useEffect, useRef, useState } from 'react'
-import { ArrowLeftRight, Info, Languages, LoaderCircle } from 'lucide-react'
-
-import { AiRichText } from '@/components/AiRichText'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowLeftRight, Check, Copy, Languages, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useAiLookupConfig } from '@/hooks/use-ai-lookup'
-import { cn } from '@/lib/utils'
-import { AI_TRANSLATION_LANGUAGES, type AiTranslationLanguage } from '../../../shared/ai-ipc'
+import {
+  TRANSLATION_LANGUAGES,
+  TRANSLATION_LANGUAGE_NAMES,
+  TRANSLATION_MAX_TEXT_LENGTH,
+  type TranslationEvent,
+  type TranslationLanguage,
+  type TranslationPublicConfig,
+  type TranslationSourceLanguage
+} from '../../../shared/translation'
 
-type TranslationStatus = 'idle' | 'running' | 'ready' | 'error'
-type AiLookupEvent = Parameters<Parameters<typeof window.dictol.aiLookup.onEvent>[0]>[0]
-
-const INITIAL_SOURCE_LANGUAGE: AiTranslationLanguage = '中文'
-const INITIAL_TARGET_LANGUAGE: AiTranslationLanguage = 'English'
+type Status = 'idle' | 'running' | 'ready' | 'error'
 
 export function TranslationPage(): React.JSX.Element {
-  const aiConfig = useAiLookupConfig()
-  const [sourceLanguage, setSourceLanguage] =
-    useState<AiTranslationLanguage>(INITIAL_SOURCE_LANGUAGE)
-  const [targetLanguage, setTargetLanguage] =
-    useState<AiTranslationLanguage>(INITIAL_TARGET_LANGUAGE)
+  const api = window.dictol.translation
+  const [config, setConfig] = useState<TranslationPublicConfig | null>(null)
+  const [loadingConfig, setLoadingConfig] = useState(true)
+  const [providerId, setProviderId] = useState('')
+  const [sourceLanguage, setSourceLanguage] = useState<TranslationSourceLanguage>('auto')
+  const [targetLanguage, setTargetLanguage] = useState<TranslationLanguage>('zh')
   const [input, setInput] = useState('')
   const [output, setOutput] = useState('')
-  const [status, setStatus] = useState<TranslationStatus>('idle')
-  const [error, setError] = useState<string | null>(null)
-  const requestRef = useRef<string | null>(null)
+  const [detectedSourceLanguage, setDetectedSourceLanguage] = useState('')
+  const [status, setStatus] = useState<Status>('idle')
+  const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
+  const requestIdRef = useRef<string | null>(null)
   const requestVersionRef = useRef(0)
   const unsubscribeRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
+    let active = true
+    void api
+      .getConfig()
+      .then((value) => {
+        if (!active) return
+        setConfig(value)
+        setTargetLanguage(value?.targetLanguage ?? 'zh')
+        setProviderId(value?.providers.find((provider) => provider.available)?.id ?? '')
+        setLoadingConfig(false)
+      })
+      .catch((loadError) => {
+        if (!active) return
+        setError(loadError instanceof Error ? loadError.message : '无法读取翻译设置。')
+        setLoadingConfig(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [api])
+
+  useEffect(() => {
     return () => {
       requestVersionRef.current += 1
-      if (requestRef.current) window.dictol.aiLookup.cancel(requestRef.current)
+      if (requestIdRef.current) api.cancel(requestIdRef.current)
       unsubscribeRef.current?.()
     }
-  }, [])
+  }, [api])
 
-  const isRunning = status === 'running'
-  const canTranslate = input.trim().length > 0 && !isRunning
+  const availableProviders = config?.providers.filter((provider) => provider.available) ?? []
 
-  const translate = async (): Promise<void> => {
-    const content = input.trim()
-    if (!content || isRunning) return
-    if (sourceLanguage === targetLanguage) {
-      setError('源语言和目标语言不能相同。')
-      setStatus('error')
-      return
-    }
-
-    const requestVersion = requestVersionRef.current + 1
-    requestVersionRef.current = requestVersion
-    requestRef.current = null
-    unsubscribeRef.current?.()
-    unsubscribeRef.current = null
-    setOutput('')
-    setError(null)
-    setStatus('running')
-
-    let requestId: string | null = null
-    let settled = false
-    const pendingEvents: AiLookupEvent[] = []
-
-    const finish = (nextStatus: Exclude<TranslationStatus, 'idle' | 'running'>): void => {
-      if (requestVersion !== requestVersionRef.current || settled) return
-      settled = true
-      requestRef.current = null
+  const translate = useCallback(
+    async (
+      text: string,
+      selectedProviderId: string,
+      source: TranslationSourceLanguage,
+      target: TranslationLanguage
+    ): Promise<void> => {
+      const content = text.trim()
+      const version = ++requestVersionRef.current
+      if (requestIdRef.current) api.cancel(requestIdRef.current)
+      requestIdRef.current = null
       unsubscribeRef.current?.()
       unsubscribeRef.current = null
-      setStatus(nextStatus)
-    }
-
-    const handleEvent = (event: AiLookupEvent): void => {
-      if (requestVersion !== requestVersionRef.current) return
-      if (!requestId) {
-        pendingEvents.push(event)
+      setOutput('')
+      setDetectedSourceLanguage('')
+      setError('')
+      if (!content || !selectedProviderId) {
+        setStatus('idle')
         return
       }
-      if (event.requestId !== requestId || settled) return
-      if (event.type === 'delta' && event.text) {
-        setOutput((current) => current + event.text)
-      } else if (event.type === 'done') {
-        finish('ready')
-      } else {
-        setError(event.message ?? 'AI 翻译失败。')
-        finish('error')
+      if (content.length > TRANSLATION_MAX_TEXT_LENGTH) {
+        setError(`翻译文本最多 ${TRANSLATION_MAX_TEXT_LENGTH} 个字符。`)
+        setStatus('error')
+        return
       }
-    }
+      if (source === target) {
+        setError('源语言和目标语言不能相同。')
+        setStatus('error')
+        return
+      }
+      setStatus('running')
+      setCopied(false)
+      let startedId: string | null = null
+      const pendingEvents: TranslationEvent[] = []
+      const handleEvent = (event: TranslationEvent): void => {
+        if (version !== requestVersionRef.current) return
+        if (!startedId) {
+          pendingEvents.push(event)
+          return
+        }
+        if (event.requestId !== startedId) return
+        if (event.type === 'delta') setOutput((current) => current + event.text)
+        if (event.type === 'done') {
+          setDetectedSourceLanguage(event.detectedSourceLanguage ?? '')
+          setStatus('ready')
+          unsubscribeRef.current?.()
+          unsubscribeRef.current = null
+          requestIdRef.current = null
+        }
+        if (event.type === 'error') {
+          setError(event.message)
+          setStatus('error')
+          unsubscribeRef.current?.()
+          unsubscribeRef.current = null
+          requestIdRef.current = null
+        }
+      }
+      unsubscribeRef.current = api.onEvent(handleEvent)
+      try {
+        startedId = await api.start({
+          providerId: selectedProviderId,
+          text: content,
+          sourceLanguage: source,
+          targetLanguage: target
+        })
+        if (version !== requestVersionRef.current) {
+          if (startedId) api.cancel(startedId)
+          return
+        }
+        if (!startedId) throw new Error('翻译请求无法启动。')
+        requestIdRef.current = startedId
+        pendingEvents.splice(0).forEach(handleEvent)
+      } catch (requestError) {
+        if (version !== requestVersionRef.current) return
+        setError(requestError instanceof Error ? requestError.message : '翻译失败。')
+        setStatus('error')
+        unsubscribeRef.current?.()
+        unsubscribeRef.current = null
+      }
+    },
+    [api]
+  )
 
-    const unsubscribe = window.dictol.aiLookup.onEvent(handleEvent)
-    unsubscribeRef.current = unsubscribe
-
-    try {
-      requestId = await window.dictol.aiLookup.startChat({
-        messages: [{ role: 'user', content }],
-        promptTarget: 'translation',
-        translation: { sourceLanguage, targetLanguage }
-      })
-      if (requestVersion !== requestVersionRef.current) return
-      if (!requestId) throw new Error('AI 请求无法启动。')
-      requestRef.current = requestId
-      pendingEvents.splice(0).forEach(handleEvent)
-    } catch (requestError) {
-      if (requestVersion !== requestVersionRef.current) return
-      setError(requestError instanceof Error ? requestError.message : 'AI 翻译失败。')
-      finish('error')
-    }
+  const copyResult = async (): Promise<void> => {
+    if (!output) return
+    await navigator.clipboard.writeText(output)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
   }
 
-  if (aiConfig.isLoading) {
-    return (
-      <main className="flex h-full items-center justify-center p-8 text-sm text-muted-foreground">
-        正在检查 AI 设置…
-      </main>
-    )
+  const changeInput = (value: string): void => {
+    requestVersionRef.current += 1
+    if (requestIdRef.current) api.cancel(requestIdRef.current)
+    requestIdRef.current = null
+    unsubscribeRef.current?.()
+    unsubscribeRef.current = null
+    setInput(value)
+    setOutput('')
+    setError('')
+    setStatus('idle')
   }
 
-  if (!aiConfig.data?.enabled) {
+  if (loadingConfig) {
     return (
-      <main className="mx-auto flex h-full w-full max-w-2xl flex-col items-center justify-center p-8 text-center">
-        <Languages className="mb-4 size-8 text-muted-foreground" />
-        <h1 className="text-lg font-semibold">AI 翻译不可用</h1>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          请先在设置中开启 AI 查词，并完成模型配置。
-        </p>
-      </main>
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        正在读取翻译设置…
+      </div>
     )
   }
 
   return (
-    <section className="mx-auto flex lg:h-full min-h-0 w-full flex-col p-6 sm:p-8">
-      <div className="shrink-0">
-        <p className="mb-2 text-sm font-medium text-primary">AI 翻译</p>
+    <section className="mx-auto flex h-full min-h-0 w-full max-w-5xl flex-col p-6 sm:p-8">
+      <header className="shrink-0">
+        <p className="mb-2 text-sm font-medium text-primary">翻译</p>
         <h1 className="text-xl font-semibold tracking-tight">翻译文本</h1>
-      </div>
-
+      </header>
       <div className="mt-8 grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
-        <section className="flex min-h-[22rem] min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card">
-          <div className="shrink-0 border-b border-border px-5 py-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="min-w-0 flex-1">
-                <LanguageSelect
-                  disabled={isRunning}
-                  label="源语言"
-                  onChange={setSourceLanguage}
-                  value={sourceLanguage}
-                />
-              </div>
-              <Button
-                aria-label="互换源语言和目标语言"
-                className="hidden sm:flex self-center sm:mb-0.5 sm:self-end sm:shrink-0"
-                disabled={isRunning}
-                onClick={() => {
-                  setSourceLanguage(targetLanguage)
-                  setTargetLanguage(sourceLanguage)
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex shrink-0 items-end gap-2 border-b border-border p-3">
+            <label className="min-w-0 flex-1 space-y-1 text-xs">
+              <span>源语言</span>
+              <select
+                aria-label="源语言"
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                value={sourceLanguage}
+                onChange={(event) => {
+                  const source = event.target.value as TranslationSourceLanguage
+                  setSourceLanguage(source)
+                  if (input.trim()) void translate(input, providerId, source, targetLanguage)
                 }}
-                size="icon"
-                title="互换源语言和目标语言"
-                type="button"
+              >
+                <option value="auto">自动检测</option>
+                {TRANSLATION_LANGUAGES.map((language) => (
+                  <option key={language} value={language}>
+                    {TRANSLATION_LANGUAGE_NAMES[language]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button
+              aria-label="互换翻译语言"
+              disabled={sourceLanguage === 'auto'}
+              onClick={() => {
+                if (sourceLanguage === 'auto') return
+                const nextSource = targetLanguage
+                const nextTarget = sourceLanguage
+                setSourceLanguage(nextSource)
+                setTargetLanguage(nextTarget)
+                if (input.trim()) void translate(input, providerId, nextSource, nextTarget)
+              }}
+              size="icon"
+              variant="ghost"
+            >
+              <ArrowLeftRight />
+            </Button>
+            <label className="min-w-0 flex-1 space-y-1 text-xs">
+              <span>目标语言</span>
+              <select
+                aria-label="目标语言"
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                value={targetLanguage}
+                onChange={(event) => {
+                  const target = event.target.value as TranslationLanguage
+                  setTargetLanguage(target)
+                  if (input.trim()) void translate(input, providerId, sourceLanguage, target)
+                }}
+              >
+                {TRANSLATION_LANGUAGES.map((language) => (
+                  <option key={language} value={language}>
+                    {TRANSLATION_LANGUAGE_NAMES[language]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <textarea
+            aria-label="待翻译文本"
+            className="min-h-0 flex-1 resize-none border-0 bg-transparent p-4 text-sm leading-6 outline-none"
+            maxLength={TRANSLATION_MAX_TEXT_LENGTH}
+            onChange={(event) => changeInput(event.target.value)}
+            placeholder="输入要翻译的文本…"
+            value={input}
+          />
+          <div className="flex justify-end p-3">
+            <Button
+              disabled={!input.trim() || !providerId || status === 'running'}
+              onClick={() => void translate(input, providerId, sourceLanguage, targetLanguage)}
+            >
+              {status === 'running' ? <LoaderCircle className="animate-spin" /> : <Languages />}
+              {status === 'running' ? '翻译中…' : '翻译'}
+            </Button>
+          </div>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex shrink-0 items-center gap-2 border-b border-border p-3">
+            <label className="min-w-0 flex-1 text-xs">
+              <span className="sr-only">翻译服务</span>
+              <select
+                aria-label="翻译服务"
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                disabled={!availableProviders.length}
+                value={providerId}
+                onChange={(event) => {
+                  const id = event.target.value
+                  setProviderId(id)
+                  if (input.trim()) void translate(input, id, sourceLanguage, targetLanguage)
+                }}
+              >
+                {!availableProviders.length && <option value="">尚无可用翻译服务</option>}
+                {availableProviders.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button
+              aria-label="复制译文"
+              disabled={status !== 'ready' || !output}
+              onClick={() => void copyResult()}
+              size="icon"
+              variant="ghost"
+            >
+              {copied ? <Check /> : <Copy />}
+            </Button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-4 text-sm leading-6">
+            {output ||
+              (status === 'running'
+                ? '正在翻译…'
+                : availableProviders.length
+                  ? '译文会显示在这里'
+                  : '请先在设置中添加并启用翻译服务。')}
+          </div>
+          {error && (
+            <div className="flex shrink-0 items-center justify-between gap-2 border-t border-destructive/20 bg-destructive/5 px-4 py-2 text-xs text-destructive">
+              <span>{error}</span>
+              <Button
+                disabled={!providerId}
+                onClick={() => void translate(input, providerId, sourceLanguage, targetLanguage)}
+                size="sm"
                 variant="outline"
               >
-                <ArrowLeftRight />
-              </Button>
-              <div className="min-w-0 flex-1">
-                <LanguageSelect
-                  disabled={isRunning}
-                  label="目标语言"
-                  onChange={setTargetLanguage}
-                  value={targetLanguage}
-                />
-              </div>
-            </div>
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col p-5">
-            <textarea
-              aria-label="待翻译文本"
-              className="min-h-0 flex-1 resize-none rounded-lg border border-input bg-background px-3 py-3 text-sm leading-6 outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isRunning}
-              id="translation-input"
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="输入要翻译的文本…"
-              value={input}
-            />
-            {error && status === 'error' && (
-              <p className="mt-3 text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            )}
-            <div className="mt-4 flex justify-end">
-              <Button disabled={!canTranslate} onClick={() => void translate()} type="button">
-                {isRunning ? <LoaderCircle className="animate-spin" /> : <Languages />}
-                {isRunning ? '翻译中…' : '翻译'}
+                重试
               </Button>
             </div>
-          </div>
-        </section>
-
-        <section className="flex min-h-[22rem] min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card">
-          <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
-            <h2 className="text-sm font-medium">翻译结果</h2>
-            {isRunning && <span className="text-xs text-muted-foreground">正在生成…</span>}
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 text-sm leading-6">
-            {output ? (
-              <AiRichText content={output} />
-            ) : isRunning ? (
-              <p className="text-muted-foreground">正在等待翻译结果…</p>
-            ) : status === 'error' && error ? (
-              <p className="text-sm text-destructive">翻译失败，请检查设置后重试。</p>
-            ) : (
-              <div className="flex h-full min-h-32 items-center justify-center text-center text-sm text-muted-foreground">
-                <p>翻译结果会显示在这里</p>
-              </div>
-            )}
-          </div>
-          {status === 'ready' && output && (
-            <p className="flex shrink-0 items-center gap-1 border-t border-border px-5 py-3 text-xs text-muted-foreground">
-              <Info aria-hidden="true" className="size-3.5 shrink-0" />
-              内容由 AI 生成，请注意甄别
-            </p>
           )}
-        </section>
+          {status === 'ready' && detectedSourceLanguage && (
+            <div className="shrink-0 border-t border-border px-4 py-2 text-xs text-muted-foreground">
+              检测到源语言：{detectedSourceLanguage}
+            </div>
+          )}
+        </div>
       </div>
     </section>
-  )
-}
-
-type LanguageSelectProps = {
-  disabled: boolean
-  label: string
-  onChange: (value: AiTranslationLanguage) => void
-  value: AiTranslationLanguage
-}
-
-function LanguageSelect({
-  disabled,
-  label,
-  onChange,
-  value
-}: LanguageSelectProps): React.JSX.Element {
-  return (
-    <label className="block space-y-1.5 text-sm">
-      <span className="font-medium">{label}</span>
-      <select
-        className={cn(
-          'h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30',
-          disabled && 'cursor-not-allowed opacity-60'
-        )}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value as AiTranslationLanguage)}
-        value={value}
-      >
-        {AI_TRANSLATION_LANGUAGES.map((language) => (
-          <option key={language} value={language}>
-            {language}
-          </option>
-        ))}
-      </select>
-    </label>
   )
 }

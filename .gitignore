@@ -26,3 +26,4 @@ opendesign/
 /native/mdict-node/target/
 /native/mdict-node/node_modules/
 /native/mdict-node/*.node
+/resources/system-translation/dictol-system-translation
