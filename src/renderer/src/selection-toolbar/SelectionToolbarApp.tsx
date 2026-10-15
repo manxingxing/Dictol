@@ -92,7 +92,7 @@ export function SelectionToolbarApp(): React.JSX.Element {
           type="button"
           variant="ghost"
         >
-          <img alt="" src={appIcon} />
+          <img alt="" draggable={false} src={appIcon} />
         </Button>
         <Separator className="selection-action-separator" orientation="vertical" />
         <Button

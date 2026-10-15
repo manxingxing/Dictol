@@ -212,7 +212,7 @@ export const HistoryPage = (): React.JSX.Element => {
           )}
         </div>
         <p className="py-2 text-xs text-center leading-6 text-muted-foreground">
-          最多保留 200 条记录, 重复查询会更新到列表顶部
+          最多保留 300 条记录, 重复查询会更新到列表顶部
         </p>
       </section>
 

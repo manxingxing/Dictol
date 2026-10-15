@@ -32,13 +32,10 @@ export function TtsSettingsCard(): React.JSX.Element {
     ? `${selectedVoice.name} · ${selectedVoice.lang}`
     : config?.systemVoiceUri
       ? '已保存的音色不可用'
-      : '自动选择（优先系统默认）'
+      : '系统默认'
 
   return (
-    <SettingsSection
-      title="朗读"
-      description="使用当前设备安装的中文、英语、日语、韩语、法语或德语本机语音。"
-    >
+    <SettingsSection title="朗读">
       <SettingsList>
         <SettingsRow
           label="系统音色"
@@ -74,7 +71,7 @@ export function TtsSettingsCard(): React.JSX.Element {
                             config?.systemVoiceUri ? 'size-4 opacity-0' : 'size-4 opacity-100'
                           }
                         />
-                        <span className="truncate">自动选择（优先系统默认）</span>
+                        <span className="truncate">系统默认</span>
                       </CommandItem>
                       {voices.map((voice) => (
                         <CommandItem
