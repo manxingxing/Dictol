@@ -281,7 +281,11 @@ export class CustomCssEditorController extends BaseController {
   private async navigatePreviewEntry(navigation: DictionaryLookupRequest): Promise<void> {
     const normalizedWord = navigation.word.trim()
     const dictionaryId = this.activeDictionaryId
-    if (!dictionaryId || navigation.sourceDictionaryId !== dictionaryId || !normalizedWord) {
+    if (
+      !dictionaryId ||
+      (navigation.sourceDictionaryId && navigation.sourceDictionaryId !== dictionaryId) ||
+      !normalizedWord
+    ) {
       return
     }
     const version = ++this.previewNavigationVersion
@@ -293,7 +297,8 @@ export class CustomCssEditorController extends BaseController {
       if (version !== this.previewNavigationVersion) return
       if (resolution.didLookup && !resolution.match) return
       const match =
-        resolution.match ?? (await this.db.lookupDictionaryEntry(dictionaryId, normalizedWord))
+        resolution.match ??
+        (await this.db.lookupDictionaryEntry(dictionaryId, resolution.request.word))
       if (!match) return
       if (version !== this.previewNavigationVersion) return
       await this.loadPreviewEntry(

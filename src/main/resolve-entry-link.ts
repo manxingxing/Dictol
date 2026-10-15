@@ -11,30 +11,35 @@ export type EntryNavigationResolution = {
   didLookup: boolean
 }
 
-/** Resolve entry://word#anchor against its source dictionary before routing. */
+/** Treat # as part of a word only when a source dictionary can confirm it. */
 export async function resolveEntryLinkWithAnchor(
   request: DictionaryLookupRequest,
   lookup: DictionaryEntryLookup
 ): Promise<EntryNavigationResolution> {
   const { word, sourceDictionaryId } = request
   const hashIndex = word.indexOf('#')
-  if (!sourceDictionaryId || hashIndex < 0) {
+  if (hashIndex < 0) {
     return { request, match: null, didLookup: false }
+  }
+
+  const fallbackTerm = word.slice(0, hashIndex).trim()
+  const fallbackRequest = {
+    ...request,
+    word: fallbackTerm,
+    ...(word.slice(hashIndex + 1) ? { anchor: word.slice(hashIndex + 1) } : {})
+  }
+  if (!sourceDictionaryId) {
+    return { request: fallbackRequest, match: null, didLookup: false }
   }
 
   try {
     const originalMatch = await lookup(sourceDictionaryId, word)
     if (originalMatch) return { request, match: originalMatch, didLookup: true }
 
-    const fallbackTerm = word.slice(0, hashIndex).trim()
     if (!fallbackTerm) return { request, match: null, didLookup: true }
 
     return {
-      request: {
-        ...request,
-        word: fallbackTerm,
-        ...(word.slice(hashIndex + 1) ? { anchor: word.slice(hashIndex + 1) } : {})
-      },
+      request: fallbackRequest,
       match: { word: fallbackTerm },
       didLookup: true
     }

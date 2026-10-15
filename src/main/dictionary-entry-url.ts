@@ -140,8 +140,10 @@ export function parseDictionaryEntryNavigation(targetUrl: string): DictionaryLoo
 
   const match = /^dictionary-(\d+)$/.exec(url.hostname)
   const dictionaryId = match ? parsePositiveSafeInteger(match[1]) : null
-  const encodedWord = url.pathname.replace(/^\//, '') + url.search + url.hash
-  if (dictionaryId === null || !encodedWord) return null
+  if (dictionaryId === null && url.pathname !== '') return null
+  const encodedWord =
+    (dictionaryId === null ? url.hostname : url.pathname.replace(/^\//, '')) + url.search + url.hash
+  if (!encodedWord) return null
 
   let word: string
   try {
@@ -151,7 +153,7 @@ export function parseDictionaryEntryNavigation(targetUrl: string): DictionaryLoo
   }
   if (!word) return null
 
-  return { word, sourceDictionaryId: String(dictionaryId) }
+  return dictionaryId === null ? { word } : { word, sourceDictionaryId: String(dictionaryId) }
 }
 
 export function parseDictionaryEntryResourceUrl(value: string): DictionaryResourceLocation | null {
