@@ -1,4 +1,4 @@
-import { BrowserWindow, Menu, nativeTheme, screen, type Rectangle } from 'electron'
+import { BrowserWindow, Menu, nativeTheme, screen } from 'electron'
 
 import icon from '../../resources/icon.png?asset'
 import {

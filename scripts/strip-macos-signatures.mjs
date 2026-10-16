@@ -133,6 +133,40 @@ function pruneAndVerifyNativeModules(appPath, arch) {
   console.log(`  • verified macOS native modules arch=${arch} count=${expected.length}`)
 }
 
+function verifyUniversalNativeModules(appPath) {
+  const unpacked = join(appPath, 'Contents', 'Resources', 'app.asar.unpacked', 'node_modules')
+  const expected = [
+    [join(unpacked, '@dictol', 'mdict-native', 'dictol-mdict-node.darwin-x64.node'), 'x86_64'],
+    [join(unpacked, '@dictol', 'mdict-native', 'dictol-mdict-node.darwin-arm64.node'), 'arm64'],
+    [join(unpacked, 'better-sqlite3', 'prebuilds', 'darwin-x64.node'), 'x86_64'],
+    [join(unpacked, 'better-sqlite3', 'prebuilds', 'darwin-arm64.node'), 'arm64'],
+    [join(unpacked, 'selection-hook', 'prebuilds', 'darwin-x64', 'selection-hook.node'), 'x86_64'],
+    [join(unpacked, 'selection-hook', 'prebuilds', 'darwin-arm64', 'selection-hook.node'), 'arm64']
+  ]
+
+  for (const [path, architecture] of expected) {
+    if (!existsSync(path)) throw new Error(`Missing universal macOS native module: ${path}`)
+    const description = fileArchitecture(path)
+    if (!description.includes(architecture)) {
+      throw new Error(
+        `Wrong architecture in universal macOS native module: ${path}\n` +
+          `expected=${architecture}, file=${description}`
+      )
+    }
+  }
+
+  const adblock = join(unpacked, 'adblock-rs', 'js', 'index.node')
+  if (!existsSync(adblock)) throw new Error(`Missing universal macOS native module: ${adblock}`)
+  const adblockDescription = fileArchitecture(adblock)
+  if (!adblockDescription.includes('x86_64') || !adblockDescription.includes('arm64')) {
+    throw new Error(
+      `adblock-rs must contain x86_64 and arm64 slices in a universal build: ${adblockDescription}`
+    )
+  }
+
+  console.log(`  • verified universal macOS native modules count=${expected.length + 1}`)
+}
+
 function verifyWindowsNativeModules(appOutDir, arch) {
   if (arch !== 'x64') throw new Error(`Only Windows x64 is supported, received: ${arch}`)
 
@@ -207,9 +241,15 @@ export default async function stripMacOSSignatures(context) {
   const appPath = resolveAppBundle(context.appOutDir)
   if (!existsSync(appPath)) throw new Error(`Packaged app does not exist: ${appPath}`)
 
-  const arch = targetDarwinArch(context)
-  verifySystemTranslationHelper(appPath, [arch === 'x64' ? 'x86_64' : 'arm64'])
-  pruneAndVerifyNativeModules(appPath, arch)
+  const universal = context.arch === 4 || context.arch === 'universal'
+  if (universal || process.env.DICTOL_MAC_UNIVERSAL === '1') {
+    verifySystemTranslationHelper(appPath, ['x86_64', 'arm64'])
+    verifyUniversalNativeModules(appPath)
+  } else {
+    const arch = targetDarwinArch(context)
+    verifySystemTranslationHelper(appPath, [arch === 'x64' ? 'x86_64' : 'arm64'])
+    pruneAndVerifyNativeModules(appPath, arch)
+  }
 
   const { bundles, files } = collectCandidates(appPath)
   const candidates = [appPath, ...bundles, ...files]
