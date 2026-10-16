@@ -24,6 +24,12 @@ export type SelectionSurfaceWindow = BrowserWindow | NativeSelectionPanel
 const getMainWindowBackgroundColor = (useDarkColors: boolean): string =>
   process.platform === 'darwin' ? '#00000000' : useDarkColors ? '#232323' : '#faf9f7'
 
+const ocrHighlightPage = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:transparent}
+body:before{content:"";position:fixed;inset:0;border-bottom:2px solid rgba(187,126,0,.95);background:rgba(255,193,7,.42)}
+</style></head><body></body></html>`)}`
+
 export class WindowManager {
   mainWindow: BrowserWindow | undefined
   dictionaryView: WebContentsViewManager | undefined
@@ -32,6 +38,9 @@ export class WindowManager {
   searchPopoverView: WebContentsViewManager | undefined
   selectionToolbarWindow: SelectionSurfaceWindow | undefined
   selectionExplanationWindow: SelectionSurfaceWindow | undefined
+  private ocrHighlightWindow: BrowserWindow | undefined
+  private ocrHighlightReady = false
+  private ocrHighlightRequested = false
   readonly excerptCaptureWindows = new Set<BrowserWindow>()
   selectionTranslationWindow: BrowserWindow | undefined
   selectionExplanationView: WebContentsViewManager | undefined
@@ -366,6 +375,65 @@ export class WindowManager {
     return surface
   }
 
+  showOcrHighlight(bounds: Rectangle): void {
+    let window = this.ocrHighlightWindow
+    this.ocrHighlightRequested = true
+    if (!window || window.isDestroyed()) {
+      this.ocrHighlightReady = false
+      const highlightWindow = new BrowserWindow({
+        ...bounds,
+        show: false,
+        frame: false,
+        type: process.platform === 'darwin' ? 'panel' : undefined,
+        transparent: true,
+        backgroundColor: '#00000000',
+        hasShadow: false,
+        focusable: false,
+        resizable: false,
+        movable: false,
+        skipTaskbar: true,
+        alwaysOnTop: true,
+        webPreferences: { sandbox: true, nodeIntegration: false, contextIsolation: true }
+      })
+      window = highlightWindow
+      this.ocrHighlightWindow = highlightWindow
+      highlightWindow.setIgnoreMouseEvents(true)
+      highlightWindow.once('ready-to-show', () => {
+        if (this.ocrHighlightWindow !== highlightWindow || highlightWindow.isDestroyed()) return
+        this.ocrHighlightReady = true
+        if (this.ocrHighlightRequested) highlightWindow.showInactive()
+      })
+      void highlightWindow.loadURL(ocrHighlightPage).catch((error: unknown) => {
+        console.error('Failed to load OCR highlight surface', error)
+        if (this.ocrHighlightWindow === highlightWindow) {
+          this.ocrHighlightReady = false
+          this.ocrHighlightRequested = false
+        }
+      })
+      if (process.platform === 'darwin') {
+        highlightWindow.setVisibleOnAllWorkspaces(true, {
+          visibleOnFullScreen: true,
+          skipTransformProcessType: true
+        })
+      }
+      highlightWindow.on('closed', () => {
+        if (this.ocrHighlightWindow === highlightWindow) {
+          this.ocrHighlightWindow = undefined
+          this.ocrHighlightReady = false
+          this.ocrHighlightRequested = false
+        }
+      })
+    }
+    window.setBounds(bounds, false)
+    if (this.ocrHighlightReady) window.showInactive()
+  }
+
+  hideOcrHighlight(): void {
+    this.ocrHighlightRequested = false
+    const window = this.ocrHighlightWindow
+    if (window && !window.isDestroyed()) window.hide()
+  }
+
   createExcerptCaptureWindow(): BrowserWindow {
     const window = new BrowserWindow({
       width: 520,
@@ -584,6 +652,9 @@ export class WindowManager {
     if (this.selectionExplanationWindow && !this.selectionExplanationWindow.isDestroyed()) {
       this.selectionExplanationWindow.destroy()
     }
+    if (this.ocrHighlightWindow && !this.ocrHighlightWindow.isDestroyed()) {
+      this.ocrHighlightWindow.destroy()
+    }
     this.excerptCaptureWindows.forEach((window) => {
       if (!window.isDestroyed()) window.destroy()
     })
@@ -602,6 +673,9 @@ export class WindowManager {
     this.searchPopoverView = undefined
     this.selectionToolbarWindow = undefined
     this.selectionExplanationWindow = undefined
+    this.ocrHighlightWindow = undefined
+    this.ocrHighlightReady = false
+    this.ocrHighlightRequested = false
     this.excerptCaptureWindows.clear()
     this.selectionTranslationWindow = undefined
     this.selectionExplanationView = undefined

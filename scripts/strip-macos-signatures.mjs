@@ -115,7 +115,15 @@ function pruneAndVerifyNativeModules(appPath, arch) {
   }
 
   const adblock = join(unpacked, 'adblock-rs', 'js', 'index.node')
-  expected.push(adblock)
+  const ocr = join(
+    unpacked,
+    '@cherrystudio',
+    'mac-system-ocr',
+    'build',
+    'Release',
+    'mac_system_ocr.node'
+  )
+  expected.push(adblock, ocr)
 
   for (const path of expected) {
     if (!existsSync(path)) throw new Error(`Missing ${arch} macOS native module: ${path}`)
@@ -164,7 +172,21 @@ function verifyUniversalNativeModules(appPath) {
     )
   }
 
-  console.log(`  • verified universal macOS native modules count=${expected.length + 1}`)
+  const ocr = join(
+    unpacked,
+    '@cherrystudio',
+    'mac-system-ocr',
+    'build',
+    'Release',
+    'mac_system_ocr.node'
+  )
+  if (!existsSync(ocr)) throw new Error(`Missing universal macOS native module: ${ocr}`)
+  const ocrDescription = fileArchitecture(ocr)
+  if (!ocrDescription.includes('x86_64') || !ocrDescription.includes('arm64')) {
+    throw new Error(`mac-system-ocr must contain x86_64 and arm64 slices: ${ocrDescription}`)
+  }
+
+  console.log(`  • verified universal macOS native modules count=${expected.length + 2}`)
 }
 
 function verifyWindowsNativeModules(appOutDir, arch) {

@@ -19,7 +19,16 @@ const getTarget = () => {
 const verifyWindowsX64Binding = (directory) => {
   const binaryPath = join(directory, 'dictol-mdict-node.win32-x64-msvc.node')
   const binary = readFileSync(binaryPath)
-  const requiredExports = ['Mdx', 'Mdd', 'MddList', 'hashFile']
+  const requiredExports = [
+    'Mdx',
+    'Mdd',
+    'MddList',
+    'hashFile',
+    'recognizeWindowsText',
+    'captureWindowsDisplayAtPoint',
+    'captureWindowsScreenRegion',
+    'getWindowsDisplayBoundsAtPoint'
+  ]
   const missingExports = requiredExports.filter((name) => !binary.includes(Buffer.from(name)))
 
   if (missingExports.length > 0) {

@@ -5,6 +5,7 @@ import type { SelectionExplanationPayload } from '../../../shared/selection-expl
 import type { TtsPlayback } from '../../../shared/tts'
 import { AiExplanation } from './AiExplanation'
 import { DictionaryExplanation } from './DictionaryExplanation'
+import { OcrAiExplanation } from './OcrAiExplanation'
 
 declare global {
   interface Window {
@@ -20,6 +21,7 @@ declare global {
       togglePin: () => void
       openInMain: () => void
       saveAiExplanationAsNote: (commentRich: string) => Promise<void>
+      saveOcrExplanationAsExcerpt: (requestId: number) => Promise<void>
       isStarred: (word: string) => Promise<boolean>
       toggleStar: (word: string) => Promise<void>
     }
@@ -43,7 +45,9 @@ export function SelectionExplanationApp(): React.JSX.Element {
     <div
       className={`selection-explanation-window${window.dictolSelectionExplanation.nativeRoundedWindow ? ' native-rounded-window' : ''}`}
     >
-      {payload.mode === 'ai' ? (
+      {payload.mode === 'ocr-ai' ? (
+        <OcrAiExplanation payload={payload} />
+      ) : payload.mode === 'ai' ? (
         <AiExplanation payload={payload} />
       ) : (
         <DictionaryExplanation payload={payload} />

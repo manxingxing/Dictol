@@ -187,6 +187,13 @@ type WordCaptureStatus = {
   lookupWordOnSelection: boolean
   selectionDictionaryGroupId: string | null
   excludedPrograms: string[]
+  ocrSupported: boolean
+  ocrEnabled: boolean
+  ocrDictionaryShortcut: string
+  ocrAiShortcut: string
+  ocrDictionaryRegistered: boolean
+  ocrAiRegistered: boolean
+  screenCapturePermission: string | null
 }
 
 type WordCaptureEvent =
@@ -612,10 +619,19 @@ const api = Object.freeze({
       ipcRenderer.invoke('word-capture:request-access'),
     openInputMonitoringSettings: (): Promise<OpenInputMonitoringSettingsResult | null> =>
       ipcRenderer.invoke('word-capture:open-input-monitoring-settings'),
+    openScreenCaptureSettings: (): Promise<OpenInputMonitoringSettingsResult | null> =>
+      ipcRenderer.invoke('word-capture:open-screen-capture-settings'),
     setShortcut: (shortcut: string): Promise<WordCaptureShortcutResult | null> =>
       ipcRenderer.invoke('word-capture:set-shortcut', shortcut),
     setSelectionEnabled: (enabled: boolean): Promise<WordCaptureShortcutResult | null> =>
       ipcRenderer.invoke('word-capture:set-selection-enabled', enabled),
+    setOcrEnabled: (enabled: boolean): Promise<WordCaptureShortcutResult | null> =>
+      ipcRenderer.invoke('word-capture:set-ocr-enabled', enabled),
+    setOcrShortcut: (
+      mode: 'dictionary' | 'ai',
+      shortcut: string
+    ): Promise<WordCaptureShortcutResult | null> =>
+      ipcRenderer.invoke('word-capture:set-ocr-shortcut', mode, shortcut),
     setSelectionDictionaryGroup: (
       groupId: string | null
     ): Promise<WordCaptureShortcutResult | null> =>

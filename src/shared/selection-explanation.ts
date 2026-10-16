@@ -10,7 +10,7 @@ export type SelectionExplanationDictionary = {
 }
 
 export type SelectionExplanationPayload = {
-  mode: 'dictionary' | 'ai'
+  mode: 'dictionary' | 'ai' | 'ocr-ai'
   requestId: number
   word: string
   aiEnabled?: boolean
@@ -22,4 +22,8 @@ export type SelectionExplanationPayload = {
   content?: string
   complete?: boolean
   message?: string
+  ocrSentence?: string
+  ocrContext?: string
+  ocrExplanation?: OcrAiExplanation
 }
+import type { OcrAiExplanation } from './ocr-explanation'

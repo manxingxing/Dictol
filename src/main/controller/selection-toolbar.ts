@@ -8,9 +8,11 @@ import {
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   type Point,
+  type Rectangle,
   type WebContents
 } from 'electron'
-import type { AppRuntime } from '../app-runtime'
+import type { AppRuntime, OcrLookupMode } from '../app-runtime'
+import { captureTextUnderCursor } from '../ocr-capture'
 import {
   getSelectionToolbarWindowSize,
   SELECTION_TOOLBAR_WINDOWS_SHADOW_MARGIN,
@@ -75,6 +77,7 @@ export class SelectionToolbarController extends BaseController {
   private nativeMenuOpen = false
   private toolbarDismissSubscriptions: Array<() => void> = []
   private globalMouseDownUnsubscribe: (() => void) | undefined
+  private ocrCaptureVersion = 0
 
   override mount(): void {
     this.explanation.setOnVisibilityChange(this.refreshDismissSubscription)
@@ -84,7 +87,6 @@ export class SelectionToolbarController extends BaseController {
     ipcMain.on('selection-toolbar:explain', this.explain)
     ipcMain.on('selection-toolbar:translate', this.translate)
     ipcMain.on('selection-toolbar:copy', this.copy)
-    ipcMain.handle('selection-toolbar:capture-excerpt', this.captureExcerpt)
     ipcMain.on('selection-toolbar:open-menu', this.openNativeMenu)
     ipcMain.on('selection-toolbar:activity', this.handleToolbarActivity)
     ipcMain.on('selection-toolbar:rendered', this.handleToolbarRendered)
@@ -95,6 +97,67 @@ export class SelectionToolbarController extends BaseController {
     ipcMain.on('selection-explanation:loading-ready', this.explanationLoadingReady)
     ipcMain.on('selection-translation:close', this.closeTranslation)
     ipcMain.on('selection-translation:desired-height', this.resizeTranslation)
+    ipcMain.handle('selection-toolbar:capture-excerpt', this.captureExcerpt)
+    this.runtime.ocrShortcutHandler = this.handleOcrShortcut
+  }
+
+  private readonly handleOcrShortcut = async (mode: OcrLookupMode): Promise<void> => {
+    const version = ++this.ocrCaptureVersion
+    const anchor = createCursorAnchor()
+    let ocrAiVersion: number | undefined
+    const onScreenshotCaptured =
+      mode === 'ai'
+        ? (): void => {
+            if (version !== this.ocrCaptureVersion) return
+            this.explanation.setAnchor(anchor)
+            ocrAiVersion = this.explanation.beginOcrAiRecognition()
+          }
+        : undefined
+    try {
+      this.runtime.windowManager.hideOcrHighlight()
+      this.explanation.prepareForOcrCapture()
+      this.dismissForMainExplanation()
+      if (mode === 'ai') this.explanation.prewarmExplanationWindow()
+      const capture = await captureTextUnderCursor(mode, onScreenshotCaptured)
+      if (version !== this.ocrCaptureVersion) return
+      this.explanation.setAnchor(anchor)
+      if (!capture) {
+        if (mode === 'ai' && ocrAiVersion !== undefined) {
+          this.explanation.showOcrAiRecognitionError(ocrAiVersion, '鼠标下没有识别到词语。')
+        } else {
+          this.explanation.showOcrError(mode, '鼠标下没有识别到词语。')
+        }
+      } else if (mode === 'dictionary') {
+        const lookup = this.explanation.showExplanation(capture.selection.word)
+        this.showOcrHighlight(capture.wordBounds)
+        await lookup
+      } else if (
+        ocrAiVersion !== undefined &&
+        this.explanation.isOcrAiRecognitionCurrent(ocrAiVersion)
+      ) {
+        const explanation = this.explanation.showOcrAiExplanation(capture.selection, ocrAiVersion)
+        this.showOcrHighlight(capture.wordBounds)
+        await explanation
+      }
+    } catch (error) {
+      if (version !== this.ocrCaptureVersion) return
+      this.explanation.setAnchor(anchor)
+      const message = error instanceof Error ? error.message : 'OCR 取词失败。'
+      if (mode === 'ai' && ocrAiVersion !== undefined) {
+        this.explanation.showOcrAiRecognitionError(ocrAiVersion, message)
+      } else {
+        this.explanation.showOcrError(mode, message)
+      }
+    }
+  }
+
+  private showOcrHighlight(bounds: Rectangle): void {
+    try {
+      this.runtime.windowManager.showOcrHighlight(bounds)
+    } catch (error) {
+      this.runtime.windowManager.hideOcrHighlight()
+      console.error('Failed to show OCR word highlight', error)
+    }
   }
 
   private readonly showExplanationFromMain = (event: IpcMainEvent, word: unknown): void => {

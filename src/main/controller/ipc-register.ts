@@ -54,4 +54,5 @@ export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
   ]
 
   controllers.forEach((controller) => controller.mount())
+  appRuntime.restartOcrShortcuts()
 }

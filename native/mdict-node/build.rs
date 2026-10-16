@@ -16,8 +16,13 @@ fn main() {
 }
 
 fn build_macos_selection_panel(target: &str) {
-    // Compile the AppKit selection panel into the native addon.
-    const SOURCES: [&str; 1] = ["src/selection_panel.m"];
+    // Keep the AppKit panel, screenshot capture, and tokenizer in one archive;
+    // Rust exposes their C entry points through the same N-API addon.
+    const SOURCES: [&str; 3] = [
+        "src/selection_panel.m",
+        "src/screen_capture.m",
+        "src/word_tokenizer.m",
+    ];
     const ARCHIVE: &str = "libdictol_macos_selection_panel.a";
 
     for source in SOURCES {
@@ -89,6 +94,10 @@ fn build_macos_selection_panel(target: &str) {
         ARCHIVE.trim_end_matches(".a").trim_start_matches("lib")
     );
     println!("cargo:rustc-link-lib=framework=AppKit");
+    // ScreenCaptureKit is unavailable on older macOS releases supported by Electron.
+    println!("cargo:rustc-link-arg=-Wl,-weak_framework,ScreenCaptureKit");
+    println!("cargo:rustc-link-lib=framework=ImageIO");
+    println!("cargo:rustc-link-lib=framework=NaturalLanguage");
 }
 
 fn show_sdk_path() -> String {

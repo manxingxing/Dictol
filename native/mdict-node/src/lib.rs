@@ -17,6 +17,10 @@ use napi::{Env, Error, Result, Status, Task};
 use napi_derive::napi;
 
 mod macos_selection_panel;
+mod macos_screen_capture;
+mod macos_word_tokenizer;
+mod windows_ocr;
+mod windows_screen_capture;
 
 /// Lingoes LD2 reader; all I/O-heavy operations run in asynchronous native tasks.
 #[napi]

@@ -153,6 +153,14 @@ export declare class MdxKeyScanner {
   nextBatch(batchSize?: number | undefined | null): Promise<KeyBatch>
 }
 
+export declare function captureScreenRegion(x: number, y: number, width: number, height: number): Promise<ScreenCaptureImage>
+
+export declare function captureWindowsDisplayAtPoint(x: number, y: number): Promise<WindowsScreenCaptureImage>
+
+export declare function captureWindowsScreenRegion(x: number, y: number, width: number, height: number): Promise<WindowsScreenCaptureImage>
+
+export declare function chineseWordRange(text: string, offset: number): WordRange | null
+
 /** Configure an Electron-managed panel window without moving its Chromium content view. */
 export declare function configureElectronPanel(nativeWindowHandle: Buffer): void
 
@@ -238,6 +246,8 @@ export interface EntryBatch {
 
 export declare function getSelectionPanelBounds(panelId: number): SelectionPanelBounds
 
+export declare function getWindowsDisplayBoundsAtPoint(x: number, y: number): WindowsDisplayBounds
+
 /** 使用 XXH3-128 计算文件 checksum。小文件读取全部内容，大文件读取头、中、尾各 64 KiB。 */
 export declare function hashFile(path: string): Promise<string>
 
@@ -287,6 +297,14 @@ export interface OpenOptions {
   keyFile?: string
 }
 
+export declare function recognizeWindowsText(png: Buffer, language?: string | undefined | null): Promise<WindowsOcrResult>
+
+export interface ScreenCaptureImage {
+  png: Buffer
+  width: number
+  height: number
+}
+
 export interface SelectionPanelBounds {
   x: number
   y: number
@@ -301,3 +319,39 @@ export declare function setSelectionPanelBounds(panelId: number, bounds: Selecti
 export declare function showSelectionPanel(panelId: number, focus: boolean): void
 
 export declare function showSelectionPanelDisableMenu(panelId: number, enabled: boolean): void
+
+export interface WindowsDisplayBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface WindowsOcrObservation {
+  text: string
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface WindowsOcrResult {
+  observations: Array<WindowsOcrObservation>
+  recognizerLanguage: string
+  inputWidth: number
+  inputHeight: number
+  processedWidth: number
+  processedHeight: number
+  maxImageDimension: number
+}
+
+export interface WindowsScreenCaptureImage {
+  png: Buffer
+  width: number
+  height: number
+}
+
+export interface WordRange {
+  start: number
+  length: number
+}

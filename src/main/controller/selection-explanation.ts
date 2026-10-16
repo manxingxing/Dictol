@@ -27,6 +27,7 @@ import { resolveEntryLinkWithAnchor } from '../resolve-entry-link'
 import { resolveRendererUrl } from '../output-path'
 import { hideSelectionWindow, showSelectionWindowInactive } from '../selection-window-behavior'
 import type { SelectionSurfaceWindow } from '../window-manager'
+import type { OcrSelection } from '../ocr-text'
 import {
   containsPoint,
   createCursorAnchor,
@@ -52,6 +53,7 @@ export class SelectionExplanationController extends BaseController {
   private pendingExplanationLoading: PendingExplanationLoading | undefined
   private lookupVersion = 0
   private preferredExplanationSize: ExplanationSize = { width: 520, height: 600 }
+  private preferredOcrAiSize: ExplanationSize = { width: 520, height: 320 }
   private appliedExplanationSize: ExplanationSize | undefined
   private activeAiRequestId: string | undefined
   private onVisibilityChange: (() => void) | undefined
@@ -70,6 +72,7 @@ export class SelectionExplanationController extends BaseController {
     ipcMain.handle('selection-explanation:is-starred', this.isWordStarred)
     ipcMain.handle('selection-explanation:toggle-star', this.toggleWordStar)
     ipcMain.handle('selection-explanation:save-ai-explanation', this.saveAiExplanationAsNote)
+    ipcMain.handle('selection-explanation:save-ocr-explanation', this.saveOcrExplanationAsExcerpt)
   }
 
   setAnchor(anchor: SelectionAnchor): void {
@@ -97,6 +100,14 @@ export class SelectionExplanationController extends BaseController {
     this.flushExplanationPayload()
   }
 
+  prepareForOcrCapture(): void {
+    this.lookupVersion += 1
+    this.cancelAiExplanation()
+    this.resolvePendingExplanationLoading()
+    const window = this.currentWindow
+    if (window?.isVisible()) hideSelectionWindow(window)
+  }
+
   hideIfOutside(point: Point): void {
     const window = this.currentWindow
     if (
@@ -120,6 +131,7 @@ export class SelectionExplanationController extends BaseController {
     }
     this.showAiExplanation(payload.word)
   }
+
   private readonly saveAiExplanationAsNote = async (
     event: IpcMainInvokeEvent,
     commentRich: unknown
@@ -144,6 +156,37 @@ export class SelectionExplanationController extends BaseController {
       commentRich
     })
     this.notifyNoteCreated([word])
+  }
+
+  private readonly saveOcrExplanationAsExcerpt = async (
+    event: IpcMainInvokeEvent,
+    requestId: unknown
+  ): Promise<void> => {
+    const payload = this.explanationPayload
+    if (
+      !this.acceptsExplanationSender(event) ||
+      payload?.mode !== 'ocr-ai' ||
+      payload.requestId !== requestId ||
+      payload.state !== 'content' ||
+      !payload.ocrSentence ||
+      !payload.ocrExplanation
+    ) {
+      throw new Error('OCR AI 解释尚未完成。')
+    }
+    const explanation = payload.ocrExplanation
+    await this.db.createDictionaryNote({
+      relatedTerms: [payload.word],
+      excerpt: payload.ocrSentence,
+      comment: [
+        `句意：${explanation.sentenceMeaning}`,
+        `${payload.word}：${explanation.wordMeaning}`,
+        explanation.usage ? `用法：${explanation.usage}` : ''
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      commentRich: null
+    })
+    this.notifyNoteCreated([payload.word])
   }
 
   markLoadingReady(requestId: number): void {
@@ -382,18 +425,21 @@ export class SelectionExplanationController extends BaseController {
     })
     window.on('resize', () => this.rememberExplanationSize(window))
     window.on('hide', () => {
+      this.runtime.windowManager.hideOcrHighlight()
       this.onVisibilityChange?.()
     })
     window.on('closed', () => {
+      this.runtime.windowManager.hideOcrHighlight()
       this.onVisibilityChange?.()
     })
     window.webContents.on('did-finish-load', () => {
       this.explanationLoaded = true
       this.flushExplanationPayload()
       if (
-        (this.explanationPayload?.mode === 'ai' ||
-          this.explanationPayload?.state === 'error') &&
-        this.explanationPayload.requestId === this.lookupVersion
+        this.explanationPayload?.requestId === this.lookupVersion &&
+        (this.explanationPayload.mode === 'ai' ||
+          this.explanationPayload.mode === 'ocr-ai' ||
+          this.explanationPayload.state === 'error')
       ) {
         this.showExplanationWindow(window)
       }
@@ -471,6 +517,7 @@ export class SelectionExplanationController extends BaseController {
     const normalizedWord = word.trim()
     if (!normalizedWord || normalizedWord.length > MAX_SELECTION_LENGTH) return
 
+    this.runtime.windowManager.hideOcrHighlight()
     this.cancelAiExplanation()
     this.explanationDictionaryMatches = []
     this.loadedExplanationDictionaryId = undefined
@@ -582,6 +629,7 @@ export class SelectionExplanationController extends BaseController {
     const normalizedWord = word.trim()
     if (!normalizedWord) return
 
+    this.runtime.windowManager.hideOcrHighlight()
     this.resolvePendingExplanationLoading()
     this.explanationDictionaryMatches = []
     this.loadedExplanationDictionaryId = undefined
@@ -644,6 +692,105 @@ export class SelectionExplanationController extends BaseController {
       },
       { sourceText: normalizedWord }
     )
+  }
+
+  showOcrError(mode: 'dictionary' | 'ai', message: string): void {
+    this.runtime.windowManager.hideOcrHighlight()
+    this.resolvePendingExplanationLoading()
+    this.cancelAiExplanation()
+    this.explanationDictionaryMatches = []
+    this.loadedExplanationDictionaryId = undefined
+    this.runtime.windowManager.setSelectionExplanationSwitcherVisible(false)
+    const version = ++this.lookupVersion
+    const window = this.initializeExplanationWindow()
+    this.explanationView.hide()
+    this.updateExplanation({
+      mode: mode === 'ai' ? 'ocr-ai' : 'dictionary',
+      requestId: version,
+      word: '',
+      state: 'error',
+      message
+    })
+    this.positionExplanation(window)
+    if (this.explanationLoaded) this.showExplanationWindow(window)
+  }
+
+  beginOcrAiRecognition(): number {
+    this.runtime.windowManager.hideOcrHighlight()
+    this.resolvePendingExplanationLoading()
+    this.cancelAiExplanation()
+    this.explanationDictionaryMatches = []
+    this.loadedExplanationDictionaryId = undefined
+    this.runtime.windowManager.setSelectionExplanationSwitcherVisible(false)
+    const version = ++this.lookupVersion
+    const window = this.initializeExplanationWindow()
+    this.explanationView.hide()
+    this.updateExplanation({
+      mode: 'ocr-ai',
+      requestId: version,
+      word: '',
+      state: 'loading'
+    })
+    this.positionExplanation(window)
+    if (this.explanationLoaded) this.showExplanationWindow(window)
+    return version
+  }
+
+  isOcrAiRecognitionCurrent(version: number): boolean {
+    return (
+      version === this.lookupVersion &&
+      this.explanationPayload?.mode === 'ocr-ai' &&
+      this.explanationPayload.state === 'loading'
+    )
+  }
+
+  showOcrAiRecognitionError(version: number, message: string): void {
+    if (!this.isOcrAiRecognitionCurrent(version)) return
+    this.updateExplanation({
+      mode: 'ocr-ai',
+      requestId: version,
+      word: '',
+      state: 'error',
+      message
+    })
+    const window = this.currentWindow
+    if (window && this.explanationLoaded && !window.isVisible()) {
+      this.showExplanationWindow(window)
+    }
+  }
+
+  async showOcrAiExplanation(selection: OcrSelection, version: number): Promise<void> {
+    if (!this.isOcrAiRecognitionCurrent(version)) return
+    const requestId = `ocr-${version}`
+    this.activeAiRequestId = requestId
+    const basePayload = {
+      mode: 'ocr-ai' as const,
+      requestId: version,
+      word: selection.word,
+      ocrSentence: selection.sentence,
+      ocrContext: selection.context
+    }
+    this.updateExplanation({ ...basePayload, state: 'loading' })
+
+    try {
+      const explanation = await this.runtime.aiLookupService.explainOcrContext(requestId, selection)
+      if (version !== this.lookupVersion) return
+      this.updateExplanation({
+        ...basePayload,
+        state: 'content',
+        ocrExplanation: explanation,
+        complete: true
+      })
+    } catch (error) {
+      if (version !== this.lookupVersion) return
+      this.updateExplanation({
+        ...basePayload,
+        state: 'error',
+        message: error instanceof Error ? error.message : 'AI 解释失败。'
+      })
+    } finally {
+      if (this.activeAiRequestId === requestId) this.activeAiRequestId = undefined
+    }
   }
 
   private async showExplanationDictionary(match: DictionaryMatch): Promise<void> {
@@ -801,7 +948,10 @@ export class SelectionExplanationController extends BaseController {
   private positionExplanation(window: SelectionSurfaceWindow): void {
     if (this.runtime.windowManager.isSelectionExplanationPinned()) return
     const anchor = this.anchor ?? createCursorAnchor()
-    const preferredSize = this.preferredExplanationSize
+    const preferredSize =
+      this.explanationPayload?.mode === 'ocr-ai'
+        ? this.preferredOcrAiSize
+        : this.preferredExplanationSize
     const bounds = fitExplanationNearSelection(anchor, preferredSize)
     this.appliedExplanationSize = { width: bounds.width, height: bounds.height }
     window.setBounds(bounds, false)
@@ -817,10 +967,15 @@ export class SelectionExplanationController extends BaseController {
       width: Math.max(EXPLANATION_MIN_WIDTH, width),
       height: Math.max(EXPLANATION_MIN_HEIGHT, height)
     }
-    this.preferredExplanationSize = preferredSize
+    if (this.explanationPayload?.mode === 'ocr-ai') {
+      this.preferredOcrAiSize = preferredSize
+    } else {
+      this.preferredExplanationSize = preferredSize
+    }
   }
 
   hideExplanation(): void {
+    this.runtime.windowManager.hideOcrHighlight()
     this.lookupVersion += 1
     this.cancelAiExplanation()
     this.resolvePendingExplanationLoading()

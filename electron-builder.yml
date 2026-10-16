@@ -47,6 +47,7 @@ asarUnpack:
   - node_modules/@dictol/mdict-native/*.node
   - node_modules/adblock-rs/js/index.node
   - node_modules/selection-hook/prebuilds/**
+  - node_modules/@cherrystudio/mac-system-ocr/build/Release/*.node
   - node_modules/better-sqlite3/lib/**
   - node_modules/better-sqlite3/prebuilds/*.node
   - node_modules/better-sqlite3/package.json
@@ -99,6 +100,7 @@ win:
     - '!node_modules/adblock-rs/js/src/**'
     - '!node_modules/adblock-rs/js/test/**'
     - '!node_modules/@dictol/mdict-native/*.darwin-*.node'
+    - '!node_modules/@cherrystudio/mac-system-ocr/**'
     - '!node_modules/@dictol/mdict-native/*.win32-arm64*.node'
     - '!node_modules/better-sqlite3/{deps,src}/**'
     - '!node_modules/better-sqlite3/prebuilds/darwin*.node'
@@ -203,6 +205,7 @@ dmg:
 linux:
   files:
     - '!resources/system-translation/**'
+    - '!node_modules/@cherrystudio/mac-system-ocr/**'
   icon: build/icon.png
   desktop:
     entry:
