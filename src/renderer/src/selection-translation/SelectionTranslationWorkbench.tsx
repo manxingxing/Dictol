@@ -151,6 +151,14 @@ export function SelectionTranslationWorkbench({
     setPendingCount((count) => Math.max(0, count - 1))
   }, [])
 
+  const submitTranslation = (
+    source: TranslationSourceLanguage,
+    target: TranslationLanguage
+  ): void => {
+    if (!input.trim() || !providers.length) return
+    translateAll(input, source, target, providers)
+  }
+
   return (
     <section className="flex h-full min-h-0 flex-col bg-background">
       <header
@@ -198,7 +206,9 @@ export function SelectionTranslationWorkbench({
                       aria-label="源语言"
                       className="h-6 w-[88px] rounded-md border border-input bg-background px-1.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                       onChange={(event) => {
-                        setSourceLanguage(event.target.value as TranslationSourceLanguage)
+                        const source = event.target.value as TranslationSourceLanguage
+                        setSourceLanguage(source)
+                        submitTranslation(source, targetLanguage)
                       }}
                       value={sourceLanguage}
                     >
@@ -218,6 +228,9 @@ export function SelectionTranslationWorkbench({
                       if (sourceLanguage === 'auto') return
                       setSourceLanguage(targetLanguage)
                       setTargetLanguage(sourceLanguage)
+                      if (sourceLanguage !== targetLanguage) {
+                        submitTranslation(targetLanguage, sourceLanguage)
+                      }
                     }}
                     size="xs"
                     variant="ghost"
@@ -230,7 +243,9 @@ export function SelectionTranslationWorkbench({
                       aria-label="目标语言"
                       className="h-6 w-[72px] rounded-md border border-input bg-background px-1.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                       onChange={(event) => {
-                        setTargetLanguage(event.target.value as TranslationLanguage)
+                        const target = event.target.value as TranslationLanguage
+                        setTargetLanguage(target)
+                        submitTranslation(sourceLanguage, target)
                       }}
                       value={targetLanguage}
                     >
@@ -267,9 +282,7 @@ export function SelectionTranslationWorkbench({
                     <div className="flex justify-end px-2 pb-1.5">
                       <Button
                         disabled={!input.trim() || !providers.length || pendingCount > 0}
-                        onClick={() =>
-                          translateAll(input, sourceLanguage, targetLanguage, providers)
-                        }
+                        onClick={() => submitTranslation(sourceLanguage, targetLanguage)}
                         size="xs"
                       >
                         {pendingCount > 0 ? (
