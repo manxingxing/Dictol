@@ -98,7 +98,7 @@ export class SelectionToolbarController extends BaseController {
     ipcMain.on('selection-translation:close', this.closeTranslation)
     ipcMain.on('selection-translation:desired-height', this.resizeTranslation)
     ipcMain.handle('selection-toolbar:capture-excerpt', this.captureExcerpt)
-    this.runtime.ocrShortcutHandler = this.handleOcrShortcut
+    if (process.platform === 'darwin') this.runtime.ocrShortcutHandler = this.handleOcrShortcut
   }
 
   private readonly handleOcrShortcut = async (mode: OcrLookupMode): Promise<void> => {
@@ -142,7 +142,7 @@ export class SelectionToolbarController extends BaseController {
     } catch (error) {
       if (version !== this.ocrCaptureVersion) return
       this.explanation.setAnchor(anchor)
-      const message = error instanceof Error ? error.message : 'OCR 取词失败。'
+      const message = error instanceof Error ? error.message : '悬停取词失败。'
       if (mode === 'ai' && ocrAiVersion !== undefined) {
         this.explanation.showOcrAiRecognitionError(ocrAiVersion, message)
       } else {

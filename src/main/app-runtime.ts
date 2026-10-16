@@ -29,7 +29,7 @@ export const LOOKUP_WORD_ON_SHORTCUT = 'lookupWordOnShortcut'
 export const SHOW_MAIN_WINDOW_SHORTCUT = 'showMainWindow'
 export const OCR_DICTIONARY_SHORTCUT = 'ocrDictionary'
 export const OCR_AI_SHORTCUT = 'ocrAi'
-export const OCR_SUPPORTED = process.platform === 'darwin' || process.platform === 'win32'
+export const OCR_SUPPORTED = process.platform === 'darwin'
 export type OcrLookupMode = 'dictionary' | 'ai'
 
 type MainWindowInitializer = (mainWindow: BrowserWindow) => void
@@ -207,13 +207,14 @@ export class AppRuntime {
     if (config.featureFlags.lookupWordOnShortcut) {
       this.registerLookupWordShortCut(config.shortcuts)
     }
-    this.registerOcrShortcuts(config)
+    if (OCR_SUPPORTED) this.registerOcrShortcuts(config)
   }
 
   private registerOcrShortcuts(config: AppConfig): void {
+    if (!OCR_SUPPORTED) return
     this.shortcutRegister.unregister(OCR_DICTIONARY_SHORTCUT)
     this.shortcutRegister.unregister(OCR_AI_SHORTCUT)
-    if (!OCR_SUPPORTED || !config.featureFlags.ocrLookup || !this.ocrShortcutHandler) {
+    if (!config.featureFlags.ocrLookup || !this.ocrShortcutHandler) {
       return
     }
     this.shortcutRegister.register(OCR_DICTIONARY_SHORTCUT, config.shortcuts.ocrDictionary, {

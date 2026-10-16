@@ -18,9 +18,11 @@ fn main() {
 fn build_macos_selection_panel(target: &str) {
     // Keep the AppKit panel, screenshot capture, and tokenizer in one archive;
     // Rust exposes their C entry points through the same N-API addon.
-    const SOURCES: [&str; 3] = [
+    const SOURCES: [&str; 5] = [
         "src/selection_panel.m",
         "src/screen_capture.m",
+        "src/macos_ocr.m",
+        "src/macos_accessibility.m",
         "src/word_tokenizer.m",
     ];
     const ARCHIVE: &str = "libdictol_macos_selection_panel.a";
@@ -98,6 +100,8 @@ fn build_macos_selection_panel(target: &str) {
     println!("cargo:rustc-link-arg=-Wl,-weak_framework,ScreenCaptureKit");
     println!("cargo:rustc-link-lib=framework=ImageIO");
     println!("cargo:rustc-link-lib=framework=NaturalLanguage");
+    println!("cargo:rustc-link-lib=framework=Vision");
+    println!("cargo:rustc-link-lib=framework=ApplicationServices");
 }
 
 fn show_sdk_path() -> String {

@@ -31,7 +31,7 @@ export function OcrAiExplanation({
 
   return (
     <>
-      <SelectionExplanationHeader title="OCR AI 解释" pinned={payload.pinned}>
+      <SelectionExplanationHeader title="悬停 AI 解释" pinned={payload.pinned}>
         <Button
           aria-label={saveState === 'saved' ? '已保存到摘抄与笔记' : '保存到摘抄与笔记'}
           className="no-drag size-7 shrink-0 disabled:opacity-100"
@@ -93,7 +93,7 @@ export function OcrAiExplanation({
             </div>
           ) : (
             <div>
-              <p className="text-sm font-medium">OCR AI 解释失败</p>
+              <p className="text-sm font-medium">悬停 AI 解释失败</p>
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
                 {payload.message ?? '请检查 AI 服务配置后重试。'}
               </p>

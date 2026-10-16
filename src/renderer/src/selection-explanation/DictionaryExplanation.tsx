@@ -158,7 +158,7 @@ export function DictionaryExplanation({ payload }: Props): React.JSX.Element {
                   ? '没有找到词条解释'
                   : payload.word
                     ? '加载词条失败'
-                    : 'OCR 取词失败'}
+                    : '悬停取词失败'}
               </p>
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
                 {payload.message ?? `第一个可用词典中没有“${payload.word}”的解释`}

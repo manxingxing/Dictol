@@ -47,7 +47,6 @@ asarUnpack:
   - node_modules/@dictol/mdict-native/*.node
   - node_modules/adblock-rs/js/index.node
   - node_modules/selection-hook/prebuilds/**
-  - node_modules/@cherrystudio/mac-system-ocr/build/Release/*.node
   - node_modules/better-sqlite3/lib/**
   - node_modules/better-sqlite3/prebuilds/*.node
   - node_modules/better-sqlite3/package.json
@@ -64,6 +63,7 @@ win:
     # Keep the Windows package self-contained while excluding unrelated
     # source, dictionary, and native-driver variants.
     - out/**
+    - '!out/main/chunks/mac-*.js'
     - drizzle/**
     - resources/**
     - '!resources/system-translation/**'
@@ -100,7 +100,6 @@ win:
     - '!node_modules/adblock-rs/js/src/**'
     - '!node_modules/adblock-rs/js/test/**'
     - '!node_modules/@dictol/mdict-native/*.darwin-*.node'
-    - '!node_modules/@cherrystudio/mac-system-ocr/**'
     - '!node_modules/@dictol/mdict-native/*.win32-arm64*.node'
     - '!node_modules/better-sqlite3/{deps,src}/**'
     - '!node_modules/better-sqlite3/prebuilds/darwin*.node'
@@ -204,8 +203,19 @@ dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
 linux:
   files:
+    - out/**
+    - '!out/main/chunks/mac-*.js'
+    - drizzle/**
+    - resources/**
     - '!resources/system-translation/**'
-    - '!node_modules/@cherrystudio/mac-system-ocr/**'
+    - '!resources/ecdict/**'
+    - '!resources/sqlite-simple/**'
+    - '!native/**'
+    - '!scripts/**'
+    - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules}/**'
+    - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,index.d.ts,package-lock.json}'
+    - '!node_modules/@dictol/mdict-native/*.darwin-*.node'
+    - '!node_modules/@dictol/mdict-native/*.win32-*.node'
   icon: build/icon.png
   desktop:
     entry:

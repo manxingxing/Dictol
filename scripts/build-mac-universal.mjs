@@ -5,32 +5,20 @@ import { tmpdir } from 'node:os'
 
 const root = join(import.meta.dirname, '..')
 const addonPath = join(root, 'node_modules', 'adblock-rs', 'js', 'index.node')
-const ocrAddonPath = join(
-  root,
-  'node_modules',
-  '@cherrystudio',
-  'mac-system-ocr',
-  'build',
-  'Release',
-  'mac_system_ocr.node'
-)
 const nativeDirectory = join(root, 'native', 'mdict-node')
 const targets = [
-  { rust: 'x86_64-apple-darwin', napi: 'darwin-x64', lipo: 'x86_64', nodeArch: 'x64' },
-  { rust: 'aarch64-apple-darwin', napi: 'darwin-arm64', lipo: 'arm64', nodeArch: 'arm64' }
+  { rust: 'x86_64-apple-darwin', napi: 'darwin-x64', lipo: 'x86_64' },
+  { rust: 'aarch64-apple-darwin', napi: 'darwin-arm64', lipo: 'arm64' }
 ]
 
 if (process.platform !== 'darwin') {
   throw new Error('The universal macOS build must run on macOS (lipo and macOS SDK required).')
 }
 if (!existsSync(addonPath)) throw new Error(`Missing adblock-rs addon: ${addonPath}`)
-if (!existsSync(ocrAddonPath)) throw new Error(`Missing macOS OCR addon: ${ocrAddonPath}`)
 
 const tempDirectory = mkdtempSync(join(tmpdir(), 'dictol-mac-universal-'))
 const originalAddon = join(tempDirectory, 'adblock-index.original.node')
-const originalOcrAddon = join(tempDirectory, 'mac-system-ocr.original.node')
 copyFileSync(addonPath, originalAddon)
-copyFileSync(ocrAddonPath, originalOcrAddon)
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const binary = (name) => {
@@ -68,12 +56,6 @@ const buildAdblockForTarget = (target, outputPath) => {
   copyFileSync(addonPath, outputPath)
 }
 
-const buildOcrForTarget = (target, outputPath) => {
-  runNpm(['rebuild', '@cherrystudio/mac-system-ocr'], { npm_config_arch: target.nodeArch })
-  verifyArchitecture(ocrAddonPath, target.lipo)
-  copyFileSync(ocrAddonPath, outputPath)
-}
-
 const verifyArchitecture = (path, architecture) => {
   const description = execFileSync('file', ['-b', path], { encoding: 'utf8' })
   if (!description.includes(architecture)) {
@@ -101,19 +83,6 @@ try {
   })
   copyFileSync(universalAdblock, addonPath)
 
-  const x64Ocr = join(tempDirectory, 'ocr-x64.node')
-  const arm64Ocr = join(tempDirectory, 'ocr-arm64.node')
-  const universalOcr = join(tempDirectory, 'ocr-universal.node')
-  buildOcrForTarget(targets[0], x64Ocr)
-  buildOcrForTarget(targets[1], arm64Ocr)
-  execFileSync('lipo', ['-create', x64Ocr, arm64Ocr, '-output', universalOcr], {
-    stdio: 'inherit'
-  })
-  execFileSync('lipo', [universalOcr, '-verify_arch', 'x86_64', 'arm64'], {
-    stdio: 'inherit'
-  })
-  copyFileSync(universalOcr, ocrAddonPath)
-
   runNpm(['run', 'typecheck'])
   runBinary('electron-vite', ['build'])
   runBinary('electron-builder', ['--mac', '--universal', ...process.argv.slice(2)], {
@@ -121,6 +90,5 @@ try {
   })
 } finally {
   copyFileSync(originalAddon, addonPath)
-  copyFileSync(originalOcrAddon, ocrAddonPath)
   rmSync(tempDirectory, { recursive: true, force: true })
 }

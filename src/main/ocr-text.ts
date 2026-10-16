@@ -4,6 +4,16 @@ export type OcrObservation = {
   y: number
   width: number
   height: number
+  confidence?: number
+  /** UTF-16 ranges and Vision-normalized boxes; accurate recognition has word-level geometry. */
+  characters?: Array<{
+    start: number
+    length: number
+    x: number
+    y: number
+    width: number
+    height: number
+  }>
 }
 
 export type OcrSelection = {
@@ -14,6 +24,7 @@ export type OcrSelection = {
 
 export type OcrTextHit = {
   selection: OcrSelection
+  confidence?: number
   bounds: { x: number; y: number; width: number; height: number }
   contextBounds: { x: number; y: number; width: number; height: number }
 }
@@ -22,8 +33,44 @@ type WordRange = { start: number; length: number }
 
 type Line = OcrObservation & { top: number; bottom: number }
 
+type SentenceContext = {
+  sentence: string
+  context: string
+  start: number
+  end: number
+}
+
 const wordSegmenter = new Intl.Segmenter(undefined, { granularity: 'word' })
 const sentenceSegmenter = new Intl.Segmenter(undefined, { granularity: 'sentence' })
+const paragraphBreaks = ['\n', '\r', '\u2029']
+
+export function sentenceContextAt(text: string, offset: number): SentenceContext | null {
+  if (offset < 0 || offset >= text.length) return null
+  const paragraphStart =
+    Math.max(...paragraphBreaks.map((separator) => text.lastIndexOf(separator, offset - 1))) + 1
+  const paragraphEnd = Math.min(
+    text.length,
+    ...paragraphBreaks
+      .map((separator) => text.indexOf(separator, offset))
+      .filter((position) => position >= 0)
+  )
+  const paragraph = text.slice(paragraphStart, paragraphEnd)
+  const sentences = Array.from(sentenceSegmenter.segment(paragraph)).map((part) => ({
+    text: part.segment.trim(),
+    start: paragraphStart + part.index,
+    end: paragraphStart + part.index + part.segment.length
+  }))
+  const current = sentences.findIndex((part) => offset >= part.start && offset < part.end)
+  if (current < 0) return null
+  const start = sentences[Math.max(0, current - 1)].start
+  const end = sentences[Math.min(sentences.length - 1, current + 1)].end
+  return {
+    sentence: sentences[current].text,
+    context: text.slice(start, end).trim(),
+    start,
+    end
+  }
+}
 
 /** Vision boxes use a bottom-left origin; pointer coordinates use a top-left origin. */
 export function selectOcrText(
@@ -68,7 +115,9 @@ export function selectOcrTextHit(
     precedingVisualWidth += visualWidths[approximateIndex]
     approximateIndex++
   }
-  const characterOffset = characters.slice(0, approximateIndex).join('').length
+  const characterOffset =
+    characterOffsetFromVision(target, pointer.x) ??
+    characters.slice(0, approximateIndex).join('').length
 
   const paragraph = [target]
   for (const preceding of [true, false]) {
@@ -90,7 +139,7 @@ export function selectOcrTextHit(
       edge = next
     }
   }
-  paragraph.sort((a, b) => a.top - b.top || a.x - b.x)
+  paragraph.sort((a, b) => (sharesVisualLine(a, b) ? a.x - b.x : a.top - b.top || a.x - b.x))
 
   let text = ''
   let targetOffset = 0
@@ -116,7 +165,11 @@ export function selectOcrTextHit(
   )
   if (!segment) return null
   let word = expandCompoundWord(text, segment.index, segment.segment)
-  if (/\p{Script=Han}/u.test(segment.segment) && chineseWordRange) {
+  if (
+    /\p{Script=Han}/u.test(segment.segment) &&
+    !/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(target.text) &&
+    chineseWordRange
+  ) {
     const range = chineseWordRange(text, targetOffset)
     if (range && range.start <= targetOffset && targetOffset < range.start + range.length) {
       const nativeWord = text.slice(range.start, range.start + range.length)
@@ -126,17 +179,10 @@ export function selectOcrTextHit(
     }
   }
 
-  const sentences = Array.from(sentenceSegmenter.segment(text)).map((part) => ({
-    text: part.segment.trim(),
-    start: part.index,
-    end: part.index + part.segment.length
-  }))
-  const current = sentences.findIndex(
-    (part) => targetOffset >= part.start && targetOffset < part.end
-  )
-  if (current < 0) return null
-  const contextStart = sentences[Math.max(0, current - 1)].start
-  const contextEnd = sentences[Math.min(sentences.length - 1, current + 1)].end
+  const sentenceContext = sentenceContextAt(text, targetOffset)
+  if (!sentenceContext) return null
+  const contextStart = sentenceContext.start
+  const contextEnd = sentenceContext.end
   const contextLines = lineRanges
     .filter(({ start, end }) => start < contextEnd && end > contextStart)
     .map(({ line }) => line)
@@ -154,13 +200,19 @@ export function selectOcrTextHit(
   const targetTextVisualWidth = visualWidth(targetText, mixedCjkLatin)
   const wordLeft = visualWidth(targetText.slice(0, wordStart), mixedCjkLatin)
   const wordRight = visualWidth(targetText.slice(0, wordEnd), mixedCjkLatin)
+  const visionBounds = wordBoundsFromVision(
+    target,
+    wordStart + target.text.length - target.text.trimStart().length,
+    wordEnd + target.text.length - target.text.trimStart().length
+  )
   return {
     selection: {
       word: word.text,
-      sentence: sentences[current].text,
-      context: text.slice(contextStart, contextEnd).trim()
+      sentence: sentenceContext.sentence,
+      context: sentenceContext.context
     },
-    bounds: {
+    confidence: target.confidence,
+    bounds: visionBounds ?? {
       x: target.x + (wordLeft / targetTextVisualWidth) * target.width,
       y: target.top,
       width: ((wordRight - wordLeft) / targetTextVisualWidth) * target.width,
@@ -173,6 +225,35 @@ export function selectOcrTextHit(
       height: contextBottom - contextTop
     }
   }
+}
+
+function characterOffsetFromVision(line: Line, pointerX: number): number | null {
+  const boxes = line.characters?.filter((box) => box.width > 0 && box.length > 0)
+  if (!boxes?.length) return null
+  const distance = (box: (typeof boxes)[number]): number =>
+    Math.max(box.x - pointerX, 0, pointerX - box.x - box.width)
+  const nearest = boxes.reduce((best, box) => (distance(box) < distance(best) ? box : best))
+  const sameWord = boxes.filter(
+    (box) =>
+      Math.abs(box.x - nearest.x) < 0.0001 &&
+      Math.abs(box.width - nearest.width) < 0.0001 &&
+      Math.abs(box.y - nearest.y) < 0.0001 &&
+      Math.abs(box.height - nearest.height) < 0.0001
+  )
+  const position = Math.max(0, Math.min(0.999, (pointerX - nearest.x) / nearest.width))
+  return sameWord[Math.floor(position * sameWord.length)].start
+}
+
+function wordBoundsFromVision(line: Line, start: number, end: number): OcrTextHit['bounds'] | null {
+  const boxes = line.characters?.filter(
+    (box) => box.start < end && box.start + box.length > start && box.width > 0 && box.height > 0
+  )
+  if (!boxes?.length) return null
+  const left = Math.min(...boxes.map((box) => box.x))
+  const top = Math.min(...boxes.map((box) => 1 - box.y - box.height))
+  const right = Math.max(...boxes.map((box) => box.x + box.width))
+  const bottom = Math.max(...boxes.map((box) => 1 - box.y))
+  return { x: left, y: top, width: right - left, height: bottom - top }
 }
 
 function hasMixedCjkLatin(text: string): boolean {
@@ -217,6 +298,18 @@ function isAdjacentLine(
   const verticalGap = lower.top - upper.bottom
   const lineHeight = Math.max(edge.height, candidate.height)
   const heightRatio = candidate.height / anchor.height
+  if (sharesVisualLine(edge, candidate)) {
+    const horizontalGap = preceding
+      ? edge.x - candidate.x - candidate.width
+      : candidate.x - edge.x - edge.width
+    return (
+      (preceding ? candidate.x < edge.x : candidate.x > edge.x) &&
+      heightRatio >= 0.7 &&
+      heightRatio <= 1.4 &&
+      horizontalGap * aspectRatio >= -lineHeight * 0.25 &&
+      horizontalGap * aspectRatio <= lineHeight * 1.5
+    )
+  }
   return (
     (preceding ? candidate.top < edge.top : candidate.top > edge.top) &&
     heightRatio >= 0.7 &&
@@ -225,6 +318,11 @@ function isAdjacentLine(
     verticalGap <= lineHeight * 1.1 &&
     Math.abs(candidate.x - anchor.x) * aspectRatio <= anchor.height * 2
   )
+}
+
+function sharesVisualLine(first: Line, second: Line): boolean {
+  const overlap = Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top)
+  return overlap >= Math.min(first.height, second.height) * 0.65
 }
 
 function isHeadingBoundary(upper: Line, lower: Line): boolean {

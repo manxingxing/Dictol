@@ -13,7 +13,6 @@ export default defineConfig({
         exclude: ['drizzle-orm']
       },
       rollupOptions: {
-        external: ['@cherrystudio/mac-system-ocr'],
         input: {
           index: resolve('src/main/index.ts'),
           'dictionary-import-worker': resolve('src/main/dictionary-import-worker.ts'),

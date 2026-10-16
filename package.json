@@ -15,8 +15,8 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "start": "electron-vite preview",
-    "dev": "node scripts/prepare-macos-ocr.mjs && npm run native:build && npm run system-translation:build && electron-vite dev",
-    "build": "node scripts/prepare-macos-ocr.mjs && npm run native:build && npm run system-translation:build && npm run adblock:build && npm run typecheck && electron-vite build",
+    "dev": "npm run native:build && npm run system-translation:build && electron-vite dev",
+    "build": "npm run native:build && npm run system-translation:build && npm run adblock:build && npm run typecheck && electron-vite build",
     "native:build": "node scripts/build-native.mjs",
     "system-translation:build": "node scripts/build-system-translation.mjs",
     "native:build:win-x64": "node scripts/build-native.mjs --target x86_64-pc-windows-msvc",
@@ -139,12 +139,8 @@
     "electron-winstaller@5.4.0": true,
     "better-sqlite3@13.0.2": true,
     "selection-hook@2.1.1": true,
-    "@cherrystudio/mac-system-ocr@0.2.7": true,
     "adblock-rs@0.13.2": true,
     "esbuild@0.18.20": true,
     "esbuild@0.25.12": true
-  },
-  "optionalDependencies": {
-    "@cherrystudio/mac-system-ocr": "^0.2.7"
   }
 }

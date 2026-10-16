@@ -101,183 +101,8 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
           )}
           <SettingsList>
             <SettingsRow
-              label="查词快捷键"
-              description={
-                recordingShortcut
-                  ? '请直接按下新的组合键，按 Esc 取消'
-                  : captureStatus.registered
-                    ? '快捷键已启用'
-                    : '快捷键被其他应用占用，请重新设置'
-              }
-              control={
-                <div className="flex items-center gap-2">
-                  <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
-                    {recordingShortcut
-                      ? '等待输入…'
-                      : formatShortcut(captureStatus.shortcut, window.dictol.platform)}
-                  </kbd>
-                  <Button
-                    disabled={savingShortcut}
-                    onClick={() => {
-                      setShortcutError(null)
-                      setRecordingShortcut(true)
-                    }}
-                    onKeyDown={(event) => {
-                      if (!recordingShortcut) return
-                      event.preventDefault()
-                      event.stopPropagation()
-                      if (event.key === 'Escape') {
-                        setRecordingShortcut(false)
-                        setShortcutError(null)
-                        return
-                      }
-
-                      const shortcut = shortcutFromKeyboardEvent(event)
-                      if (!shortcut) return
-                      setRecordingShortcut(false)
-                      setSavingShortcut(true)
-                      void window.dictol.wordCapture
-                        .setShortcut(shortcut)
-                        .then((result) => {
-                          if (!result) {
-                            setShortcutError('无法更新快捷键设置。')
-                            return
-                          }
-                          setCaptureStatus(result.status)
-                          setShortcutError(result.error ?? null)
-                        })
-                        .finally(() => setSavingShortcut(false))
-                    }}
-                    size="sm"
-                    variant="outline"
-                  >
-                    {recordingShortcut ? '按下组合键' : '修改'}
-                  </Button>
-                </div>
-              }
-            />
-            {shortcutError && (
-              <p
-                className="border-b border-border bg-card px-4 py-3 text-xs text-destructive"
-                role="alert"
-              >
-                {shortcutError}
-              </p>
-            )}
-            {captureStatus.ocrSupported && (
-              <>
-                <div className="bg-card px-4 py-3">
-                  <Field className="items-start gap-4" orientation="horizontal">
-                    <FieldContent>
-                      <FieldLabel className="cursor-pointer" htmlFor="ocr-lookup-enabled">
-                        OCR 取词
-                      </FieldLabel>
-                      <FieldDescription className="text-xs leading-5">
-                        在屏幕文字上按快捷键，识别鼠标下的词语
-                      </FieldDescription>
-                    </FieldContent>
-                    <Switch
-                      checked={captureStatus.ocrEnabled}
-                      disabled={savingOcr}
-                      id="ocr-lookup-enabled"
-                      onCheckedChange={(enabled) => {
-                        setOcrError(null)
-                        setSavingOcr(true)
-                        void window.dictol.wordCapture
-                          .setOcrEnabled(enabled)
-                          .then((result) => {
-                            if (!result) {
-                              setOcrError('无法更新 OCR 取词设置。')
-                              return
-                            }
-                            setCaptureStatus(result.status)
-                            setOcrError(result.error ?? null)
-                          })
-                          .finally(() => setSavingOcr(false))
-                      }}
-                    />
-                  </Field>
-                </div>
-                {captureStatus.ocrEnabled &&
-                  (['dictionary', 'ai'] as const).map((mode) => {
-                    const isDictionary = mode === 'dictionary'
-                    const shortcut = isDictionary
-                      ? captureStatus.ocrDictionaryShortcut
-                      : captureStatus.ocrAiShortcut
-                    const registered = isDictionary
-                      ? captureStatus.ocrDictionaryRegistered
-                      : captureStatus.ocrAiRegistered
-                    return (
-                      <SettingsRow
-                        key={mode}
-                        label={isDictionary ? 'OCR 查词快捷键' : 'OCR AI 解释快捷键'}
-                        description={
-                          recordingOcrShortcut === mode
-                            ? '请直接按下新的组合键，按 Esc 取消'
-                            : registered
-                              ? '快捷键已启用'
-                              : '快捷键被占用，请重新设置'
-                        }
-                        control={
-                          <div className="flex items-center gap-2">
-                            <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
-                              {recordingOcrShortcut === mode
-                                ? '等待输入…'
-                                : formatShortcut(shortcut, window.dictol.platform)}
-                            </kbd>
-                            <Button
-                              disabled={savingOcr}
-                              onClick={() => {
-                                setOcrError(null)
-                                setRecordingOcrShortcut(mode)
-                              }}
-                              onKeyDown={(event) => {
-                                if (recordingOcrShortcut !== mode) return
-                                event.preventDefault()
-                                event.stopPropagation()
-                                if (event.key === 'Escape') {
-                                  setRecordingOcrShortcut(null)
-                                  return
-                                }
-                                const nextShortcut = shortcutFromKeyboardEvent(event)
-                                if (!nextShortcut) return
-                                setRecordingOcrShortcut(null)
-                                setSavingOcr(true)
-                                void window.dictol.wordCapture
-                                  .setOcrShortcut(mode, nextShortcut)
-                                  .then((result) => {
-                                    if (!result) {
-                                      setOcrError('无法更新 OCR 快捷键。')
-                                      return
-                                    }
-                                    setCaptureStatus(result.status)
-                                    setOcrError(result.error ?? null)
-                                  })
-                                  .finally(() => setSavingOcr(false))
-                              }}
-                              size="sm"
-                              variant="outline"
-                            >
-                              {recordingOcrShortcut === mode ? '按下组合键' : '修改'}
-                            </Button>
-                          </div>
-                        }
-                      />
-                    )
-                  })}
-                {ocrError && (
-                  <p
-                    className="border-b border-border bg-card px-4 py-3 text-xs text-destructive"
-                    role="alert"
-                  >
-                    {ocrError}
-                  </p>
-                )}
-              </>
-            )}
-            <SettingsRow
               label="取词组"
-              description="选择文字或使用取词快捷键时，查词弹窗使用的词典组"
+              description="查词弹窗使用的词典组"
               control={
                 <Popover open={selectionGroupPickerOpen} onOpenChange={setSelectionGroupPickerOpen}>
                   <PopoverTrigger asChild>
@@ -369,6 +194,70 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
               }
               className="items-start"
             />
+            <SettingsRow
+              label="划词取词"
+              description={
+                recordingShortcut
+                  ? '请直接按下新的组合键，按 Esc 取消'
+                  : captureStatus.registered
+                    ? '快捷键已启用'
+                    : '快捷键被其他应用占用，请重新设置'
+              }
+              control={
+                <div className="flex items-center gap-2">
+                  <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
+                    {recordingShortcut
+                      ? '等待输入…'
+                      : formatShortcut(captureStatus.shortcut, window.dictol.platform)}
+                  </kbd>
+                  <Button
+                    disabled={savingShortcut}
+                    onClick={() => {
+                      setShortcutError(null)
+                      setRecordingShortcut(true)
+                    }}
+                    onKeyDown={(event) => {
+                      if (!recordingShortcut) return
+                      event.preventDefault()
+                      event.stopPropagation()
+                      if (event.key === 'Escape') {
+                        setRecordingShortcut(false)
+                        setShortcutError(null)
+                        return
+                      }
+
+                      const shortcut = shortcutFromKeyboardEvent(event)
+                      if (!shortcut) return
+                      setRecordingShortcut(false)
+                      setSavingShortcut(true)
+                      void window.dictol.wordCapture
+                        .setShortcut(shortcut)
+                        .then((result) => {
+                          if (!result) {
+                            setShortcutError('无法更新快捷键设置。')
+                            return
+                          }
+                          setCaptureStatus(result.status)
+                          setShortcutError(result.error ?? null)
+                        })
+                        .finally(() => setSavingShortcut(false))
+                    }}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {recordingShortcut ? '按下组合键' : '修改'}
+                  </Button>
+                </div>
+              }
+            />
+            {shortcutError && (
+              <p
+                className="border-b border-border bg-card px-4 py-3 text-xs text-destructive"
+                role="alert"
+              >
+                {shortcutError}
+              </p>
+            )}
             {selectionGroupError && (
               <p
                 className="border-b border-border bg-card px-4 py-3 text-xs text-destructive"
@@ -377,10 +266,7 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
                 {selectionGroupError}
               </p>
             )}
-            <div
-              className="bg-card px-4 py-3 transition-colors data-[enabled=true]:bg-primary/[0.025]"
-              data-enabled={captureStatus.lookupWordOnSelection}
-            >
+            <div className="border-b border-border bg-card px-4 py-3 last:border-b-0">
               <Field className="items-start gap-4" orientation="horizontal">
                 <FieldContent>
                   <FieldLabel className="cursor-pointer" htmlFor="lookup-word-on-selection">
@@ -401,7 +287,6 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
                   }
                   aria-invalid={Boolean(selectionLookupError)}
                   checked={captureStatus.lookupWordOnSelection}
-                  className="mt-0.5"
                   disabled={savingSelectionLookup}
                   id="lookup-word-on-selection"
                   onCheckedChange={(checked) => {
@@ -421,19 +306,22 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
                   }}
                 />
               </Field>
-
-              {selectionLookupError && (
-                <FieldError
-                  className="mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs leading-5  bg-red-50  border-red-400"
-                  id="lookup-word-on-selection-error"
-                >
-                  <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
-                  <span>{selectionLookupError}selectionLookupError</span>
-                </FieldError>
-              )}
-
-              {captureStatus.lookupWordOnSelection && (
-                <div className="mt-2 flex justify-end border-t border-border/60 pt-2">
+            </div>
+            {selectionLookupError && (
+              <p
+                className="border-b border-border bg-card px-4 py-3 text-xs text-destructive"
+                id="lookup-word-on-selection-error"
+                role="alert"
+              >
+                {selectionLookupError}
+              </p>
+            )}
+            {captureStatus.lookupWordOnSelection && (
+              <SettingsRow
+                className="pl-8"
+                label="排除程序"
+                description="在这些程序中选择文字时，不会显示划词工具栏"
+                control={
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button
@@ -442,7 +330,7 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
                         type="button"
                         variant="ghost"
                       >
-                        管理已排除的程序
+                        管理
                         {captureStatus.excludedPrograms.length > 0 &&
                           `（${captureStatus.excludedPrograms.length}）`}
                       </Button>
@@ -514,9 +402,128 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
                       )}
                     </DialogContent>
                   </Dialog>
+                }
+              />
+            )}
+
+            {captureStatus.ocrSupported && (
+              <>
+                <div className="border-b border-border bg-card px-4 py-3 last:border-b-0">
+                  <Field className="items-start gap-4" orientation="horizontal">
+                    <FieldContent>
+                      <FieldLabel
+                        className="inline-flex cursor-pointer items-center gap-2"
+                        htmlFor="ocr-lookup-enabled"
+                      >
+                        悬停取词
+                        <span className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary">
+                          Beta
+                        </span>
+                      </FieldLabel>
+                      <FieldDescription className="text-xs leading-5">
+                        在屏幕文字上按快捷键，识别鼠标下的词语
+                      </FieldDescription>
+                    </FieldContent>
+                    <Switch
+                      checked={captureStatus.ocrEnabled}
+                      disabled={savingOcr}
+                      id="ocr-lookup-enabled"
+                      onCheckedChange={(enabled) => {
+                        setOcrError(null)
+                        setSavingOcr(true)
+                        void window.dictol.wordCapture
+                          .setOcrEnabled(enabled)
+                          .then((result) => {
+                            if (!result) {
+                              setOcrError('无法更新悬停取词设置。')
+                              return
+                            }
+                            setCaptureStatus(result.status)
+                            setOcrError(result.error ?? null)
+                          })
+                          .finally(() => setSavingOcr(false))
+                      }}
+                    />
+                  </Field>
                 </div>
-              )}
-            </div>
+                {captureStatus.ocrEnabled &&
+                  (['dictionary', 'ai'] as const).map((mode) => {
+                    const isDictionary = mode === 'dictionary'
+                    const shortcut = isDictionary
+                      ? captureStatus.ocrDictionaryShortcut
+                      : captureStatus.ocrAiShortcut
+                    const registered = isDictionary
+                      ? captureStatus.ocrDictionaryRegistered
+                      : captureStatus.ocrAiRegistered
+                    return (
+                      <SettingsRow
+                        className="pl-8"
+                        key={mode}
+                        label={isDictionary ? '悬停查词快捷键' : '悬停 AI 解释快捷键'}
+                        description={
+                          recordingOcrShortcut === mode
+                            ? '请直接按下新的组合键，按 Esc 取消'
+                            : registered
+                              ? '快捷键已启用'
+                              : '快捷键被占用，请重新设置'
+                        }
+                        control={
+                          <div className="flex items-center gap-2">
+                            <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
+                              {recordingOcrShortcut === mode
+                                ? '等待输入…'
+                                : formatShortcut(shortcut, window.dictol.platform)}
+                            </kbd>
+                            <Button
+                              disabled={savingOcr}
+                              onClick={() => {
+                                setOcrError(null)
+                                setRecordingOcrShortcut(mode)
+                              }}
+                              onKeyDown={(event) => {
+                                if (recordingOcrShortcut !== mode) return
+                                event.preventDefault()
+                                event.stopPropagation()
+                                if (event.key === 'Escape') {
+                                  setRecordingOcrShortcut(null)
+                                  return
+                                }
+                                const nextShortcut = shortcutFromKeyboardEvent(event)
+                                if (!nextShortcut) return
+                                setRecordingOcrShortcut(null)
+                                setSavingOcr(true)
+                                void window.dictol.wordCapture
+                                  .setOcrShortcut(mode, nextShortcut)
+                                  .then((result) => {
+                                    if (!result) {
+                                      setOcrError('无法更新悬停取词快捷键。')
+                                      return
+                                    }
+                                    setCaptureStatus(result.status)
+                                    setOcrError(result.error ?? null)
+                                  })
+                                  .finally(() => setSavingOcr(false))
+                              }}
+                              size="sm"
+                              variant="outline"
+                            >
+                              {recordingOcrShortcut === mode ? '按下组合键' : '修改'}
+                            </Button>
+                          </div>
+                        }
+                      />
+                    )
+                  })}
+                {ocrError && (
+                  <p
+                    className="border-b border-border bg-card px-4 py-3 text-xs text-destructive"
+                    role="alert"
+                  >
+                    {ocrError}
+                  </p>
+                )}
+              </>
+            )}
           </SettingsList>
 
           {window.dictol.platform === 'darwin' && (
@@ -524,7 +531,7 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
               <div className="border-b border-border bg-muted/30 px-4 py-3">
                 <p className="text-sm font-medium">macOS 权限</p>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  需要以下权限读取选区，并响应跨应用的划词和弹窗操作
+                  需要以下权限读取选区、鼠标下文字，并响应跨应用取词
                 </p>
               </div>
 
@@ -543,7 +550,7 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
                       </span>
                     </div>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      用于获取其他应用中当前所选的文本。
+                      用于读取其他应用中的选中文本，以及鼠标下的文字和位置。
                     </p>
                     {!captureStatus.trusted && (
                       <p className="mt-2 text-xs leading-5 text-muted-foreground">
@@ -619,7 +626,7 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
                     <div>
                       <p className="text-sm font-medium">屏幕录制</p>
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        OCR 取词需要截取鼠标所在屏幕的一帧图像，并在本机识别文字。
+                        辅助功能无法读取鼠标下的文字时，会截取屏幕图像并在本机 OCR 识别。
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {captureStatus.screenCapturePermission === 'granted'

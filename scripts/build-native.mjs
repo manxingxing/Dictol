@@ -37,6 +37,28 @@ const verifyWindowsX64Binding = (directory) => {
     )
   }
 
+  const macOnlyExports = [
+    'captureScreenRegion',
+    'recognizeMacText',
+    'readMacAccessibleText',
+    'chineseWordRange'
+  ]
+  const unexpectedExports = macOnlyExports.filter((name) => binary.includes(Buffer.from(name)))
+  if (unexpectedExports.length > 0) {
+    throw new Error(
+      `Windows x64 native binding contains macOS-only exports: ${unexpectedExports.join(', ')}`
+    )
+  }
+  const generatedJs = readFileSync(join(directory, 'index.js'), 'utf8')
+  const unexpectedJsExports = macOnlyExports.filter((name) =>
+    generatedJs.includes(`module.exports.${name} =`)
+  )
+  if (unexpectedJsExports.length > 0) {
+    throw new Error(
+      `Windows x64 JS binding contains macOS-only exports: ${unexpectedJsExports.join(', ')}`
+    )
+  }
+
   const size = statSync(binaryPath).size
   console.log(`Verified Windows x64 native binding exports (${size} bytes)`)
 }
@@ -76,6 +98,12 @@ const run = (directory) => {
   if (target) {
     args.push('--', '--target', target)
     if (shouldCrossCompileWindows) args.push('--cross-compile')
+  }
+  // Keep the shared declaration file complete for typechecking both platform
+  // implementations when building Windows from a macOS checkout.
+  if (!(target?.includes('apple-darwin') ?? process.platform === 'darwin')) {
+    if (!target) args.push('--')
+    args.push('--dts', 'target/non-macos-index.d.ts')
   }
 
   const crossCompileEnvironment = shouldCrossCompileWindows

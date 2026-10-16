@@ -3,19 +3,10 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..')
-const ocrAddonPath = join(
-  root,
-  'node_modules',
-  '@cherrystudio',
-  'mac-system-ocr',
-  'build',
-  'Release',
-  'mac_system_ocr.node'
-)
 const arch = process.argv[2]
 const targets = {
-  x64: { native: 'x86_64-apple-darwin', builder: '--x64', nodeArch: 'x64', label: 'x86_64' },
-  arm64: { native: 'aarch64-apple-darwin', builder: '--arm64', nodeArch: 'arm64', label: 'arm64' }
+  x64: { native: 'x86_64-apple-darwin', builder: '--x64' },
+  arm64: { native: 'aarch64-apple-darwin', builder: '--arm64' }
 }
 
 const target = targets[arch]
@@ -47,21 +38,11 @@ const runBinary = (name, args) =>
     stdio: 'inherit'
   })
 
-const rebuildOcr = (nodeArch) => {
-  runNpm(['rebuild', '@cherrystudio/mac-system-ocr'], { npm_config_arch: nodeArch })
-  if (!existsSync(ocrAddonPath)) throw new Error(`Missing macOS OCR addon: ${ocrAddonPath}`)
-}
-
 let buildError
 try {
   runNpm(['run', 'native:build'], { DICTOL_NATIVE_TARGET: target.native })
   runNpm(['run', 'system-translation:build', '--', '--arch', arch])
   runNpm(['run', 'adblock:build', '--', '--target', target.native])
-  rebuildOcr(target.nodeArch)
-  const ocrArchitecture = execFileSync('file', ['-b', ocrAddonPath], { encoding: 'utf8' })
-  if (!ocrArchitecture.includes(target.label)) {
-    throw new Error(`Wrong OCR addon architecture: ${ocrArchitecture.trim()}`)
-  }
   runNpm(['run', 'typecheck'])
   runBinary('electron-vite', ['build'])
   runBinary('electron-builder', ['--mac', target.builder, ...process.argv.slice(3)])
@@ -84,12 +65,6 @@ try {
   runNpm(args)
 } catch (error) {
   restoreError = error
-}
-
-try {
-  rebuildOcr(process.arch)
-} catch (error) {
-  restoreError ??= error
 }
 
 if (buildError) {

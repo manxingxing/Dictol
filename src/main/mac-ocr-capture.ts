@@ -1,15 +1,16 @@
-import { chineseWordRange } from '@dictol/mdict-native'
+import { chineseWordRange, recognizeMacText } from '@dictol/mdict-native'
 import { screen, type Rectangle } from 'electron'
 import type { OcrLookupMode } from './app-runtime'
 import { contextTouchesCropEdge } from './ocr-crop'
+import { recordMacOcrDiagnostic } from './ocr-diagnostics'
 import { captureOcrDisplay, captureOcrImage, cropOcrDisplay } from './ocr-screen-capture'
 import { selectOcrTextHit, type OcrSelection } from './ocr-text'
 
 export type OcrCapture = { selection: OcrSelection; wordBounds: Rectangle }
 
-const dictionaryCaptureSize = { width: 850, height: 320 }
+const dictionaryCaptureSize = { width: 700, height: 300 }
 const aiCaptureSize = { width: 1024, height: 500 }
-const ocrLanguages = 'en-US,zh-Hans,zh-Hant,ja-JP'
+const ocrLanguages = ['ja-JP', 'zh-Hans', 'en-US', 'zh-Hant']
 
 export async function captureTextUnderCursor(
   mode: OcrLookupMode,
@@ -25,16 +26,8 @@ export async function captureTextUnderCursor(
   if (snapshot) onScreenshotCaptured?.()
   let captureMs = captured.captureMs
 
-  // Load only on macOS: the native package is an optional, platform-specific dependency.
-  const moduleLoadStartedAt = performance.now()
-  const { default: MacOCR } = await import('@cherrystudio/mac-system-ocr')
-  const moduleLoadMs = performance.now() - moduleLoadStartedAt
   const ocrStartedAt = performance.now()
-  let result = await MacOCR.recognizeFromBuffer(captured.buffer, {
-    languages: ocrLanguages,
-    recognitionLevel:
-      mode === 'dictionary' ? MacOCR.RECOGNITION_LEVEL_ACCURATE : MacOCR.RECOGNITION_LEVEL_FAST
-  })
+  let result = await recognizeMacText(captured.buffer, ocrLanguages, mode === 'dictionary')
   const firstPassOcrMs = performance.now() - ocrStartedAt
   const firstSelectionStartedAt = performance.now()
   let hit = selectOcrTextHit(
@@ -44,6 +37,35 @@ export async function captureTextUnderCursor(
     chineseWordRange
   )
   let selectionMs = performance.now() - firstSelectionStartedAt
+  await recordMacOcrDiagnostic(mode, 'initial', captured, pointer, result, hit)
+  let accurateFallbackMs = 0
+  let usedAccurateFallback = false
+  if (mode === 'ai' && (!hit || (hit.confidence ?? 1) < 0.4)) {
+    const accurateStartedAt = performance.now()
+    const accurateResult = await recognizeMacText(captured.buffer, ocrLanguages, true)
+    accurateFallbackMs = performance.now() - accurateStartedAt
+    const accurateSelectionStartedAt = performance.now()
+    const accurateHit = selectOcrTextHit(
+      accurateResult.observations,
+      captured.pointer,
+      captured.size.width / captured.size.height,
+      chineseWordRange
+    )
+    selectionMs += performance.now() - accurateSelectionStartedAt
+    await recordMacOcrDiagnostic(
+      mode,
+      'accurate-fallback',
+      captured,
+      pointer,
+      accurateResult,
+      accurateHit
+    )
+    if (accurateHit) {
+      result = accurateResult
+      hit = accurateHit
+      usedAccurateFallback = true
+    }
+  }
   let expandedOcrMs = 0
   let expanded = false
   if (
@@ -53,31 +75,51 @@ export async function captureTextUnderCursor(
     (!hit || contextTouchesCropEdge(display.bounds, captured.region, hit.contextBounds))
   ) {
     expanded = true
-    captured = cropOcrDisplay(snapshot, pointer, null)
-    captureMs += captured.captureMs
+    const expandedCapture = cropOcrDisplay(snapshot, pointer, null)
+    captureMs += expandedCapture.captureMs
     const expandedOcrStartedAt = performance.now()
-    result = await MacOCR.recognizeFromBuffer(captured.buffer, {
-      languages: ocrLanguages,
-      recognitionLevel: MacOCR.RECOGNITION_LEVEL_FAST
-    })
+    const expandedResult = await recognizeMacText(expandedCapture.buffer, ocrLanguages, false)
     expandedOcrMs = performance.now() - expandedOcrStartedAt
     const expandedSelectionStartedAt = performance.now()
-    hit = selectOcrTextHit(
-      result.observations,
-      captured.pointer,
-      captured.size.width / captured.size.height,
+    const expandedHit = selectOcrTextHit(
+      expandedResult.observations,
+      expandedCapture.pointer,
+      expandedCapture.size.width / expandedCapture.size.height,
       chineseWordRange
     )
     selectionMs += performance.now() - expandedSelectionStartedAt
+    await recordMacOcrDiagnostic(
+      mode,
+      'expanded',
+      expandedCapture,
+      pointer,
+      expandedResult,
+      expandedHit
+    )
+    const improvedContext =
+      usedAccurateFallback &&
+      Boolean(
+        expandedHit &&
+        hit &&
+        expandedHit.selection.word === hit.selection.word &&
+        expandedHit.selection.context.length > hit.selection.context.length
+      )
+    const moreConfidentHit =
+      !usedAccurateFallback && (expandedHit?.confidence ?? 0) > (hit?.confidence ?? 0)
+    if (expandedHit && (!hit || improvedContext || moreConfidentHit)) {
+      captured = expandedCapture
+      result = expandedResult
+      hit = expandedHit
+    }
   }
   console.debug('[OCR] capture and recognition', {
     mode,
     captureBackend: captured.backend,
     captureMs,
-    moduleLoadMs,
-    ocrMs: firstPassOcrMs + expandedOcrMs,
+    ocrMs: firstPassOcrMs + accurateFallbackMs + expandedOcrMs,
     fastOcrMs: mode === 'ai' ? firstPassOcrMs : undefined,
     accurateOcrMs: mode === 'dictionary' ? firstPassOcrMs : undefined,
+    accurateFallbackMs: accurateFallbackMs || undefined,
     expandedOcrMs: expandedOcrMs || undefined,
     expanded,
     selectionMs,

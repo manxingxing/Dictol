@@ -17,7 +17,13 @@ use napi::{Env, Error, Result, Status, Task};
 use napi_derive::napi;
 
 mod macos_selection_panel;
+#[cfg(target_os = "macos")]
+mod macos_ocr;
+#[cfg(target_os = "macos")]
+mod macos_accessibility;
+#[cfg(target_os = "macos")]
 mod macos_screen_capture;
+#[cfg(target_os = "macos")]
 mod macos_word_tokenizer;
 mod windows_ocr;
 mod windows_screen_capture;

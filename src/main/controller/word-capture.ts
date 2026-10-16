@@ -267,7 +267,7 @@ export class WordCaptureController extends BaseController {
   ): WordCaptureShortcutResult | null => {
     if (!this.acceptsSender(event.sender)) return null
     if (typeof enabled !== 'boolean' || !OCR_SUPPORTED) {
-      return { ok: false, status: this.createStatus(), error: '当前平台无法开启 OCR 取词。' }
+      return { ok: false, status: this.createStatus(), error: '当前平台无法开启悬停取词。' }
     }
     const previous = this.runtime.appConfig.load()
     try {
@@ -281,7 +281,11 @@ export class WordCaptureController extends BaseController {
     } catch (error) {
       console.error('Failed to update OCR lookup setting', error)
       this.restoreOcrConfig(previous)
-      return { ok: false, status: this.createStatus(), error: 'OCR 快捷键被系统或其他应用占用。' }
+      return {
+        ok: false,
+        status: this.createStatus(),
+        error: '悬停取词快捷键被系统或其他应用占用。'
+      }
     }
   }
 
@@ -298,7 +302,7 @@ export class WordCaptureController extends BaseController {
       !shortcut.trim() ||
       shortcut.length > 64
     ) {
-      return { ok: false, status: this.createStatus(), error: '无效的 OCR 快捷键。' }
+      return { ok: false, status: this.createStatus(), error: '无效的悬停取词快捷键。' }
     }
     const previous = this.runtime.appConfig.load()
     const key = mode === 'dictionary' ? 'ocrDictionary' : 'ocrAi'

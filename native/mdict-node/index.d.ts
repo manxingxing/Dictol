@@ -259,6 +259,44 @@ export interface KeyBatch {
   done: boolean
 }
 
+export interface MacAccessibleLookup {
+  result?: MacAccessibleText
+  failure?: string
+}
+
+export interface MacAccessibleText {
+  text: string
+  offset: number
+  word: string
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface MacOcrCharacterBox {
+  start: number
+  length: number
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface MacOcrObservation {
+  text: string
+  confidence: number
+  x: number
+  y: number
+  width: number
+  height: number
+  characters: Array<MacOcrCharacterBox>
+}
+
+export interface MacOcrResult {
+  observations: Array<MacOcrObservation>
+}
+
 /** 一个 MDD 列表 key 以及所在文件和 record 地址范围。 */
 export interface MddListDictionaryEntry {
   keyText: string
@@ -296,6 +334,10 @@ export interface OpenOptions {
   regCode?: string
   keyFile?: string
 }
+
+export declare function readMacAccessibleText(x: number, y: number, includeContext: boolean): Promise<MacAccessibleLookup>
+
+export declare function recognizeMacText(png: Buffer, languages: Array<string>, accurate: boolean): Promise<MacOcrResult>
 
 export declare function recognizeWindowsText(png: Buffer, language?: string | undefined | null): Promise<WindowsOcrResult>
 

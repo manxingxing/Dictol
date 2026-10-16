@@ -42,9 +42,13 @@ module.exports.hideSelectionPanel = native.hideSelectionPanel
 module.exports.selectionPanelState = native.selectionPanelState
 module.exports.getSelectionPanelBounds = native.getSelectionPanelBounds
 module.exports.setSelectionPanelBounds = native.setSelectionPanelBounds
-module.exports.captureScreenRegion = native.captureScreenRegion
+if (process.platform === 'darwin') {
+  module.exports.captureScreenRegion = native.captureScreenRegion
+  module.exports.recognizeMacText = native.recognizeMacText
+  module.exports.readMacAccessibleText = native.readMacAccessibleText
+  module.exports.chineseWordRange = native.chineseWordRange
+}
 module.exports.captureWindowsDisplayAtPoint = native.captureWindowsDisplayAtPoint
 module.exports.captureWindowsScreenRegion = native.captureWindowsScreenRegion
 module.exports.getWindowsDisplayBoundsAtPoint = native.getWindowsDisplayBoundsAtPoint
-module.exports.chineseWordRange = native.chineseWordRange
 module.exports.recognizeWindowsText = native.recognizeWindowsText

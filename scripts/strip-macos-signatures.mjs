@@ -115,15 +115,7 @@ function pruneAndVerifyNativeModules(appPath, arch) {
   }
 
   const adblock = join(unpacked, 'adblock-rs', 'js', 'index.node')
-  const ocr = join(
-    unpacked,
-    '@cherrystudio',
-    'mac-system-ocr',
-    'build',
-    'Release',
-    'mac_system_ocr.node'
-  )
-  expected.push(adblock, ocr)
+  expected.push(adblock)
 
   for (const path of expected) {
     if (!existsSync(path)) throw new Error(`Missing ${arch} macOS native module: ${path}`)
@@ -172,21 +164,7 @@ function verifyUniversalNativeModules(appPath) {
     )
   }
 
-  const ocr = join(
-    unpacked,
-    '@cherrystudio',
-    'mac-system-ocr',
-    'build',
-    'Release',
-    'mac_system_ocr.node'
-  )
-  if (!existsSync(ocr)) throw new Error(`Missing universal macOS native module: ${ocr}`)
-  const ocrDescription = fileArchitecture(ocr)
-  if (!ocrDescription.includes('x86_64') || !ocrDescription.includes('arm64')) {
-    throw new Error(`mac-system-ocr must contain x86_64 and arm64 slices: ${ocrDescription}`)
-  }
-
-  console.log(`  • verified universal macOS native modules count=${expected.length + 2}`)
+  console.log(`  • verified universal macOS native modules count=${expected.length + 1}`)
 }
 
 function verifyWindowsNativeModules(appOutDir, arch) {
@@ -246,6 +224,18 @@ function verifyWindowsNativeModules(appOutDir, arch) {
   if (missingExports.length > 0) {
     throw new Error(
       `Packaged Windows mdict binding is missing exports: ${missingExports.join(', ')}`
+    )
+  }
+  const macOnlyExports = [
+    'captureScreenRegion',
+    'recognizeMacText',
+    'readMacAccessibleText',
+    'chineseWordRange'
+  ]
+  const unexpectedExports = macOnlyExports.filter((name) => mdictBinary.includes(Buffer.from(name)))
+  if (unexpectedExports.length > 0) {
+    throw new Error(
+      `Packaged Windows mdict binding contains macOS-only exports: ${unexpectedExports.join(', ')}`
     )
   }
 
