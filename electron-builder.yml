@@ -11,6 +11,7 @@ files:
   - drizzle/**
   - resources/**
   - '!resources/ecdict/**'
+  - '!resources/sqlite-simple/**'
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
@@ -52,6 +53,8 @@ asarUnpack:
 extraResources:
   - from: resources/ecdict
     to: ecdict
+  - from: resources/sqlite-simple
+    to: sqlite-simple
 win:
   executableName: dictol
   icon: build/icon.ico
@@ -64,6 +67,7 @@ win:
     - resources/**
     - '!resources/system-translation/**'
     - '!resources/ecdict/**'
+    - '!resources/sqlite-simple/**'
     - '!**/.vscode/*'
     - '!src/*'
     - '!electron.vite.config.{js,ts,mjs,cjs}'
@@ -126,6 +130,9 @@ nsis:
 mac:
   icon: build/icon.icns
   artifactName: ${name}-${version}-${arch}-mac.${ext}
+  # The native files with architecture-specific names are present in both
+  # universal staging apps; adblock-rs and system translation are lipo-merged.
+  x64ArchFiles: '**/{app.asar.unpacked/{node_modules/@dictol/mdict-native/*.darwin-*.node,node_modules/better-sqlite3/prebuilds/darwin-*.node,node_modules/selection-hook/prebuilds/darwin-*/selection-hook.node,resources/system-translation/dictol-system-translation,resources/sqlite-simple/darwin-*/libsimple.dylib},sqlite-simple/darwin-*/libsimple.dylib}'
   # Do not let electron-builder fall back to an ad-hoc signature when no
   # Developer ID certificate is available. The distributed app is intentionally
   # unsigned so Gatekeeper treats it as an unidentified developer app rather

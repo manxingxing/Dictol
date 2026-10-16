@@ -158,9 +158,6 @@ type WordbookWordItem = {
 
 type WordbookTagItem = { id: string; name: string }
 type WordbookTagSummary = WordbookTagItem & { wordCount: number }
-  createdAt: string
-  updatedAt: string
-}
 
 type WordbookExportRequest =
   | { scope: 'all' }

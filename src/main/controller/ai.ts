@@ -2,6 +2,7 @@ import { ipcMain, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { randomUUID } from 'node:crypto'
 
 import {
+  AI_LOOKUP_MAX_SOURCE_TEXT_LENGTH,
   type AiChatRequest,
   type AiLookupPublicConfig,
   type AiSaveConfigRequest
@@ -89,7 +90,11 @@ function isChatRequest(value: unknown): value is AiChatRequest {
   }
   if (!request.lookupContext) return false
   const sourceText = request.lookupContext.sourceText
-  if (typeof sourceText !== 'string' || !sourceText.trim() || sourceText.length > 20_000)
+  if (
+    typeof sourceText !== 'string' ||
+    !sourceText.trim() ||
+    sourceText.length > AI_LOOKUP_MAX_SOURCE_TEXT_LENGTH
+  )
     return false
   return true
 }

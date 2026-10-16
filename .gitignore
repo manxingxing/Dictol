@@ -19,7 +19,7 @@ opendesign/
 /scripts/*test*.ts
 /scripts/*test*.mjs
 /scripts/*test*.cjs
-
+**/__pycache__
 # build artifact
 /benchmarks/opendict-rs/target/
 /native/mdict/target/

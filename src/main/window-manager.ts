@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeTheme, screen } from 'electron'
+import { BrowserWindow, Menu, nativeTheme, screen, type Rectangle } from 'electron'
 
 import icon from '../../resources/icon.png?asset'
 import {
@@ -15,11 +15,11 @@ import { MAIN_WINDOW_TITLEBAR_HEIGHT } from '../shared/window-chrome'
 import { DICTIONARY_SESSION_PARTITION, EMBED_BROWSER_SESSION_PARTITION } from './entry-assets'
 import { resolvePreloadPath } from './output-path'
 import { applySelectionWindowBehavior } from './selection-window-behavior'
+import { WebContentsViewManager } from './web-contents-view-manager'
 import { NativeSelectionPanel } from './native-selection-panel'
 import { configureElectronPanel } from '@dictol/mdict-native'
 
 export type SelectionSurfaceWindow = BrowserWindow | NativeSelectionPanel
-import { WebContentsViewManager } from './web-contents-view-manager'
 
 const getMainWindowBackgroundColor = (useDarkColors: boolean): string =>
   process.platform === 'darwin' ? '#00000000' : useDarkColors ? '#232323' : '#faf9f7'
@@ -31,7 +31,7 @@ export class WindowManager {
   readonly embedBrowserViews = new Map<string, WebContentsViewManager>()
   searchPopoverView: WebContentsViewManager | undefined
   selectionToolbarWindow: SelectionSurfaceWindow | undefined
-  selectionExplanationWindow: BrowserWindow | undefined
+  selectionExplanationWindow: SelectionSurfaceWindow | undefined
   readonly excerptCaptureWindows = new Set<BrowserWindow>()
   selectionTranslationWindow: BrowserWindow | undefined
   selectionExplanationView: WebContentsViewManager | undefined
@@ -283,7 +283,7 @@ export class WindowManager {
     return surface
   }
 
-  createSelectionExplanationWindow(): BrowserWindow {
+  createSelectionExplanationWindow(): SelectionSurfaceWindow {
     if (this.selectionExplanationWindow && !this.selectionExplanationWindow.isDestroyed()) {
       return this.selectionExplanationWindow
     }
@@ -296,12 +296,12 @@ export class WindowManager {
       minHeight: 300,
       show: false,
       frame: false,
+      ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
       backgroundColor: darkMode ? '#232323' : '#faf9f7',
       resizable: true,
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
-      ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
       focusable: true,
       acceptFirstMouse: true,
       skipTaskbar: true,
@@ -313,13 +313,11 @@ export class WindowManager {
       }
     })
     if (process.platform === 'darwin') {
-      // Keep Chromium's content view in its owning Electron window.
-      // Configure only this Electron panel's Spaces policy.
+      // Keep Chromium's content view in its owning Electron window. Electron's
+      // panel type is non-activating, but its collection behavior joins Spaces;
+      // the native bridge changes that policy on this Electron panel instance only.
       configureElectronPanel(window.getNativeWindowHandle())
-    } else {
-      applySelectionWindowBehavior(window)
     }
-
     const view = new WebContentsViewManager(window, {
       backgroundColor: darkMode ? '#232323' : '#ffffff',
       view: {
@@ -335,8 +333,10 @@ export class WindowManager {
         }
       }
     })
+    const surface: SelectionSurfaceWindow = window
+    if (process.platform !== 'darwin') applySelectionWindowBehavior(window)
     const updateViewBounds = (): void => {
-      const [width, height] = window.getContentSize()
+      const [width, height] = surface.getContentSize()
       // Keep the native view below the renderer-owned divider instead of sharing its edge pixel.
       const viewTop =
         SELECTION_EXPLANATION_HEADER_HEIGHT +
@@ -351,19 +351,19 @@ export class WindowManager {
       })
     }
     this.updateSelectionExplanationViewBounds = updateViewBounds
-    window.on('resize', updateViewBounds)
-    window.on('closed', () => {
+    surface.on('resize', updateViewBounds)
+    surface.on('closed', () => {
       view.dispose()
       this.selectionExplanationSwitcherVisible = false
       this.updateSelectionExplanationViewBounds = undefined
       if (this.selectionExplanationView === view) this.selectionExplanationView = undefined
-      if (this.selectionExplanationWindow === window) this.selectionExplanationWindow = undefined
+      if (this.selectionExplanationWindow === surface) this.selectionExplanationWindow = undefined
     })
     updateViewBounds()
 
-    this.selectionExplanationWindow = window
+    this.selectionExplanationWindow = surface
     this.selectionExplanationView = view
-    return window
+    return surface
   }
 
   createExcerptCaptureWindow(): BrowserWindow {
@@ -540,6 +540,15 @@ export class WindowManager {
     return this.selectionExplanationPinned
   }
 
+  hasVisibleSelectionSurface(): boolean {
+    return [
+      this.selectionToolbarWindow,
+      this.selectionExplanationWindow,
+      this.selectionTranslationWindow,
+      ...this.excerptCaptureWindows
+    ].some((window) => window && !window.isDestroyed() && window.isVisible())
+  }
+
   toggleSelectionExplanationPinned(): boolean {
     this.selectionExplanationPinned = !this.selectionExplanationPinned
     return this.selectionExplanationPinned
@@ -547,17 +556,6 @@ export class WindowManager {
 
   resetSelectionExplanationPinned(): void {
     this.selectionExplanationPinned = false
-  }
-
-  hasVisibleSelectionSurface(): boolean {
-    return [
-      this.selectionToolbarWindow,
-      this.selectionExplanationWindow,
-      this.selectionTranslationWindow,
-      ...this.excerptCaptureWindows
-    ].some(
-      (window) => window && !window.isDestroyed() && window.isVisible()
-    )
   }
 
   focusMainWindowRenderer(): void {
@@ -608,11 +606,13 @@ export class WindowManager {
     this.selectionTranslationWindow = undefined
     this.selectionExplanationView = undefined
     this.selectionExplanationSwitcherVisible = false
+    this.selectionExplanationPinned = false
     this.updateSelectionExplanationViewBounds = undefined
     this.findBarView = undefined
     this.customCssEditorWindow = undefined
     this.customCssEditorPreviewView = undefined
     this.browseWindow = undefined
+    this.browseDictionaryId = undefined
     this.mainWindow = undefined
   }
 

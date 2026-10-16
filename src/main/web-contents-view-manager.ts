@@ -15,6 +15,7 @@ type WebContentsViewManagerEvents = {
 export type WebContentsViewManagerOptions = {
   view?: WebContentsViewConstructorOptions
   backgroundColor?: string
+  borderRadius?: number
 }
 
 export class WebContentsViewManager {
@@ -29,6 +30,7 @@ export class WebContentsViewManager {
   ) {
     this.view = new WebContentsView(options.view)
     if (options.backgroundColor) this.view.setBackgroundColor(options.backgroundColor)
+    if (options.borderRadius !== undefined) this.view.setBorderRadius(options.borderRadius)
     this.view.setVisible(false)
     this.mainWindow.contentView.addChildView(this.view)
   }
@@ -77,6 +79,10 @@ export class WebContentsViewManager {
       width: Math.max(0, Math.round(bounds.width)),
       height: Math.max(0, Math.round(bounds.height))
     })
+  }
+
+  getBounds(): Rectangle {
+    return this.view.getBounds()
   }
 
   setBackgroundColor(color: string): void {

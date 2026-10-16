@@ -1,12 +1,12 @@
 {
   "name": "dictol",
-  "version": "0.3.1",
+  "version": "0.3.8",
   "description": "A desktop dictionary reader for MDX and MDD dictionaries",
   "main": "./out/main/index.js",
   "author": "Alan Mann",
   "private": true,
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.12.0 <24.0.0"
   },
   "scripts": {
     "format": "prettier --write .",
@@ -25,6 +25,7 @@
     "win:signing:check": "node scripts/check-windows-signing.mjs",
     "native:test": "npm --prefix native/mdict-node test",
     "db:generate": "drizzle-kit generate",
+    "dictionary-note-fts:rebuild": "node scripts/rebuild-dictionary-note-fts.mjs",
     "ecdict:build": "node scripts/build-ecdict.mjs",
     "adblock:prepare": "node scripts/prepare-adblock-network-lists.mjs",
     "adblock:build": "node scripts/build-adblock.mjs",
@@ -32,11 +33,12 @@
     "mdict:inspect": "node scripts/inspect-mdict.mjs",
     "mdict:benchmark": "node scripts/compare-mdict-parsers.mjs",
     "postinstall": "electron-builder install-app-deps",
-    "build:unpack": "npm run build && electron-builder --dir",
+    "build:unpack": "npm run build && node scripts/package-unpacked.mjs",
     "build:win": "node scripts/build-win.mjs",
     "build:mac": "node scripts/build-mac.mjs x64",
     "build:mac-arm64": "node scripts/build-mac.mjs arm64",
-    "build:linux": "electron-vite build && electron-builder --linux"
+    "build:mac-universal": "node scripts/build-mac-universal.mjs",
+    "build:linux": "node scripts/build-linux.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
