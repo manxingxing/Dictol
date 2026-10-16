@@ -29,7 +29,9 @@ export default defineConfig({
         resolveId(source, importer) {
           // Sandboxed Electron preloads cannot require a Rollup shared chunk.
           // Give each preload its own copy while keeping one TTS source module.
-          if (source === './tts' && importer?.startsWith(resolve('src/preload/'))) {
+          const preloadRoot = resolve('src/preload').replaceAll('\\', '/').toLowerCase()
+          const importerPath = importer?.replaceAll('\\', '/').toLowerCase()
+          if (source === './tts' && importer && importerPath?.startsWith(`${preloadRoot}/`)) {
             return `${resolve('src/preload/tts.ts')}?preload=${basename(importer)}`
           }
           return null

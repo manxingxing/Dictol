@@ -7,6 +7,7 @@ pub struct WindowsScreenCaptureImage {
     pub png: Buffer,
     pub width: u32,
     pub height: u32,
+    pub backend: String,
 }
 
 #[napi(object)]
@@ -69,7 +70,7 @@ impl Task for CaptureWindowsDisplayAtPointTask {
                     format!("Windows screen capture failed: {error}"),
                 )
             })?;
-            let png = capture(x, y, width, height).map_err(|error| {
+            let (png, backend) = capture_with_fallback(x, y, width, height).map_err(|error| {
                 Error::new(
                     Status::GenericFailure,
                     format!("Windows screen capture failed: {error}"),
@@ -79,6 +80,7 @@ impl Task for CaptureWindowsDisplayAtPointTask {
                 png: png.into(),
                 width,
                 height,
+                backend: backend.into(),
             })
         }
         #[cfg(not(windows))]
@@ -111,16 +113,18 @@ impl Task for CaptureWindowsScreenRegionTask {
     fn compute(&mut self) -> Result<Self::Output> {
         #[cfg(windows)]
         {
-            let png = capture(self.x, self.y, self.width, self.height).map_err(|error| {
-                Error::new(
-                    Status::GenericFailure,
-                    format!("Windows screen capture failed: {error}"),
-                )
-            })?;
+            let (png, backend) = capture_with_fallback(self.x, self.y, self.width, self.height)
+                .map_err(|error| {
+                    Error::new(
+                        Status::GenericFailure,
+                        format!("Windows screen capture failed: {error}"),
+                    )
+                })?;
             Ok(WindowsScreenCaptureImage {
                 png: png.into(),
                 width: self.width,
                 height: self.height,
+                backend: backend.into(),
             })
         }
         #[cfg(not(windows))]
@@ -154,6 +158,154 @@ pub fn capture_windows_screen_region(
         width,
         height,
     }))
+}
+
+#[cfg(windows)]
+fn capture_with_fallback(
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+) -> windows::core::Result<(Vec<u8>, &'static str)> {
+    match capture(x, y, width, height) {
+        Ok(png) => Ok((png, "wgc")),
+        Err(wgc_error) => capture_gdi(x, y, width, height)
+            .map(|png| (png, "gdi"))
+            .map_err(|gdi_error| {
+                capture_error(&format!(
+                    "Windows Graphics Capture failed: {wgc_error}; GDI fallback failed: {gdi_error}"
+                ))
+            }),
+    }
+}
+
+#[cfg(windows)]
+fn capture_gdi(x: i32, y: i32, width: u32, height: u32) -> windows::core::Result<Vec<u8>> {
+    use windows::Win32::Graphics::Gdi::{
+        BI_RGB, BITMAPINFO, BitBlt, CAPTUREBLT, CreateCompatibleBitmap, CreateCompatibleDC,
+        DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC, GetDIBits, HBITMAP, HDC, HGDIOBJ, ROP_CODE,
+        ReleaseDC, SRCCOPY, SelectObject,
+    };
+    use windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize, RoUninitialize};
+
+    struct Resources {
+        screen: HDC,
+        memory: HDC,
+        bitmap: HBITMAP,
+        previous: Option<HGDIOBJ>,
+    }
+    impl Drop for Resources {
+        fn drop(&mut self) {
+            unsafe {
+                if let Some(previous) = self.previous.take() {
+                    SelectObject(self.memory, previous);
+                }
+                if !self.bitmap.is_invalid() {
+                    let _ = DeleteObject(self.bitmap.into());
+                }
+                if !self.memory.is_invalid() {
+                    let _ = DeleteDC(self.memory);
+                }
+                if !self.screen.is_invalid() {
+                    ReleaseDC(None, self.screen);
+                }
+            }
+        }
+    }
+    struct Apartment;
+    impl Drop for Apartment {
+        fn drop(&mut self) {
+            unsafe { RoUninitialize() };
+        }
+    }
+
+    let center_x = i32::try_from(i64::from(x) + i64::from(width / 2))
+        .map_err(|_| capture_error("Invalid capture coordinates"))?;
+    let center_y = i32::try_from(i64::from(y) + i64::from(height / 2))
+        .map_err(|_| capture_error("Invalid capture coordinates"))?;
+    let (display_x, display_y, display_width, display_height) =
+        display_bounds_at(center_x, center_y)?;
+    if x < display_x
+        || y < display_y
+        || i64::from(x) + i64::from(width) > i64::from(display_x) + i64::from(display_width)
+        || i64::from(y) + i64::from(height) > i64::from(display_y) + i64::from(display_height)
+    {
+        return Err(capture_error("Capture region must fit within one display"));
+    }
+    let w = i32::try_from(width).map_err(|_| capture_error("Invalid capture width"))?;
+    let h = i32::try_from(height).map_err(|_| capture_error("Invalid capture height"))?;
+    let mut resources = Resources {
+        screen: unsafe { GetDC(None) },
+        memory: HDC::default(),
+        bitmap: HBITMAP::default(),
+        previous: None,
+    };
+    if resources.screen.is_invalid() {
+        return Err(capture_error("Could not access desktop DC"));
+    }
+    resources.memory = unsafe { CreateCompatibleDC(Some(resources.screen)) };
+    if resources.memory.is_invalid() {
+        return Err(capture_error("Could not create capture DC"));
+    }
+    resources.bitmap = unsafe { CreateCompatibleBitmap(resources.screen, w, h) };
+    if resources.bitmap.is_invalid() {
+        return Err(capture_error("Could not create capture bitmap"));
+    }
+    let previous = unsafe { SelectObject(resources.memory, resources.bitmap.into()) };
+    if previous.is_invalid() {
+        return Err(capture_error("Could not select capture bitmap"));
+    }
+    resources.previous = Some(previous);
+    let blit = unsafe {
+        BitBlt(
+            resources.memory,
+            0,
+            0,
+            w,
+            h,
+            Some(resources.screen),
+            x,
+            y,
+            ROP_CODE(SRCCOPY.0 | CAPTUREBLT.0),
+        )
+    };
+    unsafe { SelectObject(resources.memory, previous) };
+    resources.previous = None;
+    blit?;
+
+    let mut info = BITMAPINFO::default();
+    info.bmiHeader.biSize = std::mem::size_of_val(&info.bmiHeader) as u32;
+    info.bmiHeader.biWidth = w;
+    info.bmiHeader.biHeight = -h; // Top-down pixels match the OCR image coordinates.
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB.0;
+    let byte_count = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| capture_error("Screenshot is too large"))?;
+    let mut pixels = vec![0; byte_count];
+    let lines = unsafe {
+        GetDIBits(
+            resources.screen,
+            resources.bitmap,
+            0,
+            height,
+            Some(pixels.as_mut_ptr().cast()),
+            &mut info,
+            DIB_RGB_COLORS,
+        )
+    };
+    if lines != h {
+        return Err(capture_error("Could not read capture bitmap"));
+    }
+    for pixel in pixels.chunks_exact_mut(4) {
+        pixel[3] = 255;
+    }
+    drop(resources);
+    unsafe { RoInitialize(RO_INIT_MULTITHREADED)? };
+    let _apartment = Apartment;
+    encode_png(&pixels, width, height)
 }
 
 #[cfg(windows)]
@@ -421,4 +573,18 @@ fn encode_png(pixels: &[u8], width: u32, height: u32) -> windows::core::Result<V
 fn capture_error(message: &str) -> windows::core::Error {
     use windows::core::{Error, HRESULT};
     Error::new(HRESULT(0x80004005u32 as i32), message)
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::{capture_gdi, display_bounds_at};
+
+    #[test]
+    #[ignore = "requires an interactive Windows desktop"]
+    fn gdi_capture_returns_png() {
+        let (x, y, width, height) = display_bounds_at(0, 0).unwrap();
+        let png = capture_gdi(x, y, width.min(400), height.min(200)).unwrap();
+        assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
+        assert!(png.len() > 1_000);
+    }
 }

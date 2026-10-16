@@ -19,6 +19,7 @@ export async function captureTextUnderCursor(
   if (process.platform !== 'darwin') return null
   const pointer = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(pointer)
+  const languages = mode === 'ai' ? ['en-US'] : ocrLanguages
   const snapshot = mode === 'ai' ? await captureOcrDisplay(display) : null
   let captured = snapshot
     ? cropOcrDisplay(snapshot, pointer, aiCaptureSize)
@@ -27,7 +28,7 @@ export async function captureTextUnderCursor(
   let captureMs = captured.captureMs
 
   const ocrStartedAt = performance.now()
-  let result = await recognizeMacText(captured.buffer, ocrLanguages, mode === 'dictionary')
+  let result = await recognizeMacText(captured.buffer, languages, mode === 'dictionary')
   const firstPassOcrMs = performance.now() - ocrStartedAt
   const firstSelectionStartedAt = performance.now()
   let hit = selectOcrTextHit(
@@ -42,7 +43,7 @@ export async function captureTextUnderCursor(
   let usedAccurateFallback = false
   if (mode === 'ai' && (!hit || (hit.confidence ?? 1) < 0.4)) {
     const accurateStartedAt = performance.now()
-    const accurateResult = await recognizeMacText(captured.buffer, ocrLanguages, true)
+    const accurateResult = await recognizeMacText(captured.buffer, languages, true)
     accurateFallbackMs = performance.now() - accurateStartedAt
     const accurateSelectionStartedAt = performance.now()
     const accurateHit = selectOcrTextHit(
@@ -78,7 +79,7 @@ export async function captureTextUnderCursor(
     const expandedCapture = cropOcrDisplay(snapshot, pointer, null)
     captureMs += expandedCapture.captureMs
     const expandedOcrStartedAt = performance.now()
-    const expandedResult = await recognizeMacText(expandedCapture.buffer, ocrLanguages, false)
+    const expandedResult = await recognizeMacText(expandedCapture.buffer, languages, false)
     expandedOcrMs = performance.now() - expandedOcrStartedAt
     const expandedSelectionStartedAt = performance.now()
     const expandedHit = selectOcrTextHit(

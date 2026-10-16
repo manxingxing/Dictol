@@ -9,6 +9,17 @@ pub struct WindowsOcrObservation {
     pub y: f64,
     pub width: f64,
     pub height: f64,
+    pub characters: Vec<WindowsOcrCharacterBox>,
+}
+
+#[napi(object)]
+pub struct WindowsOcrCharacterBox {
+    pub start: u32,
+    pub length: u32,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
 }
 
 #[napi(object)]
@@ -26,7 +37,9 @@ pub struct WindowsOcrResult {
 struct RecognizedWord {
     text: String,
     left: f32,
+    top: f32,
     right: f32,
+    bottom: f32,
     width: f32,
 }
 
@@ -112,8 +125,8 @@ pub fn recognize_windows_text(
 fn recognize(png: &[u8], language: Option<&str>) -> windows::core::Result<WindowsOcrResult> {
     use windows::Globalization::Language;
     use windows::Graphics::Imaging::{
-        BitmapAlphaMode, BitmapDecoder, BitmapPixelFormat, BitmapTransform, ColorManagementMode,
-        ExifOrientationMode,
+        BitmapAlphaMode, BitmapDecoder, BitmapInterpolationMode, BitmapPixelFormat,
+        BitmapTransform, ColorManagementMode, ExifOrientationMode,
     };
     use windows::Media::Ocr::OcrEngine;
     use windows::Storage::Streams::{DataWriter, InMemoryRandomAccessStream};
@@ -157,11 +170,15 @@ fn recognize(png: &[u8], language: Option<&str>) -> windows::core::Result<Window
     let original_width = decoder.PixelWidth()?;
     let original_height = decoder.PixelHeight()?;
     let max_dimension = OcrEngine::MaxImageDimension()?;
-    let bitmap = if original_width.max(original_height) > max_dimension {
-        let scale = max_dimension as f64 / original_width.max(original_height) as f64;
+    // Small labels in illustrations are often only a dozen physical pixels
+    // high. Enlarge the crop before recognition while keeping memory bounded.
+    let longest_edge = original_width.max(original_height);
+    let scale = (max_dimension.min(3_200) as f64 / longest_edge as f64).min(3.0);
+    let bitmap = if (scale - 1.0).abs() > 0.001 {
         let transform = BitmapTransform::new()?;
         transform.SetScaledWidth((original_width as f64 * scale).round().max(1.0) as u32)?;
         transform.SetScaledHeight((original_height as f64 * scale).round().max(1.0) as u32)?;
+        transform.SetInterpolationMode(BitmapInterpolationMode::Cubic)?;
         decoder
             .GetSoftwareBitmapTransformedAsync(
                 BitmapPixelFormat::Bgra8,
@@ -203,19 +220,50 @@ fn recognize(png: &[u8], language: Option<&str>) -> windows::core::Result<Window
             recognized_words.push(RecognizedWord {
                 text: word.Text()?.to_string(),
                 left: rect.X,
+                top: rect.Y,
                 right: rect.X + rect.Width,
+                bottom: rect.Y + rect.Height,
                 width: rect.Width,
             });
         }
         if right <= left || bottom <= top {
             continue;
         }
+        let text = repair_split_latin_words(&text, &recognized_words);
+        let mut characters = Vec::new();
+        let mut cursor = 0;
+        for word in &recognized_words {
+            let Some(relative_start) = text[cursor..].find(&word.text) else {
+                continue;
+            };
+            let start = cursor + relative_start;
+            let utf16_start = text[..start].encode_utf16().count() as u32;
+            let box_x = word.left as f64 / image_width;
+            let box_y = 1.0 - word.bottom as f64 / image_height;
+            let box_width = (word.right - word.left) as f64 / image_width;
+            let box_height = (word.bottom - word.top) as f64 / image_height;
+            let mut offset = utf16_start;
+            for ch in word.text.chars() {
+                let length = ch.len_utf16() as u32;
+                characters.push(WindowsOcrCharacterBox {
+                    start: offset,
+                    length,
+                    x: box_x,
+                    y: box_y,
+                    width: box_width,
+                    height: box_height,
+                });
+                offset += length;
+            }
+            cursor = start + word.text.len();
+        }
         observations.push(WindowsOcrObservation {
-            text: repair_split_latin_words(&text, &recognized_words),
+            text,
             x: left as f64 / image_width,
             y: 1.0 - bottom as f64 / image_height,
             width: (right - left) as f64 / image_width,
             height: (bottom - top) as f64 / image_height,
+            characters,
         });
     }
     Ok(WindowsOcrResult {
@@ -239,25 +287,33 @@ mod tests {
             RecognizedWord {
                 text: "there".into(),
                 left: 0.0,
+                top: 0.0,
                 right: 35.0,
+                bottom: 10.0,
                 width: 35.0,
             },
             RecognizedWord {
                 text: "a".into(),
                 left: 40.0,
+                top: 0.0,
                 right: 47.0,
+                bottom: 10.0,
                 width: 7.0,
             },
             RecognizedWord {
                 text: "re".into(),
                 left: 48.0,
+                top: 0.0,
                 right: 62.0,
+                bottom: 10.0,
                 width: 14.0,
             },
             RecognizedWord {
                 text: "three".into(),
                 left: 68.0,
+                top: 0.0,
                 right: 103.0,
+                bottom: 10.0,
                 width: 35.0,
             },
         ];
@@ -277,13 +333,17 @@ mod tests {
             RecognizedWord {
                 text: "an".into(),
                 left: 0.0,
+                top: 0.0,
                 right: 14.0,
+                bottom: 10.0,
                 width: 14.0,
             },
             RecognizedWord {
                 text: "image".into(),
                 left: 20.0,
+                top: 0.0,
                 right: 55.0,
+                bottom: 10.0,
                 width: 35.0,
             },
         ];

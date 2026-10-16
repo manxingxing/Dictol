@@ -1,7 +1,7 @@
 import { recognizeWindowsText, type WindowsOcrResult } from '@dictol/mdict-native'
 import { screen, type Display } from 'electron'
 import type { OcrLookupMode } from './app-runtime'
-import { contextTouchesCropEdge } from './ocr-crop'
+import { contextTouchesCropEdge, mapOcrBoundsToRegion } from './ocr-crop'
 import {
   captureOcrDisplay,
   captureOcrImage,
@@ -38,9 +38,16 @@ function isLatinContext(text: string): boolean {
   )
 }
 
+function isLatinWord(text: string): boolean {
+  return (
+    /[A-Za-z]/u.test(text) &&
+    !/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(text)
+  )
+}
+
 async function recognize(captured: CapturedImage, mode: OcrLookupMode): Promise<Recognition> {
   const ocrStartedAt = performance.now()
-  let result = await recognizeWindowsText(captured.buffer)
+  let result = await recognizeWindowsText(captured.buffer, mode === 'ai' ? 'en-US' : undefined)
   const profileLanguage = result.recognizerLanguage
   let ocrMs = performance.now() - ocrStartedAt
   const selectionStartedAt = performance.now()
@@ -49,11 +56,13 @@ async function recognize(captured: CapturedImage, mode: OcrLookupMode): Promise<
   let englishPass = false
 
   // The profile recognizer can split English words when Windows prefers a CJK language.
+  // Dictionary lookup needs this pass too, including when the first pass missed the label.
   if (
-    mode === 'ai' &&
-    hit &&
+    mode === 'dictionary' &&
     !profileLanguage.toLowerCase().startsWith('en') &&
-    isLatinContext(hit.selection.context)
+    (hit
+      ? isLatinContext(hit.selection.context) || isLatinWord(hit.selection.word)
+      : result.observations.some((observation) => /[A-Za-z]{2}/u.test(observation.text)))
   ) {
     try {
       const englishStartedAt = performance.now()
@@ -62,7 +71,7 @@ async function recognize(captured: CapturedImage, mode: OcrLookupMode): Promise<
       const englishSelectionStartedAt = performance.now()
       const englishHit = selectHit(english, captured)
       selectionMs += performance.now() - englishSelectionStartedAt
-      if (englishHit && isLatinContext(englishHit.selection.context)) {
+      if (englishHit && isLatinWord(englishHit.selection.word)) {
         result = english
         hit = englishHit
         englishPass = true
@@ -128,7 +137,12 @@ export async function captureWindowsTextUnderCursor(
     ocrMs += expandedRecognition.ocrMs
     selectionMs += expandedRecognition.selectionMs
     expandedMatched = expandedRecognition.hit !== null
-    if (expandedRecognition.hit) {
+    if (
+      expandedRecognition.hit &&
+      (!hit ||
+        (expandedRecognition.hit.selection.word === hit.selection.word &&
+          expandedRecognition.hit.selection.context.length > hit.selection.context.length))
+    ) {
       captured = expandedCapture
       recognition = expandedRecognition
       hit = expandedRecognition.hit
@@ -154,5 +168,11 @@ export async function captureWindowsTextUnderCursor(
     matched: hit !== null
   })
   if (!hit) return null
-  return { selection: hit.selection, wordBounds: captured.mapBounds(hit.bounds) }
+  return {
+    selection: hit.selection,
+    wordBounds: mapOcrBoundsToRegion(captured.region, hit.bounds, {
+      horizontal: 1,
+      vertical: 0
+    })
+  }
 }

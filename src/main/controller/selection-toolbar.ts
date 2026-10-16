@@ -98,7 +98,9 @@ export class SelectionToolbarController extends BaseController {
     ipcMain.on('selection-translation:close', this.closeTranslation)
     ipcMain.on('selection-translation:desired-height', this.resizeTranslation)
     ipcMain.handle('selection-toolbar:capture-excerpt', this.captureExcerpt)
-    if (process.platform === 'darwin') this.runtime.ocrShortcutHandler = this.handleOcrShortcut
+    if (process.platform === 'darwin' || process.platform === 'win32') {
+      this.runtime.ocrShortcutHandler = this.handleOcrShortcut
+    }
   }
 
   private readonly handleOcrShortcut = async (mode: OcrLookupMode): Promise<void> => {
@@ -123,7 +125,7 @@ export class SelectionToolbarController extends BaseController {
       this.explanation.setAnchor(anchor)
       if (!capture) {
         if (mode === 'ai' && ocrAiVersion !== undefined) {
-          this.explanation.showOcrAiRecognitionError(ocrAiVersion, '鼠标下没有识别到词语。')
+          this.explanation.showOcrAiRecognitionError(ocrAiVersion, '鼠标下没有识别到英文内容。')
         } else {
           this.explanation.showOcrError(mode, '鼠标下没有识别到词语。')
         }

@@ -29,7 +29,7 @@ export const LOOKUP_WORD_ON_SHORTCUT = 'lookupWordOnShortcut'
 export const SHOW_MAIN_WINDOW_SHORTCUT = 'showMainWindow'
 export const OCR_DICTIONARY_SHORTCUT = 'ocrDictionary'
 export const OCR_AI_SHORTCUT = 'ocrAi'
-export const OCR_SUPPORTED = process.platform === 'darwin'
+export const OCR_SUPPORTED = process.platform === 'darwin' || process.platform === 'win32'
 export type OcrLookupMode = 'dictionary' | 'ai'
 
 type MainWindowInitializer = (mainWindow: BrowserWindow) => void

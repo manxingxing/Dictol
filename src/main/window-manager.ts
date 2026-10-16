@@ -27,8 +27,8 @@ const getMainWindowBackgroundColor = (useDarkColors: boolean): string =>
 const ocrHighlightPage = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
 *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:transparent}
-body:before{content:"";position:fixed;inset:0;border-bottom:2px solid rgba(187,126,0,.95);background:rgba(255,193,7,.42)}
-</style></head><body></body></html>`)}`
+#highlight{position:fixed;inset:0;border-bottom:2px solid rgba(187,126,0,.95);background:rgba(255,193,7,.42)}
+</style></head><body><div id="highlight"></div></body></html>`)}`
 
 export class WindowManager {
   mainWindow: BrowserWindow | undefined
@@ -41,6 +41,8 @@ export class WindowManager {
   private ocrHighlightWindow: BrowserWindow | undefined
   private ocrHighlightReady = false
   private ocrHighlightRequested = false
+  private ocrHighlightBounds: Rectangle | undefined
+  private ocrHighlightVersion = 0
   readonly excerptCaptureWindows = new Set<BrowserWindow>()
   selectionTranslationWindow: BrowserWindow | undefined
   selectionExplanationView: WebContentsViewManager | undefined
@@ -378,10 +380,23 @@ export class WindowManager {
   showOcrHighlight(bounds: Rectangle): void {
     let window = this.ocrHighlightWindow
     this.ocrHighlightRequested = true
+    this.ocrHighlightBounds = bounds
+    const version = ++this.ocrHighlightVersion
+    // Windows can enforce a minimum size even for a frameless window. Keep the
+    // surface transparent and position the painted rectangle independently.
+    const windowBounds =
+      process.platform === 'win32'
+        ? {
+            x: bounds.x,
+            y: bounds.y - Math.floor((Math.max(64, bounds.height) - bounds.height) / 2),
+            width: Math.max(64, bounds.width),
+            height: Math.max(64, bounds.height)
+          }
+        : bounds
     if (!window || window.isDestroyed()) {
       this.ocrHighlightReady = false
       const highlightWindow = new BrowserWindow({
-        ...bounds,
+        ...windowBounds,
         show: false,
         frame: false,
         type: process.platform === 'darwin' ? 'panel' : undefined,
@@ -398,18 +413,26 @@ export class WindowManager {
       window = highlightWindow
       this.ocrHighlightWindow = highlightWindow
       highlightWindow.setIgnoreMouseEvents(true)
-      highlightWindow.once('ready-to-show', () => {
-        if (this.ocrHighlightWindow !== highlightWindow || highlightWindow.isDestroyed()) return
-        this.ocrHighlightReady = true
-        if (this.ocrHighlightRequested) highlightWindow.showInactive()
-      })
-      void highlightWindow.loadURL(ocrHighlightPage).catch((error: unknown) => {
-        console.error('Failed to load OCR highlight surface', error)
-        if (this.ocrHighlightWindow === highlightWindow) {
-          this.ocrHighlightReady = false
-          this.ocrHighlightRequested = false
-        }
-      })
+      void highlightWindow
+        .loadURL(ocrHighlightPage)
+        .then(() => {
+          if (this.ocrHighlightWindow !== highlightWindow || highlightWindow.isDestroyed()) return
+          this.ocrHighlightReady = true
+          if (this.ocrHighlightRequested && this.ocrHighlightBounds) {
+            void this.paintOcrHighlight(
+              highlightWindow,
+              this.ocrHighlightBounds,
+              this.ocrHighlightVersion
+            )
+          }
+        })
+        .catch((error: unknown) => {
+          console.error('Failed to load OCR highlight surface', error)
+          if (this.ocrHighlightWindow === highlightWindow) {
+            this.ocrHighlightReady = false
+            this.ocrHighlightRequested = false
+          }
+        })
       if (process.platform === 'darwin') {
         highlightWindow.setVisibleOnAllWorkspaces(true, {
           visibleOnFullScreen: true,
@@ -421,15 +444,62 @@ export class WindowManager {
           this.ocrHighlightWindow = undefined
           this.ocrHighlightReady = false
           this.ocrHighlightRequested = false
+          this.ocrHighlightBounds = undefined
         }
       })
     }
-    window.setBounds(bounds, false)
-    if (this.ocrHighlightReady) window.showInactive()
+    window.hide()
+    window.setBounds(windowBounds, false)
+    if (this.ocrHighlightReady) void this.paintOcrHighlight(window, bounds, version)
+  }
+
+  private async paintOcrHighlight(
+    window: BrowserWindow,
+    bounds: Rectangle,
+    version: number
+  ): Promise<void> {
+    const content = window.getContentBounds()
+    const height =
+      process.platform === 'win32'
+        ? Math.min(bounds.height, Math.max(12, Math.round(bounds.height * 0.8)))
+        : bounds.height
+    const painted = {
+      x: bounds.x - content.x,
+      y: bounds.y + Math.floor((bounds.height - height) / 2) - content.y,
+      width: bounds.width,
+      height
+    }
+    try {
+      const cssText = `left:${painted.x}px;top:${painted.y}px;right:auto;bottom:auto;width:${painted.width}px;height:${painted.height}px`
+      const painting = window.webContents.executeJavaScript(
+        `(() => { const element = document.getElementById('highlight'); if (!element) return false; element.style.cssText = ${JSON.stringify(cssText)}; return true })()`
+      )
+      if (
+        this.ocrHighlightWindow === window &&
+        !window.isDestroyed() &&
+        this.ocrHighlightRequested &&
+        this.ocrHighlightVersion === version
+      ) {
+        window.showInactive()
+      }
+      if (!(await painting)) throw new Error('OCR highlight element is missing')
+    } catch (error) {
+      console.error('Failed to paint OCR highlight', error)
+      if (
+        this.ocrHighlightWindow === window &&
+        !window.isDestroyed() &&
+        this.ocrHighlightRequested &&
+        this.ocrHighlightVersion === version
+      ) {
+        window.showInactive()
+      }
+    }
   }
 
   hideOcrHighlight(): void {
     this.ocrHighlightRequested = false
+    this.ocrHighlightBounds = undefined
+    ++this.ocrHighlightVersion
     const window = this.ocrHighlightWindow
     if (window && !window.isDestroyed()) window.hide()
   }

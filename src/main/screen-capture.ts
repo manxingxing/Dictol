@@ -13,7 +13,7 @@ export type Screenshot = {
   pixelSize: { width: number; height: number }
   bounds: Rectangle
   displayId: number
-  backend: 'screencapturekit' | 'windows-wgc' | 'electron-fallback'
+  backend: 'screencapturekit' | 'windows-wgc' | 'windows-gdi' | 'electron-fallback'
 }
 
 export type CaptureRequest = {
@@ -116,41 +116,49 @@ export async function captureScreen(request: CaptureRequest): Promise<Screenshot
   }
 
   if (process.platform === 'win32') {
-    const center = screen.dipToScreenPoint({
-      x: Math.floor(display.bounds.x + display.bounds.width / 2),
-      y: Math.floor(display.bounds.y + display.bounds.height / 2)
-    })
-    const wholeDisplay =
-      bounds.x === display.bounds.x &&
-      bounds.y === display.bounds.y &&
-      bounds.width === display.bounds.width &&
-      bounds.height === display.bounds.height
-    if (wholeDisplay) {
-      const image = await captureWindowsDisplayAtPoint(center.x, center.y)
+    try {
+      const center = screen.dipToScreenPoint({
+        x: Math.floor(display.bounds.x + display.bounds.width / 2),
+        y: Math.floor(display.bounds.y + display.bounds.height / 2)
+      })
+      const wholeDisplay =
+        bounds.x === display.bounds.x &&
+        bounds.y === display.bounds.y &&
+        bounds.width === display.bounds.width &&
+        bounds.height === display.bounds.height
+      if (wholeDisplay) {
+        const image = await captureWindowsDisplayAtPoint(center.x, center.y)
+        return {
+          data: image.png,
+          mimeType: 'image/png',
+          pixelSize: { width: image.width, height: image.height },
+          bounds: display.bounds,
+          displayId: display.id,
+          backend: image.backend === 'gdi' ? 'windows-gdi' : 'windows-wgc'
+        }
+      }
+      const physicalDisplay = getWindowsDisplayBoundsAtPoint(center.x, center.y)
+      const mapped = mapWindowsCaptureRegion(display.bounds, physicalDisplay, bounds)
+      const image = await captureWindowsScreenRegion(
+        mapped.physical.x,
+        mapped.physical.y,
+        mapped.physical.width,
+        mapped.physical.height
+      )
       return {
         data: image.png,
         mimeType: 'image/png',
         pixelSize: { width: image.width, height: image.height },
-        bounds: display.bounds,
+        bounds: mapped.bounds,
         displayId: display.id,
-        backend: 'windows-wgc'
+        backend: image.backend === 'gdi' ? 'windows-gdi' : 'windows-wgc'
       }
-    }
-    const physicalDisplay = getWindowsDisplayBoundsAtPoint(center.x, center.y)
-    const mapped = mapWindowsCaptureRegion(display.bounds, physicalDisplay, bounds)
-    const image = await captureWindowsScreenRegion(
-      mapped.physical.x,
-      mapped.physical.y,
-      mapped.physical.width,
-      mapped.physical.height
-    )
-    return {
-      data: image.png,
-      mimeType: 'image/png',
-      pixelSize: { width: image.width, height: image.height },
-      bounds: mapped.bounds,
-      displayId: display.id,
-      backend: 'windows-wgc'
+    } catch (error) {
+      console.warn(
+        '[ScreenCapture] Windows Graphics Capture failed; using Electron fallback',
+        error
+      )
+      return captureElectronFallback(display, bounds)
     }
   }
 

@@ -337,6 +337,8 @@ export interface OpenOptions {
 
 export declare function readMacAccessibleText(x: number, y: number, includeContext: boolean): Promise<MacAccessibleLookup>
 
+export declare function readWindowsAccessibleText(x: number, y: number): Promise<WindowsAccessibleLookup>
+
 export declare function recognizeMacText(png: Buffer, languages: Array<string>, accurate: boolean): Promise<MacOcrResult>
 
 export declare function recognizeWindowsText(png: Buffer, language?: string | undefined | null): Promise<WindowsOcrResult>
@@ -369,8 +371,33 @@ export interface WindowsDisplayBounds {
   height: number
 }
 
+export interface WindowsAccessibleLookup {
+  result?: WindowsAccessibleText
+  failure?: string
+}
+
+export interface WindowsAccessibleText {
+  text: string
+  offset: number
+  word: string
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface WindowsOcrObservation {
   text: string
+  x: number
+  y: number
+  width: number
+  height: number
+  characters: Array<WindowsOcrCharacterBox>
+}
+
+export interface WindowsOcrCharacterBox {
+  start: number
+  length: number
   x: number
   y: number
   width: number
@@ -391,6 +418,7 @@ export interface WindowsScreenCaptureImage {
   png: Buffer
   width: number
   height: number
+  backend: string
 }
 
 export interface WordRange {

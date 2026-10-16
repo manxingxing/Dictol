@@ -1,6 +1,7 @@
 type Size = { width: number; height: number }
 type Point = { x: number; y: number }
 type Rect = Point & Size
+type BoundsPadding = { horizontal: number; vertical: number }
 
 export function cropAroundPointer(
   image: Size,
@@ -24,15 +25,16 @@ export function mapOcrBoundsToDisplay(
   fullImage: Size,
   imageRect: Rect,
   image: Size,
-  word: Rect
+  word: Rect,
+  padding?: BoundsPadding
 ): Rect {
   const left = display.x + ((imageRect.x + word.x * image.width) / fullImage.width) * display.width
   const top =
     display.y + ((imageRect.y + word.y * image.height) / fullImage.height) * display.height
   const right = left + word.width * image.width * (display.width / fullImage.width)
   const bottom = top + word.height * image.height * (display.height / fullImage.height)
-  const horizontalPadding = Math.max(5, Math.min(12, (right - left) * 0.1))
-  const verticalPadding = Math.max(3, Math.min(6, (bottom - top) * 0.2))
+  const horizontalPadding = padding?.horizontal ?? Math.max(5, Math.min(12, (right - left) * 0.1))
+  const verticalPadding = padding?.vertical ?? Math.max(3, Math.min(6, (bottom - top) * 0.2))
   const x = Math.max(display.x, Math.floor(left - horizontalPadding))
   const y = Math.max(display.y, Math.floor(top - verticalPadding))
   return {
@@ -49,13 +51,14 @@ export function mapOcrBoundsToDisplay(
   }
 }
 
-export function mapOcrBoundsToRegion(region: Rect, word: Rect): Rect {
+export function mapOcrBoundsToRegion(region: Rect, word: Rect, padding?: BoundsPadding): Rect {
   return mapOcrBoundsToDisplay(
     region,
     { width: region.width, height: region.height },
     { x: 0, y: 0, width: region.width, height: region.height },
     { width: region.width, height: region.height },
-    word
+    word,
+    padding
   )
 }
 

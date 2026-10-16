@@ -52,3 +52,4 @@ module.exports.captureWindowsDisplayAtPoint = native.captureWindowsDisplayAtPoin
 module.exports.captureWindowsScreenRegion = native.captureWindowsScreenRegion
 module.exports.getWindowsDisplayBoundsAtPoint = native.getWindowsDisplayBoundsAtPoint
 module.exports.recognizeWindowsText = native.recognizeWindowsText
+module.exports.readWindowsAccessibleText = native.readWindowsAccessibleText

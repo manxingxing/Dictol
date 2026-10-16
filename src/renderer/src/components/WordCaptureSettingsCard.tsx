@@ -421,7 +421,9 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
                         </span>
                       </FieldLabel>
                       <FieldDescription className="text-xs leading-5">
-                        在屏幕文字上按快捷键，识别鼠标下的词语
+                        {window.dictol.platform === 'win32'
+                          ? '在屏幕文字上按快捷键；优先读取鼠标下的文字，无法读取时使用本机 OCR'
+                          : '在屏幕文字上按快捷键，识别鼠标下的词语'}
                       </FieldDescription>
                     </FieldContent>
                     <Switch
@@ -464,8 +466,12 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
                           recordingOcrShortcut === mode
                             ? '请直接按下新的组合键，按 Esc 取消'
                             : registered
-                              ? '快捷键已启用'
-                              : '快捷键被占用，请重新设置'
+                              ? isDictionary
+                                ? '快捷键已启用'
+                                : '仅支持英文；快捷键已启用'
+                              : isDictionary
+                                ? '快捷键被占用，请重新设置'
+                                : '仅支持英文；快捷键被占用，请重新设置'
                         }
                         control={
                           <div className="flex items-center gap-2">
