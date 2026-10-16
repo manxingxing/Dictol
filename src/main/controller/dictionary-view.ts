@@ -97,6 +97,8 @@ export class DictionaryViewController extends BaseController {
     const normalizedTerm = target.term.trim()
     if (!normalizedTerm || normalizedTerm.length > 200) return
 
+    // Resolve a recreated view before its load state is updated.
+    const view = this.activeView
     this.navigationVersion += 1
     const url = createDictionaryAggregateUrl(normalizedTerm, {
       dictionaryId: target.dictionaryId,
@@ -108,22 +110,22 @@ export class DictionaryViewController extends BaseController {
     this.pendingUrl = undefined
     this.pendingLoad = undefined
     this.notifyLoadingState(true)
-    this.activeView.show()
+    view.show()
 
     try {
-      await this.activeView.loadURL(url)
+      await view.loadURL(url)
       if (this.runtime.isDisposed) return
       if (version !== this.loadVersion || this.desiredUrl !== url) return
       this.loadedUrl = url
       this.notifyLoadingState(false)
-      this.activeView.show()
+      view.show()
     } catch (error) {
       if (this.runtime.isDisposed) return
       if (version !== this.loadVersion || this.desiredUrl !== url) return
       this.notifyLoadingState(false)
 
       if (!isNavigationAborted(error)) {
-        this.activeView.hide()
+        view.hide()
         throw error
       }
     }
@@ -288,14 +290,15 @@ export class DictionaryViewController extends BaseController {
   }
 
   private async showEntry(url: string): Promise<boolean> {
+    const view = this.activeView
     this.desiredUrl = url
     if (this.loadedUrl === url) {
-      this.activeView.show()
+      view.show()
       this.notifyLoadingState(false)
       return true
     }
     if (this.pendingUrl === url && this.pendingLoad) {
-      this.activeView.show()
+      view.show()
       this.notifyLoadingState(true)
       return this.pendingLoad
     }
@@ -303,7 +306,7 @@ export class DictionaryViewController extends BaseController {
     const version = ++this.loadVersion
     this.loadedUrl = undefined
     this.notifyLoadingState(true)
-    const load = this.loadEntry(url, version)
+    const load = this.loadEntry(view, url, version)
     this.pendingUrl = url
     this.pendingLoad = load
 
@@ -375,17 +378,21 @@ export class DictionaryViewController extends BaseController {
     this.hideFindBarView()
   }
 
-  private async loadEntry(url: string, version: number): Promise<boolean> {
-    this.activeView.show()
+  private async loadEntry(
+    view: WebContentsViewManager,
+    url: string,
+    version: number
+  ): Promise<boolean> {
+    view.show()
     try {
-      await this.activeView.loadURL(url)
+      await view.loadURL(url)
       if (this.runtime.isDisposed) return false
       if (version !== this.loadVersion) return false
       this.loadedUrl = url
       const shouldRemainVisible = this.desiredUrl === url
       this.notifyLoadingState(false)
-      if (shouldRemainVisible) this.activeView.show()
-      else this.activeView.hide()
+      if (shouldRemainVisible) view.show()
+      else view.hide()
       return shouldRemainVisible
     } catch (error) {
       if (this.runtime.isDisposed) return false
@@ -394,7 +401,7 @@ export class DictionaryViewController extends BaseController {
       }
       this.notifyLoadingState(false)
       if (isNavigationAborted(error)) return false
-      this.activeView.hide()
+      view.hide()
       throw error
     }
   }
