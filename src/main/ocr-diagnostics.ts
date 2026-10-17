@@ -9,7 +9,7 @@ import type { OcrTextHit } from './ocr-text'
 /** Explicit opt-in: screenshots and recognized text can contain private screen content. */
 export async function recordMacOcrDiagnostic(
   mode: 'dictionary' | 'ai',
-  pass: 'initial' | 'accurate-fallback' | 'expanded',
+  pass: 'initial' | 'japanese-fallback' | 'expanded',
   captured: CapturedImage,
   pointer: Point,
   result: MacOcrResult,

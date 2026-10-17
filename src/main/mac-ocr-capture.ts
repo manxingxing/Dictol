@@ -10,7 +10,8 @@ export type OcrCapture = { selection: OcrSelection; wordBounds: Rectangle }
 
 const dictionaryCaptureSize = { width: 700, height: 300 }
 const aiCaptureSize = { width: 1024, height: 500 }
-const ocrLanguages = ['ja-JP', 'zh-Hans', 'en-US', 'zh-Hant']
+const ocrLanguages = ['zh-Hans', 'en-US', 'ja-JP', 'zh-Hant']
+const japaneseOcrLanguages = ['ja-JP', 'zh-Hans', 'en-US', 'zh-Hant']
 
 export async function captureTextUnderCursor(
   mode: OcrLookupMode,
@@ -19,7 +20,6 @@ export async function captureTextUnderCursor(
   if (process.platform !== 'darwin') return null
   const pointer = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(pointer)
-  const languages = mode === 'ai' ? ['en-US'] : ocrLanguages
   const snapshot = mode === 'ai' ? await captureOcrDisplay(display) : null
   let captured = snapshot
     ? cropOcrDisplay(snapshot, pointer, aiCaptureSize)
@@ -28,7 +28,7 @@ export async function captureTextUnderCursor(
   let captureMs = captured.captureMs
 
   const ocrStartedAt = performance.now()
-  let result = await recognizeMacText(captured.buffer, languages, mode === 'dictionary')
+  let result = await recognizeMacText(captured.buffer, ocrLanguages, true)
   const firstPassOcrMs = performance.now() - ocrStartedAt
   const firstSelectionStartedAt = performance.now()
   let hit = selectOcrTextHit(
@@ -39,32 +39,30 @@ export async function captureTextUnderCursor(
   )
   let selectionMs = performance.now() - firstSelectionStartedAt
   await recordMacOcrDiagnostic(mode, 'initial', captured, pointer, result, hit)
-  let accurateFallbackMs = 0
-  let usedAccurateFallback = false
-  if (mode === 'ai' && (!hit || (hit.confidence ?? 1) < 0.4)) {
-    const accurateStartedAt = performance.now()
-    const accurateResult = await recognizeMacText(captured.buffer, languages, true)
-    accurateFallbackMs = performance.now() - accurateStartedAt
-    const accurateSelectionStartedAt = performance.now()
-    const accurateHit = selectOcrTextHit(
-      accurateResult.observations,
+  let japaneseFallbackMs = 0
+  if (!hit) {
+    const fallbackStartedAt = performance.now()
+    const fallbackResult = await recognizeMacText(captured.buffer, japaneseOcrLanguages, true)
+    japaneseFallbackMs = performance.now() - fallbackStartedAt
+    const fallbackSelectionStartedAt = performance.now()
+    const fallbackHit = selectOcrTextHit(
+      fallbackResult.observations,
       captured.pointer,
       captured.size.width / captured.size.height,
       chineseWordRange
     )
-    selectionMs += performance.now() - accurateSelectionStartedAt
+    selectionMs += performance.now() - fallbackSelectionStartedAt
     await recordMacOcrDiagnostic(
       mode,
-      'accurate-fallback',
+      'japanese-fallback',
       captured,
       pointer,
-      accurateResult,
-      accurateHit
+      fallbackResult,
+      fallbackHit
     )
-    if (accurateHit) {
-      result = accurateResult
-      hit = accurateHit
-      usedAccurateFallback = true
+    if (fallbackHit) {
+      result = fallbackResult
+      hit = fallbackHit
     }
   }
   let expandedOcrMs = 0
@@ -79,7 +77,7 @@ export async function captureTextUnderCursor(
     const expandedCapture = cropOcrDisplay(snapshot, pointer, null)
     captureMs += expandedCapture.captureMs
     const expandedOcrStartedAt = performance.now()
-    const expandedResult = await recognizeMacText(expandedCapture.buffer, languages, false)
+    const expandedResult = await recognizeMacText(expandedCapture.buffer, ocrLanguages, true)
     expandedOcrMs = performance.now() - expandedOcrStartedAt
     const expandedSelectionStartedAt = performance.now()
     const expandedHit = selectOcrTextHit(
@@ -97,16 +95,13 @@ export async function captureTextUnderCursor(
       expandedResult,
       expandedHit
     )
-    const improvedContext =
-      usedAccurateFallback &&
-      Boolean(
-        expandedHit &&
-        hit &&
-        expandedHit.selection.word === hit.selection.word &&
-        expandedHit.selection.context.length > hit.selection.context.length
-      )
-    const moreConfidentHit =
-      !usedAccurateFallback && (expandedHit?.confidence ?? 0) > (hit?.confidence ?? 0)
+    const improvedContext = Boolean(
+      expandedHit &&
+      hit &&
+      expandedHit.selection.word === hit.selection.word &&
+      expandedHit.selection.context.length > hit.selection.context.length
+    )
+    const moreConfidentHit = (expandedHit?.confidence ?? 0) > (hit?.confidence ?? 0)
     if (expandedHit && (!hit || improvedContext || moreConfidentHit)) {
       captured = expandedCapture
       result = expandedResult
@@ -117,10 +112,9 @@ export async function captureTextUnderCursor(
     mode,
     captureBackend: captured.backend,
     captureMs,
-    ocrMs: firstPassOcrMs + accurateFallbackMs + expandedOcrMs,
-    fastOcrMs: mode === 'ai' ? firstPassOcrMs : undefined,
-    accurateOcrMs: mode === 'dictionary' ? firstPassOcrMs : undefined,
-    accurateFallbackMs: accurateFallbackMs || undefined,
+    ocrMs: firstPassOcrMs + japaneseFallbackMs + expandedOcrMs,
+    accurateOcrMs: firstPassOcrMs,
+    japaneseFallbackMs: japaneseFallbackMs || undefined,
     expandedOcrMs: expandedOcrMs || undefined,
     expanded,
     selectionMs,

@@ -48,7 +48,9 @@ int dictol_recognize_mac_text(const uint8_t *png, size_t png_length,
         request.recognitionLevel = accurate ? VNRequestTextRecognitionLevelAccurate
                                             : VNRequestTextRecognitionLevelFast;
         request.recognitionLanguages = languages;
-        if (@available(macOS 13.0, *)) request.automaticallyDetectsLanguage = YES;
+        // The requested languages already cover mixed text. Automatic detection can turn
+        // a short Chinese span in an English line into Latin gibberish.
+        if (@available(macOS 13.0, *)) request.automaticallyDetectsLanguage = NO;
         request.usesLanguageCorrection = YES;
         VNImageRequestHandler *handler = [[VNImageRequestHandler alloc] initWithCGImage:image options:@{}];
         NSError *error = nil;

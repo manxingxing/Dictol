@@ -55,11 +55,25 @@ export function sentenceContextAt(text: string, offset: number): SentenceContext
       .filter((position) => position >= 0)
   )
   const paragraph = text.slice(paragraphStart, paragraphEnd)
-  const sentences = Array.from(sentenceSegmenter.segment(paragraph)).map((part) => ({
-    text: part.segment.trim(),
-    start: paragraphStart + part.index,
-    end: paragraphStart + part.index + part.segment.length
-  }))
+  const sentences: { text: string; start: number; end: number }[] = []
+  for (const part of sentenceSegmenter.segment(paragraph)) {
+    const previous = sentences.at(-1)
+    if (
+      previous &&
+      /\.(?:[（(]\s*)?$/u.test(previous.text) &&
+      /^(?:[（(]\s*)?\p{Script=Han}/u.test(part.segment) &&
+      !/\s/u.test(paragraph[part.index - 1])
+    ) {
+      previous.text += part.segment.trimEnd()
+      previous.end = paragraphStart + part.index + part.segment.length
+    } else {
+      sentences.push({
+        text: part.segment.trim(),
+        start: paragraphStart + part.index,
+        end: paragraphStart + part.index + part.segment.length
+      })
+    }
+  }
   const current = sentences.findIndex((part) => offset >= part.start && offset < part.end)
   if (current < 0) return null
   const start = sentences[Math.max(0, current - 1)].start
@@ -134,7 +148,9 @@ export function selectOcrTextHit(
             Math.abs(a.x - target.x) - Math.abs(b.x - target.x)
         )[0]
       if (!next) break
-      if (isHeadingBoundary(preceding ? next : edge, preceding ? edge : next)) break
+      const upper = preceding ? next : edge
+      const lower = preceding ? edge : next
+      if (isHeadingBoundary(upper, lower) || isEntryBoundary(lower)) break
       paragraph.push(next)
       edge = next
     }
@@ -315,7 +331,7 @@ function isAdjacentLine(
     heightRatio >= 0.7 &&
     heightRatio <= 1.4 &&
     verticalGap >= -lineHeight * 0.25 &&
-    verticalGap <= lineHeight * 1.1 &&
+    verticalGap <= lineHeight * 0.45 &&
     Math.abs(candidate.x - anchor.x) * aspectRatio <= anchor.height * 2
   )
 }
@@ -330,6 +346,13 @@ function isHeadingBoundary(upper: Line, lower: Line): boolean {
     upper.width < lower.width * 0.5 &&
     !/[.!?。！？,，:：;；-]/u.test(upper.text) &&
     /^\p{Lu}/u.test(lower.text)
+  )
+}
+
+function isEntryBoundary(line: Line): boolean {
+  return (
+    /^\s*(?:\d{1,2}|[A-Za-z])\s*:\s*\p{L}/u.test(line.text) ||
+    /^\s*(?:\[[^\n]{1,24}\]|［[^\n]{1,24}］)\s*$/u.test(line.text)
   )
 }
 
