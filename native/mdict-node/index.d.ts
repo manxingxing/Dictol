@@ -159,6 +159,8 @@ export declare function captureWindowsDisplayAtPoint(x: number, y: number): Prom
 
 export declare function captureWindowsScreenRegion(x: number, y: number, width: number, height: number): Promise<WindowsScreenCaptureImage>
 
+export declare function stopWindowsScreenCaptureSessions(): void
+
 export declare function chineseWordRange(text: string, offset: number): WordRange | null
 
 /** Configure an Electron-managed panel window without moving its Chromium content view. */

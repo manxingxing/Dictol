@@ -50,6 +50,7 @@ if (process.platform === 'darwin') {
 }
 module.exports.captureWindowsDisplayAtPoint = native.captureWindowsDisplayAtPoint
 module.exports.captureWindowsScreenRegion = native.captureWindowsScreenRegion
+module.exports.stopWindowsScreenCaptureSessions = native.stopWindowsScreenCaptureSessions
 module.exports.getWindowsDisplayBoundsAtPoint = native.getWindowsDisplayBoundsAtPoint
 module.exports.recognizeWindowsText = native.recognizeWindowsText
 module.exports.readWindowsAccessibleText = native.readWindowsAccessibleText

@@ -1,5 +1,6 @@
 import { nativeTheme } from 'electron'
 import type { BrowserWindow } from 'electron'
+import { stopWindowsScreenCaptureSessions } from '@dictol/mdict-native'
 
 import { AppConfigStore, type AppConfig } from './app-config'
 import { AiLookupService } from './ai-service'
@@ -226,7 +227,11 @@ export class AppRuntime {
   }
 
   restartOcrShortcuts(): void {
-    this.registerOcrShortcuts(this.appConfig.load())
+    const config = this.appConfig.load()
+    this.registerOcrShortcuts(config)
+    if (process.platform === 'win32' && !config.featureFlags.ocrLookup) {
+      stopWindowsScreenCaptureSessions()
+    }
   }
 
   restartMainWindowShortcut(): void {
@@ -267,6 +272,7 @@ export class AppRuntime {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    if (process.platform === 'win32') stopWindowsScreenCaptureSessions()
     this.shortcutRegister.unregisterAll()
     this.mainWindowShortcutRouter?.dispose()
     this.mainWindowShortcutRouter = undefined
