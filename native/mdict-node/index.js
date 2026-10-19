@@ -726,3 +726,4 @@ module.exports.selectionPanelState = nativeBinding.selectionPanelState
 module.exports.setSelectionPanelBounds = nativeBinding.setSelectionPanelBounds
 module.exports.showSelectionPanel = nativeBinding.showSelectionPanel
 module.exports.showSelectionPanelDisableMenu = nativeBinding.showSelectionPanelDisableMenu
+module.exports.stopWindowsScreenCaptureSessions = nativeBinding.stopWindowsScreenCaptureSessions

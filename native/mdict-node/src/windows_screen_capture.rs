@@ -1,6 +1,12 @@
 use napi::bindgen_prelude::{AsyncTask, Buffer};
 use napi::{Env, Error, Result, Status, Task};
 use napi_derive::napi;
+#[cfg(windows)]
+use std::collections::HashMap;
+#[cfg(windows)]
+use std::sync::{Arc, Condvar, Mutex, OnceLock, mpsc};
+#[cfg(windows)]
+use std::time::{Duration, Instant};
 
 #[napi(object)]
 pub struct WindowsScreenCaptureImage {
@@ -167,7 +173,7 @@ fn capture_with_fallback(
     width: u32,
     height: u32,
 ) -> windows::core::Result<(Vec<u8>, &'static str)> {
-    match capture(x, y, width, height) {
+    match capture_reusing_session(x, y, width, height).or_else(|_| capture(x, y, width, height)) {
         Ok(png) => Ok((png, "wgc")),
         Err(wgc_error) => capture_gdi(x, y, width, height)
             .map(|png| (png, "gdi"))
@@ -177,6 +183,295 @@ fn capture_with_fallback(
                 ))
             }),
     }
+}
+
+#[cfg(windows)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+struct MonitorKey {
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
+}
+
+#[cfg(windows)]
+struct CaptureRequest {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    reply: mpsc::SyncSender<std::result::Result<Vec<u8>, String>>,
+}
+
+#[cfg(windows)]
+static CAPTURE_WORKERS: OnceLock<Mutex<HashMap<MonitorKey, mpsc::Sender<CaptureRequest>>>> =
+    OnceLock::new();
+
+#[napi]
+pub fn stop_windows_screen_capture_sessions() {
+    #[cfg(windows)]
+    if let Some(workers) = CAPTURE_WORKERS.get() {
+        if let Ok(mut map) = workers.lock() {
+            // Dropping the senders wakes each worker so it can close its capture session.
+            map.clear();
+        }
+    }
+}
+
+#[cfg(windows)]
+fn capture_reusing_session(
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+) -> windows::core::Result<Vec<u8>> {
+    use windows::Win32::Foundation::POINT;
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MONITOR_DEFAULTTONULL, MONITORINFO, MonitorFromPoint,
+    };
+    use windows::core::Error as WinError;
+
+    let center_x = i32::try_from(i64::from(x) + i64::from(width / 2))
+        .map_err(|_| capture_error("Invalid capture coordinates"))?;
+    let center_y = i32::try_from(i64::from(y) + i64::from(height / 2))
+        .map_err(|_| capture_error("Invalid capture coordinates"))?;
+    let monitor = unsafe {
+        MonitorFromPoint(
+            POINT {
+                x: center_x,
+                y: center_y,
+            },
+            MONITOR_DEFAULTTONULL,
+        )
+    };
+    if monitor.is_invalid() {
+        return Err(capture_error("Capture region is outside a display"));
+    }
+    let mut info = MONITORINFO {
+        cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+        ..Default::default()
+    };
+    if !unsafe { GetMonitorInfoW(monitor, &mut info) }.as_bool() {
+        return Err(WinError::from_thread());
+    }
+    let rect = info.rcMonitor;
+    let key = MonitorKey {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+    };
+    if x < key.left
+        || y < key.top
+        || i64::from(x) + i64::from(width) > i64::from(key.right)
+        || i64::from(y) + i64::from(height) > i64::from(key.bottom)
+    {
+        return Err(capture_error("Capture region must fit within one display"));
+    }
+
+    let workers = CAPTURE_WORKERS.get_or_init(|| Mutex::new(HashMap::new()));
+    let request = |sender: &mpsc::Sender<CaptureRequest>| {
+        let (reply, result) = mpsc::sync_channel(1);
+        sender
+            .send(CaptureRequest {
+                x: (x - key.left) as u32,
+                y: (y - key.top) as u32,
+                width,
+                height,
+                reply,
+            })
+            .map_err(|_| capture_error("Screen capture session stopped"))?;
+        result
+            .recv_timeout(Duration::from_secs(3))
+            .map_err(|_| capture_error("Timed out waiting for a screen frame"))?
+            .map_err(|message| capture_error(&message))
+    };
+
+    for attempt in 0..2 {
+        let sender = {
+            let mut map = workers
+                .lock()
+                .map_err(|_| capture_error("Capture session lock failed"))?;
+            if let Some(sender) = map.get(&key) {
+                sender.clone()
+            } else {
+                let sender = start_capture_worker(key)?;
+                map.insert(key, sender.clone());
+                sender
+            }
+        };
+        match request(&sender) {
+            Ok(png) => return Ok(png),
+            Err(error) if attempt == 0 => {
+                workers
+                    .lock()
+                    .map_err(|_| capture_error("Capture session lock failed"))?
+                    .remove(&key);
+                let _ = error;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(capture_error("Screen capture session stopped"))
+}
+
+#[cfg(windows)]
+fn start_capture_worker(key: MonitorKey) -> windows::core::Result<mpsc::Sender<CaptureRequest>> {
+    let (requests, receiver) = mpsc::channel();
+    let (ready, started) = mpsc::sync_channel(1);
+    std::thread::Builder::new()
+        .name("dictol-wgc-capture".into())
+        .spawn(move || {
+            if let Err(error) = run_capture_worker(key, receiver, &ready) {
+                let _ = ready.send(Err(error.to_string()));
+            }
+        })
+        .map_err(|error| capture_error(&error.to_string()))?;
+    started
+        .recv_timeout(Duration::from_secs(3))
+        .map_err(|_| capture_error("Timed out starting screen capture"))?
+        .map_err(|message| capture_error(&message))?;
+    Ok(requests)
+}
+
+#[cfg(windows)]
+fn run_capture_worker(
+    key: MonitorKey,
+    requests: mpsc::Receiver<CaptureRequest>,
+    ready: &mpsc::SyncSender<std::result::Result<(), String>>,
+) -> windows::core::Result<()> {
+    use windows::Foundation::TypedEventHandler;
+    use windows::Graphics::Capture::{
+        Direct3D11CaptureFrame, Direct3D11CaptureFramePool, GraphicsCaptureItem,
+    };
+    use windows::Graphics::DirectX::Direct3D11::IDirect3DDevice;
+    use windows::Graphics::DirectX::DirectXPixelFormat;
+    use windows::Win32::Foundation::POINT;
+    use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_HARDWARE;
+    use windows::Win32::Graphics::Direct3D11::{
+        D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION, D3D11CreateDevice, ID3D11Device,
+    };
+    use windows::Win32::Graphics::Dxgi::IDXGIDevice;
+    use windows::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONULL, MonitorFromPoint};
+    use windows::Win32::System::WinRT::Direct3D11::CreateDirect3D11DeviceFromDXGIDevice;
+    use windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemInterop;
+    use windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize, RoUninitialize};
+    use windows::core::{IInspectable, Interface, factory};
+
+    struct Apartment;
+    impl Drop for Apartment {
+        fn drop(&mut self) {
+            unsafe { RoUninitialize() };
+        }
+    }
+
+    unsafe { RoInitialize(RO_INIT_MULTITHREADED)? };
+    let _apartment = Apartment;
+    let center = POINT {
+        x: key.left + (key.right - key.left) / 2,
+        y: key.top + (key.bottom - key.top) / 2,
+    };
+    let monitor = unsafe { MonitorFromPoint(center, MONITOR_DEFAULTTONULL) };
+    if monitor.is_invalid() {
+        return Err(capture_error("Capture monitor is unavailable"));
+    }
+    let item = unsafe {
+        factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()?
+            .CreateForMonitor::<GraphicsCaptureItem>(monitor)?
+    };
+    let mut device = None;
+    unsafe {
+        D3D11CreateDevice(
+            None,
+            D3D_DRIVER_TYPE_HARDWARE,
+            Default::default(),
+            D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+            None,
+            D3D11_SDK_VERSION,
+            Some(&mut device),
+            None,
+            None,
+        )?;
+    }
+    let device: ID3D11Device = device.ok_or_else(|| capture_error("No D3D11 device"))?;
+    let dxgi: IDXGIDevice = device.cast()?;
+    let inspectable = unsafe { CreateDirect3D11DeviceFromDXGIDevice(&dxgi)? };
+    let winrt_device: IDirect3DDevice = inspectable.cast()?;
+    // Keep two buffers so the newest frame can replace the one being read.
+    let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(
+        &winrt_device,
+        DirectXPixelFormat::B8G8R8A8UIntNormalized,
+        2,
+        item.Size()?,
+    )?;
+    let latest: Arc<(Mutex<Option<Direct3D11CaptureFrame>>, Condvar)> =
+        Arc::new((Mutex::new(None), Condvar::new()));
+    let callback_latest = Arc::clone(&latest);
+    let handler =
+        TypedEventHandler::<Direct3D11CaptureFramePool, IInspectable>::new(move |pool, _| {
+            let frame = pool
+                .as_ref()
+                .ok_or_else(|| capture_error("Capture frame pool was closed"))?
+                .TryGetNextFrame()?;
+            let (lock, changed) = &*callback_latest;
+            let mut guard = lock
+                .lock()
+                .map_err(|_| capture_error("Capture frame lock failed"))?;
+            if let Some(previous) = guard.replace(frame) {
+                let _ = previous.Close();
+            }
+            changed.notify_all();
+            Ok(())
+        });
+    let token = pool.FrameArrived(&handler)?;
+    let session = pool.CreateCaptureSession(&item)?;
+    let _ = session.SetIsCursorCaptureEnabled(false);
+    let _ = session.SetIsBorderRequired(false);
+    session.StartCapture()?;
+    let _ = ready.send(Ok(()));
+
+    // Keep the session ready until screen capture is disabled or the app exits.
+    while let Ok(request) = requests.recv() {
+        let result = (|| -> windows::core::Result<Vec<u8>> {
+            let (lock, changed) = &*latest;
+            let mut guard = lock
+                .lock()
+                .map_err(|_| capture_error("Capture frame lock failed"))?;
+            let deadline = Instant::now() + Duration::from_secs(3);
+            while guard.is_none() {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Err(capture_error("Timed out waiting for a screen frame"));
+                }
+                let (next, _) = changed
+                    .wait_timeout(guard, remaining)
+                    .map_err(|_| capture_error("Capture frame lock failed"))?;
+                guard = next;
+            }
+            let pixels = read_frame(
+                &device,
+                guard.as_ref().unwrap(),
+                request.x,
+                request.y,
+                request.width,
+                request.height,
+            )?;
+            drop(guard);
+            encode_png(&pixels, request.width, request.height)
+        })();
+        let _ = request
+            .reply
+            .send(result.map_err(|error| error.to_string()));
+    }
+    let _ = session.Close();
+    let _ = pool.RemoveFrameArrived(token);
+    let _ = pool.Close();
+    if let Ok(mut guard) = latest.0.lock() {
+        if let Some(frame) = guard.take() {
+            let _ = frame.Close();
+        }
+    }
+    Ok(())
 }
 
 #[cfg(windows)]
