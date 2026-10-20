@@ -303,7 +303,10 @@ function normalizeTranslationProviders(value: unknown): TranslationProviderConfi
     'microsoft',
     'volcano',
     'deepl',
-    'openai-compatible'
+    'openai-compatible',
+    'youdao-web',
+    'google-web',
+    'bing-web'
   ]
   for (const item of value) {
     if (!item || typeof item !== 'object') continue
@@ -326,7 +329,10 @@ function normalizeTranslationProviders(value: unknown): TranslationProviderConfi
       microsoft: ['region', 'endpoint'],
       volcano: [],
       deepl: ['plan'],
-      'openai-compatible': ['baseUrl', 'model']
+      'openai-compatible': ['baseUrl', 'model'],
+      'youdao-web': [],
+      'google-web': [],
+      'bing-web': []
     }
     if (provider.options && typeof provider.options === 'object') {
       for (const [key, option] of Object.entries(provider.options)) {

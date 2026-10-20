@@ -7,6 +7,9 @@ import type {
 import { TRANSLATION_LANGUAGE_NAMES } from '../../shared/translation'
 import { translateWithSystem } from './system'
 import { translateWithVolcano } from './volcano'
+import { translateWithYoudaoWeb } from './youdao-web'
+import { translateWithGoogleWeb } from './google-web'
+import { translateWithBingWeb } from './bing-web'
 
 export type TranslationAdapterContext = {
   config: TranslationProviderConfig
@@ -24,6 +27,9 @@ export const adapters: Record<TranslationProviderKind, TranslationAdapter> = {
   system: ({ request, signal }) => translateWithSystem(request, signal),
   'openai-compatible': translateWithOpenAiCompatible,
   google: translateWithGoogle,
+  'youdao-web': translateWithYoudaoWeb,
+  'google-web': translateWithGoogleWeb,
+  'bing-web': translateWithBingWeb,
   microsoft: translateWithMicrosoft,
   volcano: ({ request, credentials, signal }) => translateWithVolcano(request, credentials, signal),
   deepl: translateWithDeepL
