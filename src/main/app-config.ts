@@ -23,12 +23,14 @@ export type AppConfig = {
     lookupWordOnShortcut: boolean
     lookupWordOnSelection: boolean
     ocrLookup: boolean
+    screenshotTranslation: boolean
   }
   shortcuts: {
     lookupWordOnShortcut: string
     showMainWindow: string
     ocrDictionary: string
     ocrAi: string
+    screenshotTranslation: string
   }
   selection: {
     dictionaryGroupId: number | undefined
@@ -52,13 +54,15 @@ const DEFAULT_CONFIG: AppConfig = {
   featureFlags: {
     lookupWordOnShortcut: true,
     lookupWordOnSelection: false,
-    ocrLookup: false
+    ocrLookup: false,
+    screenshotTranslation: process.platform === 'darwin'
   },
   shortcuts: {
     lookupWordOnShortcut: 'Alt+D',
     showMainWindow: 'CommandOrControl+Alt+D',
     ocrDictionary: 'Alt+S',
-    ocrAi: 'Alt+T'
+    ocrAi: 'Alt+T',
+    screenshotTranslation: 'Alt+R'
   },
   selection: {
     dictionaryGroupId: undefined,
@@ -168,12 +172,14 @@ function parseConfig(value: unknown): AppConfig {
       lookupWordOnShortcut?: unknown
       lookupWordOnSelection?: unknown
       ocrLookup?: unknown
+      screenshotTranslation?: unknown
     }
     shortcuts?: {
       lookupWordOnShortcut?: unknown
       showMainWindow?: unknown
       ocrDictionary?: unknown
       ocrAi?: unknown
+      screenshotTranslation?: unknown
     }
     selection?: { dictionaryGroupId?: unknown; excludedPrograms?: unknown }
     aiLookup?: {
@@ -210,7 +216,11 @@ function parseConfig(value: unknown): AppConfig {
       ocrLookup:
         typeof candidate.featureFlags?.ocrLookup === 'boolean'
           ? candidate.featureFlags.ocrLookup
-          : DEFAULT_CONFIG.featureFlags.ocrLookup
+          : DEFAULT_CONFIG.featureFlags.ocrLookup,
+      screenshotTranslation:
+        typeof candidate.featureFlags?.screenshotTranslation === 'boolean'
+          ? candidate.featureFlags.screenshotTranslation
+          : DEFAULT_CONFIG.featureFlags.screenshotTranslation
     },
     shortcuts: {
       lookupWordOnShortcut:
@@ -228,7 +238,12 @@ function parseConfig(value: unknown): AppConfig {
         DEFAULT_CONFIG.shortcuts.ocrDictionary,
         64
       ),
-      ocrAi: normalizeConfigString(candidate.shortcuts?.ocrAi, DEFAULT_CONFIG.shortcuts.ocrAi, 64)
+      ocrAi: normalizeConfigString(candidate.shortcuts?.ocrAi, DEFAULT_CONFIG.shortcuts.ocrAi, 64),
+      screenshotTranslation: normalizeConfigString(
+        candidate.shortcuts?.screenshotTranslation,
+        DEFAULT_CONFIG.shortcuts.screenshotTranslation,
+        64
+      )
     },
     selection: {
       dictionaryGroupId: normalizeDictionaryGroupId(candidate.selection?.dictionaryGroupId),

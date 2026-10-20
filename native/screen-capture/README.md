@@ -24,7 +24,7 @@ opening macOS settings rejects. The status is advisory: the application attempts
 capture before treating permission as the cause of a failure.
 
 The application keeps display selection, Electron DIP conversion, and Electron
-fallback in `src/main/screen-capture.ts`.
+fallback in `src/main/ocr/screen-capture.ts`.
 
 The macOS app target is Sonoma (14.0) or later. The native addon converts the
 captured `CGImage` to PNG and keeps the same `{ png, width, height }` result

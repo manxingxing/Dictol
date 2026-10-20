@@ -32,6 +32,10 @@ opendesign/
 /native/accessibility/*.node
 /native/accessibility/windows/target/
 /native/accessibility/windows/*.node
+/native/ocr/target/
+/native/ocr/macos/target/
+/native/ocr/windows/target/
+/native/ocr/windows/*.node
 /native/screen-capture/target/
 /native/screen-capture/node_modules/
 /native/screen-capture/macos/target/
@@ -41,4 +45,3 @@ opendesign/
 /native/screen-capture/windows/*.node
 /native/screen-capture/windows/index.d.ts
 /resources/system-translation/dictol-system-translation
-/resources/rapidocr/

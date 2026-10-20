@@ -16,7 +16,6 @@ export default defineConfig({
         input: {
           index: resolve('src/main/index.ts'),
           'dictionary-import-worker': resolve('src/main/dictionary-import-worker.ts'),
-          'rapid-ocr-worker': resolve('src/main/rapid-ocr-worker.ts'),
           'wordbook-export-worker': resolve('src/main/wordbook-export-worker.ts')
         }
       }
@@ -48,6 +47,7 @@ export default defineConfig({
           'selection-toolbar': resolve('src/preload/selection-toolbar.ts'),
           'selection-explanation': resolve('src/preload/selection-explanation.ts'),
           'selection-translation': resolve('src/preload/selection-translation.ts'),
+          'screenshot-area': resolve('src/preload/screenshot-area.ts'),
           'external-excerpt': resolve('src/preload/external-excerpt.ts'),
           'selection-entry': resolve('src/preload/selection-entry.ts'),
           'custom-css-editor': resolve('src/preload/custom-css-editor.ts'),
@@ -66,6 +66,8 @@ export default defineConfig({
           'selection-toolbar': resolve('src/renderer/selection-toolbar.html'),
           'selection-explanation': resolve('src/renderer/selection-explanation.html'),
           'selection-translation': resolve('src/renderer/selection-translation.html'),
+          'screenshot-area': resolve('src/renderer/screenshot-area.html'),
+          'screenshot-progress': resolve('src/renderer/screenshot-progress.html'),
           'external-excerpt': resolve('src/renderer/external-excerpt.html'),
           'find-bar': resolve('src/renderer/find-bar.html'),
           'custom-css-editor': resolve('src/renderer/custom-css-editor.html'),

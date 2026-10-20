@@ -23,6 +23,10 @@ static NSDictionary *rect_json(CGRect rect) {
     };
 }
 
+static NSDictionary *top_left_point_json(CGPoint point) {
+    return @{@"x": @(point.x), @"y": @(1 - point.y)};
+}
+
 int dictol_recognize_mac_text(const uint8_t *png, size_t png_length,
                              const char *language_list, int accurate,
                              uint8_t **output, size_t *output_length) {
@@ -74,6 +78,12 @@ int dictol_recognize_mac_text(const uint8_t *png, size_t png_length,
                     NSMutableDictionary *character = [rect_json(box.boundingBox) mutableCopy];
                     character[@"start"] = @(range.location);
                     character[@"length"] = @(range.length);
+                    character[@"quad"] = @[
+                        top_left_point_json(box.topLeft),
+                        top_left_point_json(box.topRight),
+                        top_left_point_json(box.bottomRight),
+                        top_left_point_json(box.bottomLeft)
+                    ];
                     [characters addObject:character];
                 }
                 offset = NSMaxRange(range);
@@ -82,6 +92,12 @@ int dictol_recognize_mac_text(const uint8_t *png, size_t png_length,
             line[@"text"] = text;
             line[@"confidence"] = @(candidate.confidence);
             line[@"characters"] = characters;
+            line[@"quad"] = @[
+                top_left_point_json(observation.topLeft),
+                top_left_point_json(observation.topRight),
+                top_left_point_json(observation.bottomRight),
+                top_left_point_json(observation.bottomLeft)
+            ];
             [observations addObject:line];
         }
         return copy_json(@{@"observations": observations}, output, output_length);

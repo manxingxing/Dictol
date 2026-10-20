@@ -46,7 +46,6 @@ try {
   })
   runNpm(['run', 'system-translation:build', '--', '--arch', arch])
   runNpm(['run', 'adblock:build', '--', '--target', target.native])
-  runNpm(['run', 'rapidocr:prepare'])
   runNpm(['run', 'typecheck'])
   runBinary('electron-vite', ['build'])
   runBinary('electron-builder', ['--mac', target.builder, ...process.argv.slice(3)])

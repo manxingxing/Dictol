@@ -45,6 +45,10 @@ import type {
   TranslationRequest,
   TranslationSaveProviderRequest
 } from '../shared/translation'
+import type {
+  ScreenshotTranslationSettingResult,
+  ScreenshotTranslationStatus
+} from '../shared/screenshot-translation'
 
 type ReadyDictionary = {
   id: string
@@ -530,6 +534,12 @@ const api = Object.freeze({
     }
   }),
   translation: Object.freeze({
+    getScreenshotStatus: (): Promise<ScreenshotTranslationStatus | null> =>
+      ipcRenderer.invoke('screenshot-translation:status'),
+    setScreenshotEnabled: (enabled: boolean): Promise<ScreenshotTranslationSettingResult | null> =>
+      ipcRenderer.invoke('screenshot-translation:set-enabled', enabled),
+    setScreenshotShortcut: (shortcut: string): Promise<ScreenshotTranslationSettingResult | null> =>
+      ipcRenderer.invoke('screenshot-translation:set-shortcut', shortcut),
     getConfig: (): Promise<TranslationPublicConfig | null> =>
       ipcRenderer.invoke('translation:get-config'),
     saveProvider: (

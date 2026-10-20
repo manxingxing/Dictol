@@ -1,4 +1,4 @@
-import type { OcrLookupMode } from './app-runtime'
+import type { OcrLookupMode } from '../app-runtime'
 import { captureAccessibleText } from './accessibility'
 import type { OcrCapture } from './ocr-capture-types'
 
@@ -27,17 +27,17 @@ export async function captureTextUnderCursor(
       onCaptureReady?.()
       return prepared
     }
-  } catch (error) {
-    console.debug('[HoverText] Accessibility unavailable; using OCR', error)
+  } catch {
+    // Fall back to OCR when the target application cannot expose accessible text.
   }
 
   if (process.platform === 'darwin') {
-    const { captureTextUnderCursor: captureMacText } = await import('./mac-ocr-capture')
+    const { captureTextUnderCursor: captureMacText } = await import('./mac-ocr')
     const captured = await captureMacText(mode, onCaptureReady)
     return prepareCapture(mode, captured)
   }
   if (process.platform === 'win32') {
-    const { captureWindowsTextUnderCursor } = await import('./win-ocr-capture')
+    const { captureWindowsTextUnderCursor } = await import('./win-ocr')
     const captured = await captureWindowsTextUnderCursor(mode, onCaptureReady)
     return prepareCapture(mode, captured)
   }

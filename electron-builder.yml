@@ -28,6 +28,7 @@ files:
   - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,index.d.ts,package-lock.json}'
   - '!node_modules/@dictol/accessibility-native/{macos,windows,target,test,node_modules}/**'
   - '!node_modules/@dictol/screen-capture-native/{macos,windows,target,test,node_modules}/**'
+  - '!node_modules/@dictol/ocr-native/{macos,windows,target,test,node_modules}/**'
   - '!node_modules/adblock-rs/Cargo.lock'
   - '!node_modules/adblock-rs/Cargo.toml'
   - '!node_modules/adblock-rs/CHANGELOG.md'
@@ -46,11 +47,10 @@ files:
   - '!node_modules/adblock-rs/js/test/**'
 asarUnpack:
   - resources/**
-  - node_modules/onnxruntime-node/bin/**
-  - node_modules/@img/sharp-*/lib/**
   - node_modules/@dictol/mdict-native/*.node
   - node_modules/@dictol/accessibility-native/prebuilds/**/*.node
   - node_modules/@dictol/screen-capture-native/prebuilds/**/*.node
+  - node_modules/@dictol/ocr-native/prebuilds/**/*.node
   - node_modules/adblock-rs/js/index.node
   - node_modules/selection-hook/prebuilds/**
   - node_modules/better-sqlite3/lib/**
@@ -73,7 +73,6 @@ win:
     - drizzle/**
     - resources/**
     - '!resources/system-translation/**'
-    - '!resources/rapidocr/**'
     - '!resources/ecdict/**'
     - '!resources/sqlite-simple/**'
     - '!**/.vscode/*'
@@ -92,6 +91,7 @@ win:
     - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,index.d.ts,package-lock.json}'
     - '!node_modules/@dictol/accessibility-native/{macos,windows,target,test,node_modules}/**'
     - '!node_modules/@dictol/screen-capture-native/{macos,windows,target,test,node_modules}/**'
+    - '!node_modules/@dictol/ocr-native/{macos,windows,target,test,node_modules}/**'
     - '!node_modules/adblock-rs/Cargo.lock'
     - '!node_modules/adblock-rs/Cargo.toml'
     - '!node_modules/adblock-rs/CHANGELOG.md'
@@ -111,14 +111,11 @@ win:
     - '!node_modules/@dictol/mdict-native/*.darwin-*.node'
     - '!node_modules/@dictol/accessibility-native/prebuilds/darwin-*/**'
     - '!node_modules/@dictol/screen-capture-native/prebuilds/darwin-*/**'
-    - '!node_modules/rapidocr-node/**'
-    - '!node_modules/onnxruntime-node/**'
-    - '!node_modules/sharp/**'
-    - '!node_modules/@img/sharp-*/**'
-    - '!node_modules/@techstark/opencv-js/**'
+    - '!node_modules/@dictol/ocr-native/prebuilds/darwin-*/**'
     - '!node_modules/@dictol/mdict-native/*.win32-arm64*.node'
     - '!node_modules/@dictol/accessibility-native/prebuilds/win32-arm64/**'
     - '!node_modules/@dictol/screen-capture-native/prebuilds/win32-arm64/**'
+    - '!node_modules/@dictol/ocr-native/prebuilds/win32-arm64/**'
     - '!node_modules/better-sqlite3/{deps,src}/**'
     - '!node_modules/better-sqlite3/prebuilds/darwin*.node'
     - '!node_modules/better-sqlite3/prebuilds/linux*.node'
@@ -152,11 +149,10 @@ mac:
   artifactName: ${name}-${version}-${arch}-mac.${ext}
   # The native files with architecture-specific names are present in both
   # universal staging apps; adblock-rs and system translation are lipo-merged.
-  x64ArchFiles: '**/{app.asar.unpacked/{node_modules/@dictol/mdict-native/*.darwin-*.node,node_modules/@dictol/accessibility-native/prebuilds/darwin-x64/accessibility.node,node_modules/@dictol/screen-capture-native/prebuilds/darwin-x64/screen-capture.node,node_modules/better-sqlite3/prebuilds/darwin-*.node,node_modules/selection-hook/prebuilds/darwin-*/selection-hook.node,node_modules/onnxruntime-node/bin/napi-v6/darwin/*/*,node_modules/@img/sharp-darwin-*/lib/*.node,node_modules/@img/sharp-libvips-darwin-*/lib/*.dylib,resources/system-translation/dictol-system-translation,resources/sqlite-simple/darwin-*/libsimple.dylib},sqlite-simple/darwin-*/libsimple.dylib}'
-  # Do not let electron-builder fall back to an ad-hoc signature when no
-  # Developer ID certificate is available. The distributed app is intentionally
-  # unsigned so Gatekeeper treats it as an unidentified developer app rather
-  # than an app with an invalid code signature.
+  x64ArchFiles: '**/{app.asar.unpacked/{node_modules/@dictol/mdict-native/*.darwin-*.node,node_modules/@dictol/accessibility-native/prebuilds/darwin-x64/accessibility.node,node_modules/@dictol/screen-capture-native/prebuilds/darwin-x64/screen-capture.node,node_modules/@dictol/ocr-native/prebuilds/darwin-x64/ocr.node,node_modules/better-sqlite3/prebuilds/darwin-*.node,node_modules/selection-hook/prebuilds/darwin-*/selection-hook.node,resources/system-translation/dictol-system-translation,resources/sqlite-simple/darwin-*/libsimple.dylib},sqlite-simple/darwin-*/libsimple.dylib}'
+  # Do not let electron-builder sign with a fallback identity. The afterPack
+  # hook ad-hoc signs executable code on both macOS architectures; the app has
+  # no Developer ID identity and is not notarized.
   identity: null
   entitlementsInherit: build/entitlements.mac.plist
   notarize: false
@@ -187,6 +183,7 @@ mac:
     - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,index.d.ts,package-lock.json}'
     - '!node_modules/@dictol/accessibility-native/{macos,windows,target,test,node_modules}/**'
     - '!node_modules/@dictol/screen-capture-native/{macos,windows,target,test,node_modules}/**'
+    - '!node_modules/@dictol/ocr-native/{macos,windows,target,test,node_modules}/**'
     - '!node_modules/adblock-rs/Cargo.lock'
     - '!node_modules/adblock-rs/Cargo.toml'
     - '!node_modules/adblock-rs/CHANGELOG.md'
@@ -213,10 +210,11 @@ mac:
     - '!node_modules/@dictol/mdict-native/*.win32-*.node'
     - '!node_modules/@dictol/accessibility-native/prebuilds/win32-*/**'
     - '!node_modules/@dictol/screen-capture-native/prebuilds/win32-*/**'
-    - '!node_modules/onnxruntime-node/bin/napi-v6/{linux,win32}/**'
+    - '!node_modules/@dictol/ocr-native/prebuilds/win32-*/**'
     - node_modules/@dictol/mdict-native/*.darwin-*.node
     - node_modules/@dictol/accessibility-native/prebuilds/darwin-*/**
     - node_modules/@dictol/screen-capture-native/prebuilds/darwin-*/**
+    - node_modules/@dictol/ocr-native/prebuilds/darwin-*/**
     - '!node_modules/better-sqlite3/{deps,src}/**'
     - '!node_modules/better-sqlite3/prebuilds/linux*.node'
     - '!node_modules/better-sqlite3/prebuilds/win32*.node'
@@ -234,7 +232,6 @@ linux:
     - drizzle/**
     - resources/**
     - '!resources/system-translation/**'
-    - '!resources/rapidocr/**'
     - '!resources/ecdict/**'
     - '!resources/sqlite-simple/**'
     - '!native/**'
@@ -247,11 +244,8 @@ linux:
     - '!node_modules/@dictol/accessibility-native/prebuilds/win32-*/**'
     - '!node_modules/@dictol/screen-capture-native/prebuilds/darwin-*/**'
     - '!node_modules/@dictol/screen-capture-native/prebuilds/win32-*/**'
-    - '!node_modules/rapidocr-node/**'
-    - '!node_modules/onnxruntime-node/**'
-    - '!node_modules/sharp/**'
-    - '!node_modules/@img/sharp-*/**'
-    - '!node_modules/@techstark/opencv-js/**'
+    - '!node_modules/@dictol/ocr-native/prebuilds/darwin-*/**'
+    - '!node_modules/@dictol/ocr-native/prebuilds/win32-*/**'
   icon: build/icon.png
   desktop:
     entry:

@@ -42,8 +42,3 @@ module.exports.hideSelectionPanel = native.hideSelectionPanel
 module.exports.selectionPanelState = native.selectionPanelState
 module.exports.getSelectionPanelBounds = native.getSelectionPanelBounds
 module.exports.setSelectionPanelBounds = native.setSelectionPanelBounds
-if (process.platform === 'darwin') {
-  module.exports.recognizeMacText = native.recognizeMacText
-  module.exports.chineseWordRange = native.chineseWordRange
-}
-module.exports.recognizeWindowsText = native.recognizeWindowsText

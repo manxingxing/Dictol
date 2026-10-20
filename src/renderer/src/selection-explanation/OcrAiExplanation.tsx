@@ -31,7 +31,7 @@ export function OcrAiExplanation({
 
   return (
     <>
-      <SelectionExplanationHeader title="悬停 AI 解释" pinned={payload.pinned}>
+      <SelectionExplanationHeader title="AI 语境查词" pinned={payload.pinned}>
         <Button
           aria-label={saveState === 'saved' ? '已保存到摘抄与笔记' : '保存到摘抄与笔记'}
           className="no-drag size-7 shrink-0 disabled:opacity-100"

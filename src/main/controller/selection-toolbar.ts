@@ -8,11 +8,11 @@ import {
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   type Point,
-  type Rectangle,
   type WebContents
 } from 'electron'
 import type { AppRuntime, OcrLookupMode } from '../app-runtime'
-import { captureTextUnderCursor } from '../ocr-capture'
+import type { OcrCapture } from '../ocr/ocr-capture-types'
+import { captureTextUnderCursor } from '../ocr/ocr'
 import {
   getSelectionToolbarWindowSize,
   SELECTION_TOOLBAR_WINDOWS_SHADOW_MARGIN,
@@ -131,14 +131,14 @@ export class SelectionToolbarController extends BaseController {
         }
       } else if (mode === 'dictionary') {
         const lookup = this.explanation.showExplanation(capture.selection.word)
-        this.showOcrHighlight(capture.wordBounds)
+        this.showOcrHighlight(capture)
         await lookup
       } else if (
         ocrAiVersion !== undefined &&
         this.explanation.isOcrAiRecognitionCurrent(ocrAiVersion)
       ) {
         const explanation = this.explanation.showOcrAiExplanation(capture.selection, ocrAiVersion)
-        this.showOcrHighlight(capture.wordBounds)
+        this.showOcrHighlight(capture)
         await explanation
       }
     } catch (error) {
@@ -153,9 +153,9 @@ export class SelectionToolbarController extends BaseController {
     }
   }
 
-  private showOcrHighlight(bounds: Rectangle): void {
+  private showOcrHighlight(capture: OcrCapture): void {
     try {
-      this.runtime.windowManager.showOcrHighlight(bounds)
+      this.runtime.windowManager.showOcrHighlight(capture.wordBounds, capture.wordQuad)
     } catch (error) {
       this.runtime.windowManager.hideOcrHighlight()
       console.error('Failed to show OCR word highlight', error)

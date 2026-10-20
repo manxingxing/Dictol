@@ -1,0 +1,44 @@
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+body {
+  cursor: crosshair;
+  user-select: none;
+  font:
+    13px -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  background: rgb(12 18 25 / 20%);
+}
+body:has(#selection:not([hidden])) {
+  background: transparent;
+}
+#hint {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 9px 15px;
+  color: white;
+  background: rgb(25 27 35 / 85%);
+  border-radius: 8px;
+  box-shadow: 0 5px 18px rgb(0 0 0 / 18%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+#selection {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #a38bfa;
+  background: rgb(255 255 255 / 8%);
+  box-shadow: 0 0 0 9999px rgb(12 18 25 / 20%);
+  pointer-events: none;
+}
+#selection[hidden],
+#hint[hidden] {
+  display: none;
+}

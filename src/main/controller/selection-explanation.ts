@@ -27,7 +27,7 @@ import { resolveEntryLinkWithAnchor } from '../resolve-entry-link'
 import { resolveRendererUrl } from '../output-path'
 import { hideSelectionWindow, showSelectionWindowInactive } from '../selection-window-behavior'
 import type { SelectionSurfaceWindow } from '../window-manager'
-import type { OcrSelection } from '../ocr-text'
+import type { OcrSelection } from '../ocr/ocr-text'
 import {
   containsPoint,
   createCursorAnchor,
@@ -537,28 +537,10 @@ export class SelectionExplanationController extends BaseController {
     if (positionWindow) this.positionExplanation(window)
 
     try {
-      const startedAt = performance.now()
-      const lookupPromise = this.db
-        .lookupDictionaryEntryGroup(normalizedWord, this.runtime.selectionDictionaryGroupId)
-        .then(
-          (group) => {
-            console.debug('[DictionaryLookup] selection popup', {
-              term: normalizedWord,
-              takeMs: performance.now() - startedAt,
-              matched: Boolean(group)
-            })
-            return group
-          },
-          (error: unknown) => {
-            console.debug('[DictionaryLookup] selection popup', {
-              term: normalizedWord,
-              takeMs: performance.now() - startedAt,
-              matched: false,
-              failed: true
-            })
-            throw error
-          }
-        )
+      const lookupPromise = this.db.lookupDictionaryEntryGroup(
+        normalizedWord,
+        this.runtime.selectionDictionaryGroupId
+      )
       await loadingReady
       if (version !== this.lookupVersion) return
       if (!keepWindowVisible) this.showExplanationWindow(window)

@@ -1,7 +1,7 @@
 import { readAccessibleText } from '@dictol/accessibility-native'
 import { screen } from 'electron'
 import type { OcrLookupMode } from '../../app-runtime'
-import { mapOcrBoundsToRegion } from '../../ocr-crop'
+import { mapOcrBoundsToRegion } from '../../ocr/ocr-crop'
 import type { AccessibleTextLookup } from '../types'
 
 export async function readAccessibleTextAtCursor(

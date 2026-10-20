@@ -1,6 +1,6 @@
-import { recognizeWindowsText, type WindowsOcrResult } from '@dictol/mdict-native'
+import { recognizeWindowsText, type WindowsOcrResult } from '@dictol/ocr-native'
 import { screen, type Display } from 'electron'
-import type { OcrLookupMode } from './app-runtime'
+import type { OcrLookupMode } from '../app-runtime'
 import { contextTouchesCropEdge, mapOcrBoundsToRegion } from './ocr-crop'
 import {
   captureOcrDisplay,
@@ -17,10 +17,6 @@ const aiCaptureSize = { width: 1024, height: 500 }
 type Recognition = {
   result: WindowsOcrResult
   hit: OcrTextHit | null
-  ocrMs: number
-  selectionMs: number
-  englishPass: boolean
-  profileLanguage: string
 }
 
 function selectHit(result: WindowsOcrResult, captured: CapturedImage): OcrTextHit | null {
@@ -46,14 +42,9 @@ function isLatinWord(text: string): boolean {
 }
 
 async function recognize(captured: CapturedImage, mode: OcrLookupMode): Promise<Recognition> {
-  const ocrStartedAt = performance.now()
   let result = await recognizeWindowsText(captured.buffer, mode === 'ai' ? 'en-US' : undefined)
   const profileLanguage = result.recognizerLanguage
-  let ocrMs = performance.now() - ocrStartedAt
-  const selectionStartedAt = performance.now()
   let hit = selectHit(result, captured)
-  let selectionMs = performance.now() - selectionStartedAt
-  let englishPass = false
 
   // The profile recognizer can split English words when Windows prefers a CJK language.
   // Dictionary lookup needs this pass too, including when the first pass missed the label.
@@ -65,22 +56,17 @@ async function recognize(captured: CapturedImage, mode: OcrLookupMode): Promise<
       : result.observations.some((observation) => /[A-Za-z]{2}/u.test(observation.text)))
   ) {
     try {
-      const englishStartedAt = performance.now()
       const english = await recognizeWindowsText(captured.buffer, 'en-US')
-      ocrMs += performance.now() - englishStartedAt
-      const englishSelectionStartedAt = performance.now()
       const englishHit = selectHit(english, captured)
-      selectionMs += performance.now() - englishSelectionStartedAt
       if (englishHit && isLatinWord(englishHit.selection.word)) {
         result = english
         hit = englishHit
-        englishPass = true
       }
-    } catch (error) {
-      console.debug('[OCR] English recognizer unavailable; keeping profile result', error)
+    } catch {
+      // Keep the profile result when the English OCR language pack is unavailable.
     }
   }
-  return { result, hit, ocrMs, selectionMs, englishPass, profileLanguage }
+  return { result, hit }
 }
 
 function expandedCaptureSize(
@@ -114,13 +100,8 @@ export async function captureWindowsTextUnderCursor(
     ? cropOcrDisplay(snapshot, pointer, aiCaptureSize)
     : await captureOcrImage(display, pointer, dictionaryCaptureSize)
   if (snapshot) onCaptureReady?.()
-  let captureMs = captured.captureMs
-  let recognition = await recognize(captured, mode)
+  const recognition = await recognize(captured, mode)
   let { hit } = recognition
-  let ocrMs = recognition.ocrMs
-  let selectionMs = recognition.selectionMs
-  let expanded = false
-  let expandedMatched: boolean | undefined
   const expandedSize = snapshot ? expandedCaptureSize(recognition.result, display, snapshot) : null
   if (
     snapshot &&
@@ -130,13 +111,8 @@ export async function captureWindowsTextUnderCursor(
     (!hit || contextTouchesCropEdge(display.bounds, captured.region, hit.contextBounds)) &&
     (expandedSize.width > captured.region.width || expandedSize.height > captured.region.height)
   ) {
-    expanded = true
     const expandedCapture = cropOcrDisplay(snapshot, pointer, expandedSize)
-    captureMs += expandedCapture.captureMs - snapshot.captureMs
     const expandedRecognition = await recognize(expandedCapture, mode)
-    ocrMs += expandedRecognition.ocrMs
-    selectionMs += expandedRecognition.selectionMs
-    expandedMatched = expandedRecognition.hit !== null
     if (
       expandedRecognition.hit &&
       (!hit ||
@@ -144,29 +120,9 @@ export async function captureWindowsTextUnderCursor(
           expandedRecognition.hit.selection.context.length > hit.selection.context.length))
     ) {
       captured = expandedCapture
-      recognition = expandedRecognition
       hit = expandedRecognition.hit
     }
   }
-  console.debug('[OCR] capture and recognition', {
-    mode,
-    captureBackend: captured.backend,
-    captureMs,
-    ocrMs,
-    selectionMs,
-    expanded,
-    expandedMatched,
-    imageWidth: captured.size.width,
-    imageHeight: captured.size.height,
-    ocrProcessedWidth: recognition.result.processedWidth,
-    ocrProcessedHeight: recognition.result.processedHeight,
-    ocrMaxImageDimension: recognition.result.maxImageDimension,
-    recognizerLanguage: recognition.result.recognizerLanguage,
-    profileLanguage: recognition.profileLanguage,
-    englishPass: recognition.englishPass,
-    observations: recognition.result.observations.length,
-    matched: hit !== null
-  })
   if (!hit) return null
   return {
     selection: hit.selection,

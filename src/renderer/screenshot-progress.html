@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'unsafe-inline'"
+    />
+    <style>
+      body {
+        margin: 0;
+        background: transparent;
+        color: white;
+        font:
+          13px -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+      }
+      .pill {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 3px;
+        padding: 10px 14px;
+        border-radius: 9px;
+        background: rgb(34 36 43 / 92%);
+        box-shadow: 0 3px 12px rgb(0 0 0 / 20%);
+      }
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgb(255 255 255 / 35%);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="pill"><span class="spinner"></span>正在识别选区文字…</div>
+  </body>
+</html>

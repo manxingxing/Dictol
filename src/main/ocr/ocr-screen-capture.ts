@@ -10,17 +10,14 @@ export type CapturedImage = {
   pointer: { x: number; y: number }
   region: Rectangle
   mapBounds: (bounds: Rectangle) => Rectangle
-  backend: Screenshot['backend']
-  captureMs: number
 }
 
-export type OcrDisplaySnapshot = { image: Screenshot; captureMs: number }
+export type OcrDisplaySnapshot = { image: Screenshot }
 
 /** Reuse one display frame for initial AI OCR and any wider context pass. */
 export async function captureOcrDisplay(display: Display): Promise<OcrDisplaySnapshot> {
-  const startedAt = performance.now()
   const image = await captureScreen({ displayId: display.id })
-  return { image, captureMs: performance.now() - startedAt }
+  return { image }
 }
 
 export function cropOcrDisplay(
@@ -28,9 +25,8 @@ export function cropOcrDisplay(
   pointer: Point,
   requestedSize: CaptureSize | null
 ): CapturedImage {
-  if (!requestedSize) return toCapturedImage(snapshot.image, pointer, 0)
+  if (!requestedSize) return toCapturedImage(snapshot.image, pointer)
 
-  const startedAt = performance.now()
   const source = snapshot.image
   const sourceBounds = source.bounds
   const crop = cropAroundPointer(
@@ -60,7 +56,7 @@ export function cropOcrDisplay(
       height: (pixels.height / source.pixelSize.height) * sourceBounds.height
     }
   }
-  return toCapturedImage(image, pointer, snapshot.captureMs + performance.now() - startedAt)
+  return toCapturedImage(image, pointer)
 }
 
 export async function captureOcrImage(
@@ -83,12 +79,11 @@ export async function captureOcrImage(
         height: crop.rect.height
       }
     : display.bounds
-  const startedAt = performance.now()
   const image = await captureScreen({ displayId: display.id, region: requestedBounds })
-  return toCapturedImage(image, pointer, performance.now() - startedAt)
+  return toCapturedImage(image, pointer)
 }
 
-function toCapturedImage(image: Screenshot, pointer: Point, captureMs: number): CapturedImage {
+function toCapturedImage(image: Screenshot, pointer: Point): CapturedImage {
   return {
     buffer: image.data,
     size: image.pixelSize,
@@ -97,8 +92,6 @@ function toCapturedImage(image: Screenshot, pointer: Point, captureMs: number): 
       y: (pointer.y - image.bounds.y) / image.bounds.height
     },
     region: image.bounds,
-    mapBounds: (bounds) => mapOcrBoundsToRegion(image.bounds, bounds),
-    backend: image.backend,
-    captureMs
+    mapBounds: (bounds) => mapOcrBoundsToRegion(image.bounds, bounds)
   }
 }

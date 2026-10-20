@@ -16,13 +16,8 @@ fn main() {
 }
 
 fn build_macos_bridges(target: &str) {
-    // Keep the remaining AppKit features in this addon. Accessibility is
-    // compiled by the separate native/accessibility addon.
-    const SOURCES: [&str; 3] = [
-        "src/selection_panel.m",
-        "src/macos_ocr.m",
-        "src/word_tokenizer.m",
-    ];
+    // Selection panel is the only remaining AppKit bridge in this addon.
+    const SOURCES: [&str; 1] = ["src/selection_panel.m"];
     const ARCHIVE: &str = "libdictol_macos_bridges.a";
 
     for source in SOURCES {
@@ -94,9 +89,6 @@ fn build_macos_bridges(target: &str) {
         ARCHIVE.trim_end_matches(".a").trim_start_matches("lib")
     );
     println!("cargo:rustc-link-lib=framework=AppKit");
-    println!("cargo:rustc-link-lib=framework=ImageIO");
-    println!("cargo:rustc-link-lib=framework=NaturalLanguage");
-    println!("cargo:rustc-link-lib=framework=Vision");
     println!("cargo:rustc-link-lib=framework=ApplicationServices");
 }
 

@@ -2,12 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
-/**
- * electron-builder skips the outer app signature when mac.identity is null,
- * but native addons and downloaded Electron frameworks can still carry
- * ad-hoc signatures. Remove those signatures too so the macOS artifact is
- * consistently unsigned.
- */
+/** Sign packaged macOS executable code without a Developer ID identity. */
 function collectCandidates(root) {
   const files = []
   const bundles = []
@@ -26,7 +21,8 @@ function collectCandidates(root) {
       path.includes('/Contents/MacOS/') ||
       path.includes('/Contents/Frameworks/') ||
       path.endsWith('.node') ||
-      path.endsWith('.dylib')
+      path.endsWith('.dylib') ||
+      (stat.mode & 0o111) !== 0
     ) {
       files.push(path)
     }
@@ -45,6 +41,33 @@ function targetDarwinArch(context) {
 
 function fileArchitecture(path) {
   return execFileSync('file', ['-b', path], { encoding: 'utf8' }).trim()
+}
+
+function signMacOSApp(appPath, bundles, files) {
+  const deepestFirst = (left, right) => right.length - left.length
+  let signed = 0
+  for (const path of [...files].sort(deepestFirst)) {
+    if (!fileArchitecture(path).includes('Mach-O')) continue
+    execFileSync('codesign', ['--force', '--sign', '-', '--timestamp=none', path], {
+      stdio: 'inherit'
+    })
+    signed += 1
+  }
+  for (const path of bundles.filter((path) => path !== appPath).sort(deepestFirst)) {
+    execFileSync('codesign', ['--force', '--sign', '-', '--timestamp=none', path], {
+      stdio: 'inherit'
+    })
+  }
+  execFileSync('codesign', ['--force', '--sign', '-', '--timestamp=none', appPath], {
+    stdio: 'inherit'
+  })
+  execFileSync('codesign', ['--verify', '--deep', '--strict', appPath], { stdio: 'inherit' })
+  for (const path of files) {
+    if (path.endsWith('.node')) {
+      execFileSync('codesign', ['--verify', path], { stdio: 'inherit' })
+    }
+  }
+  console.log(`  • ad-hoc signed macOS app and executable files count=${signed}`)
 }
 
 function isWindowsX64Pe(path) {
@@ -117,6 +140,7 @@ function pruneAndVerifyNativeModules(appPath, arch) {
       `darwin-${arch}`,
       'screen-capture.node'
     ),
+    join(unpacked, '@dictol', 'ocr-native', 'prebuilds', `darwin-${arch}`, 'ocr.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', `darwin-${arch}.node`),
     join(unpacked, 'selection-hook', 'prebuilds', `darwin-${arch}`, 'selection-hook.node')
   ]
@@ -138,6 +162,7 @@ function pruneAndVerifyNativeModules(appPath, arch) {
       `darwin-${otherArch}`,
       'screen-capture.node'
     ),
+    join(unpacked, '@dictol', 'ocr-native', 'prebuilds', `darwin-${otherArch}`, 'ocr.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', `darwin-${otherArch}.node`),
     join(unpacked, 'selection-hook', 'prebuilds', `darwin-${otherArch}`, 'selection-hook.node')
   ]
@@ -163,63 +188,6 @@ function pruneAndVerifyNativeModules(appPath, arch) {
   }
 
   console.log(`  • verified macOS native modules arch=${arch} count=${expected.length}`)
-}
-
-function verifyRapidOcrAssets(appPath, architectures) {
-  const unpacked = join(appPath, 'Contents', 'Resources', 'app.asar.unpacked')
-  const models = join(unpacked, 'resources', 'rapidocr')
-  for (const name of [
-    'PP-OCRv6_det_small.onnx',
-    'PP-OCRv6_rec_small.onnx',
-    'ch_ppocr_mobile_v2.0_cls_mobile.onnx',
-    'multi_PP-OCRv6_rec_small-dictionary.txt'
-  ]) {
-    const path = join(models, name)
-    if (!existsSync(path)) throw new Error(`Missing packaged RapidOCR model: ${path}`)
-  }
-
-  const ortBin = join(unpacked, 'node_modules', 'onnxruntime-node', 'bin', 'napi-v6')
-  for (const platform of ['linux', 'win32']) {
-    rmSync(join(ortBin, platform), { recursive: true, force: true })
-  }
-  for (const arch of ['x64', 'arm64']) {
-    if (!architectures.includes(arch)) {
-      rmSync(join(ortBin, 'darwin', arch), { recursive: true, force: true })
-      continue
-    }
-    const expectedArchitecture = arch === 'x64' ? 'x86_64' : 'arm64'
-    const ortArchDirectory = join(ortBin, 'darwin', arch)
-    const ortLibrary = existsSync(ortArchDirectory)
-      ? readdirSync(ortArchDirectory).find((name) => /^libonnxruntime\..*\.dylib$/.test(name))
-      : undefined
-    if (!ortLibrary) throw new Error(`Missing packaged ONNX Runtime library: ${ortArchDirectory}`)
-    const nativePaths = [
-      join(ortArchDirectory, 'onnxruntime_binding.node'),
-      join(ortArchDirectory, ortLibrary)
-    ]
-    const imgRoot = join(unpacked, 'node_modules', '@img')
-    const sharpLib = join(imgRoot, `sharp-darwin-${arch}`, 'lib')
-    const vipsLib = join(imgRoot, `sharp-libvips-darwin-${arch}`, 'lib')
-    for (const [directory, suffix] of [
-      [sharpLib, '.node'],
-      [vipsLib, '.dylib']
-    ]) {
-      const name = existsSync(directory)
-        ? readdirSync(directory).find((entry) => entry.endsWith(suffix))
-        : undefined
-      if (!name) throw new Error(`Missing packaged RapidOCR dependency: ${directory}`)
-      nativePaths.push(join(directory, name))
-    }
-    for (const path of nativePaths) {
-      if (!existsSync(path) || !fileArchitecture(path).includes(expectedArchitecture)) {
-        throw new Error(`Wrong or missing ${arch} RapidOCR native dependency: ${path}`)
-      }
-    }
-  }
-
-  console.log(
-    `  • verified RapidOCR models and native dependencies arch=${architectures.join(', ')}`
-  )
 }
 
 function verifyUniversalNativeModules(appPath) {
@@ -271,6 +239,8 @@ function verifyUniversalNativeModules(appPath) {
       ),
       'arm64'
     ],
+    [join(unpacked, '@dictol', 'ocr-native', 'prebuilds', 'darwin-x64', 'ocr.node'), 'x86_64'],
+    [join(unpacked, '@dictol', 'ocr-native', 'prebuilds', 'darwin-arm64', 'ocr.node'), 'arm64'],
     [join(unpacked, 'better-sqlite3', 'prebuilds', 'darwin-x64.node'), 'x86_64'],
     [join(unpacked, 'better-sqlite3', 'prebuilds', 'darwin-arm64.node'), 'arm64'],
     [join(unpacked, 'selection-hook', 'prebuilds', 'darwin-x64', 'selection-hook.node'), 'x86_64'],
@@ -322,6 +292,7 @@ function verifyWindowsNativeModules(appOutDir, arch) {
       'win32-x64',
       'screen-capture.node'
     ),
+    join(unpacked, '@dictol', 'ocr-native', 'prebuilds', 'win32-x64', 'ocr.node'),
     join(unpacked, 'adblock-rs', 'js', 'index.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', 'win32-x64.node'),
     join(unpacked, 'selection-hook', 'prebuilds', 'win32-x64', 'selection-hook.node')
@@ -331,6 +302,7 @@ function verifyWindowsNativeModules(appOutDir, arch) {
     join(unpacked, '@dictol', 'mdict-native'),
     join(unpacked, '@dictol', 'accessibility-native'),
     join(unpacked, '@dictol', 'screen-capture-native'),
+    join(unpacked, '@dictol', 'ocr-native'),
     join(unpacked, 'adblock-rs'),
     join(unpacked, 'better-sqlite3'),
     join(unpacked, 'selection-hook')
@@ -377,11 +349,11 @@ function verifyWindowsNativeModules(appOutDir, arch) {
       `Packaged Windows mdict binding is missing exports: ${missingExports.join(', ')}`
     )
   }
-  const macOnlyExports = ['recognizeMacText', 'chineseWordRange']
-  const unexpectedExports = macOnlyExports.filter((name) => mdictBinary.includes(Buffer.from(name)))
+  const ocrExports = ['recognizeMacText', 'recognizeWindowsText', 'chineseWordRange']
+  const unexpectedExports = ocrExports.filter((name) => mdictBinary.includes(Buffer.from(name)))
   if (unexpectedExports.length > 0) {
     throw new Error(
-      `Packaged Windows mdict binding contains macOS-only exports: ${unexpectedExports.join(', ')}`
+      `Packaged Windows MDict binding still contains OCR exports: ${unexpectedExports.join(', ')}`
     )
   }
   const screenCaptureAddonExports = [
@@ -421,10 +393,14 @@ function verifyWindowsNativeModules(appOutDir, arch) {
     )
   }
 
+  if (!readFileSync(expected[3]).includes(Buffer.from('recognizeWindowsText'))) {
+    throw new Error('Packaged Windows OCR binding is missing recognizeWindowsText')
+  }
+
   console.log(`  • verified Windows native modules arch=${arch} count=${expected.length}`)
 }
 
-export default async function stripMacOSSignatures(context) {
+export default async function verifyAndSignNativePackages(context) {
   if (context.electronPlatformName === 'win32') {
     const arch = context.arch === 1 || context.arch === 'x64' ? 'x64' : String(context.arch)
     verifyWindowsNativeModules(context.appOutDir, arch)
@@ -439,26 +415,13 @@ export default async function stripMacOSSignatures(context) {
   if (universal || process.env.DICTOL_MAC_UNIVERSAL === '1') {
     verifySystemTranslationHelper(appPath, ['x86_64', 'arm64'])
     verifyUniversalNativeModules(appPath)
-    verifyRapidOcrAssets(appPath, ['x64', 'arm64'])
   } else {
     const arch = targetDarwinArch(context)
     verifySystemTranslationHelper(appPath, [arch === 'x64' ? 'x86_64' : 'arm64'])
     pruneAndVerifyNativeModules(appPath, arch)
-    verifyRapidOcrAssets(appPath, [arch])
   }
 
   const { bundles, files } = collectCandidates(appPath)
-  const candidates = [appPath, ...bundles, ...files]
-  let removed = 0
-
-  for (const candidate of candidates) {
-    try {
-      execFileSync('codesign', ['--remove-signature', candidate], { stdio: 'ignore' })
-      removed += 1
-    } catch {
-      // Non-signable files and already unsigned objects are expected here.
-    }
-  }
-
-  console.log(`  • stripped macOS code signatures count=${removed}`)
+  // Sign nested code before its parent to keep every resource seal valid.
+  signMacOSApp(appPath, bundles, files)
 }

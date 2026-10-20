@@ -16,12 +16,7 @@ use napi::bindgen_prelude::{AsyncTask, BigInt, Buffer};
 use napi::{Env, Error, Result, Status, Task};
 use napi_derive::napi;
 
-#[cfg(target_os = "macos")]
-mod macos_ocr;
 mod macos_selection_panel;
-#[cfg(target_os = "macos")]
-mod macos_word_tokenizer;
-mod windows_ocr;
 
 /// Lingoes LD2 reader; all I/O-heavy operations run in asynchronous native tasks.
 #[napi]

@@ -17,13 +17,11 @@ export async function readAccessibleTextAtCursor(
   ]).finally(() => clearTimeout(timeout))
 
   if (!lookup) {
-    console.debug('[HoverText] Windows UI Automation timed out; using OCR')
     return { failure: 'timeout' }
   }
 
   const result = lookup.result
   if (result && (result.word.includes('\uFFFC') || !/[\p{L}\p{N}]/u.test(result.word))) {
-    console.debug('[HoverText] Windows UI Automation returned an object placeholder; using OCR')
     return { failure: lookup.failure ?? 'object-placeholder' }
   }
 

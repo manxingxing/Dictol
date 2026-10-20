@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { selectOcrTextHit } from '../src/main/ocr-text.ts'
+import { selectOcrTextHit } from '../src/main/ocr/ocr-text.ts'
 
 const image = { width: 742, height: 458 }
 const line = (text, x, top, width, height = 24) => ({
@@ -14,7 +14,7 @@ const line = (text, x, top, width, height = 24) => ({
 // Based on a two-column PDF where OCR splits the left target row at a style
 // boundary and the next right-column row starts close to its right edge.
 const observations = [
-  line('ers. Generally speaking', 10, 60, 205, 28),
+  line('ers. Generally speaking ', 10, 60, 205, 28),
   line('customers have more', 209, 62, 191),
   line('power relative to vendors as their technological', 9, 88, 391),
   line('aptitude and product knowledge continue to', 9, 114, 391),

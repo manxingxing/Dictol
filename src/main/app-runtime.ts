@@ -30,6 +30,7 @@ export const LOOKUP_WORD_ON_SHORTCUT = 'lookupWordOnShortcut'
 export const SHOW_MAIN_WINDOW_SHORTCUT = 'showMainWindow'
 export const OCR_DICTIONARY_SHORTCUT = 'ocrDictionary'
 export const OCR_AI_SHORTCUT = 'ocrAi'
+export const SCREENSHOT_TRANSLATION_SHORTCUT = 'screenshotTranslation'
 export const OCR_SUPPORTED = process.platform === 'darwin' || process.platform === 'win32'
 export type OcrLookupMode = 'dictionary' | 'ai'
 
@@ -59,6 +60,7 @@ export class AppRuntime {
   dictionarySearchScope: DictionarySearchScope = new DictionarySearchScope()
   selectionDictionaryGroupId: number | undefined
   ocrShortcutHandler: ((mode: OcrLookupMode) => Promise<void>) | undefined
+  screenshotTranslationHandler: (() => Promise<void>) | undefined
 
   get isInitialized(): boolean {
     return this.initialized
@@ -209,6 +211,7 @@ export class AppRuntime {
       this.registerLookupWordShortCut(config.shortcuts)
     }
     if (OCR_SUPPORTED) this.registerOcrShortcuts(config)
+    if (OCR_SUPPORTED) this.registerScreenshotTranslationShortcut(config)
   }
 
   private registerOcrShortcuts(config: AppConfig): void {
@@ -232,6 +235,25 @@ export class AppRuntime {
     if (process.platform === 'win32' && !config.featureFlags.ocrLookup) {
       stopWindowsScreenCaptureSessions()
     }
+  }
+
+  restartScreenshotTranslationShortcut(): void {
+    this.registerScreenshotTranslationShortcut(this.appConfig.load())
+  }
+
+  private registerScreenshotTranslationShortcut(config: AppConfig): void {
+    this.shortcutRegister.unregister(SCREENSHOT_TRANSLATION_SHORTCUT)
+    if (
+      !OCR_SUPPORTED ||
+      !config.featureFlags.screenshotTranslation ||
+      !this.screenshotTranslationHandler
+    )
+      return
+    this.shortcutRegister.register(
+      SCREENSHOT_TRANSLATION_SHORTCUT,
+      config.shortcuts.screenshotTranslation,
+      { handleShortcut: () => this.screenshotTranslationHandler?.() }
+    )
   }
 
   restartMainWindowShortcut(): void {
@@ -264,6 +286,7 @@ export class AppRuntime {
     this.shortcutRegister.unregister(LOOKUP_WORD_ON_SHORTCUT)
     this.shortcutRegister.unregister(OCR_DICTIONARY_SHORTCUT)
     this.shortcutRegister.unregister(OCR_AI_SHORTCUT)
+    this.shortcutRegister.unregister(SCREENSHOT_TRANSLATION_SHORTCUT)
     const config = this.appConfig.load()
     this.initSelectionHook(config)
     this.registerGlobalShortCuts(config)
@@ -278,6 +301,7 @@ export class AppRuntime {
     this.mainWindowShortcutRouter = undefined
     this.selectionHookService.dispose()
     this.ocrShortcutHandler = undefined
+    this.screenshotTranslationHandler = undefined
     this.trayManager.dispose()
     this.adBlockService.dispose()
     this.windowManager.dispose()

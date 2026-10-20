@@ -153,8 +153,6 @@ export declare class MdxKeyScanner {
   nextBatch(batchSize?: number | undefined | null): Promise<KeyBatch>
 }
 
-export declare function chineseWordRange(text: string, offset: number): WordRange | null
-
 /** Configure an Electron-managed panel window without moving its Chromium content view. */
 export declare function configureElectronPanel(nativeWindowHandle: Buffer): void
 
@@ -251,29 +249,6 @@ export interface KeyBatch {
   done: boolean
 }
 
-export interface MacOcrCharacterBox {
-  start: number
-  length: number
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-export interface MacOcrObservation {
-  text: string
-  confidence: number
-  x: number
-  y: number
-  width: number
-  height: number
-  characters: Array<MacOcrCharacterBox>
-}
-
-export interface MacOcrResult {
-  observations: Array<MacOcrObservation>
-}
-
 /** 一个 MDD 列表 key 以及所在文件和 record 地址范围。 */
 export interface MddListDictionaryEntry {
   keyText: string
@@ -312,10 +287,6 @@ export interface OpenOptions {
   keyFile?: string
 }
 
-export declare function recognizeMacText(png: Buffer, languages: Array<string>, accurate: boolean): Promise<MacOcrResult>
-
-export declare function recognizeWindowsText(png: Buffer, language?: string | undefined | null): Promise<WindowsOcrResult>
-
 export interface SelectionPanelBounds {
   x: number
   y: number
@@ -330,36 +301,3 @@ export declare function setSelectionPanelBounds(panelId: number, bounds: Selecti
 export declare function showSelectionPanel(panelId: number, focus: boolean): void
 
 export declare function showSelectionPanelDisableMenu(panelId: number, enabled: boolean): void
-
-export interface WindowsOcrCharacterBox {
-  start: number
-  length: number
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-export interface WindowsOcrObservation {
-  text: string
-  x: number
-  y: number
-  width: number
-  height: number
-  characters: Array<WindowsOcrCharacterBox>
-}
-
-export interface WindowsOcrResult {
-  observations: Array<WindowsOcrObservation>
-  recognizerLanguage: string
-  inputWidth: number
-  inputHeight: number
-  processedWidth: number
-  processedHeight: number
-  maxImageDimension: number
-}
-
-export interface WordRange {
-  start: number
-  length: number
-}

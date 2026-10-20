@@ -1,4 +1,4 @@
-import { BrowserWindow, Menu, nativeTheme, screen, type Rectangle } from 'electron'
+import { BrowserWindow, Menu, nativeTheme, screen, type Point, type Rectangle } from 'electron'
 
 import icon from '../../resources/icon.png?asset'
 import {
@@ -28,7 +28,8 @@ const ocrHighlightPage = `data:text/html;charset=utf-8,${encodeURIComponent(`<!d
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
 *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:transparent}
 #highlight{position:fixed;inset:0;border-bottom:2px solid rgba(187,126,0,.95);background:rgba(255,193,7,.42)}
-</style></head><body><div id="highlight"></div></body></html>`)}`
+#underline{position:fixed;display:none;height:2px;background:rgba(187,126,0,.95);transform-origin:left center}
+</style></head><body><div id="highlight"></div><div id="underline"></div></body></html>`)}`
 
 export class WindowManager {
   mainWindow: BrowserWindow | undefined
@@ -42,6 +43,7 @@ export class WindowManager {
   private ocrHighlightReady = false
   private ocrHighlightRequested = false
   private ocrHighlightBounds: Rectangle | undefined
+  private ocrHighlightQuad: Point[] | undefined
   private ocrHighlightVersion = 0
   readonly excerptCaptureWindows = new Set<BrowserWindow>()
   selectionTranslationWindow: BrowserWindow | undefined
@@ -377,10 +379,11 @@ export class WindowManager {
     return surface
   }
 
-  showOcrHighlight(bounds: Rectangle): void {
+  showOcrHighlight(bounds: Rectangle, quad?: Point[]): void {
     let window = this.ocrHighlightWindow
     this.ocrHighlightRequested = true
     this.ocrHighlightBounds = bounds
+    this.ocrHighlightQuad = quad
     const version = ++this.ocrHighlightVersion
     // Windows can enforce a minimum size even for a frameless window. Keep the
     // surface transparent and position the painted rectangle independently.
@@ -422,6 +425,7 @@ export class WindowManager {
             void this.paintOcrHighlight(
               highlightWindow,
               this.ocrHighlightBounds,
+              this.ocrHighlightQuad,
               this.ocrHighlightVersion
             )
           }
@@ -445,17 +449,19 @@ export class WindowManager {
           this.ocrHighlightReady = false
           this.ocrHighlightRequested = false
           this.ocrHighlightBounds = undefined
+          this.ocrHighlightQuad = undefined
         }
       })
     }
     window.hide()
     window.setBounds(windowBounds, false)
-    if (this.ocrHighlightReady) void this.paintOcrHighlight(window, bounds, version)
+    if (this.ocrHighlightReady) void this.paintOcrHighlight(window, bounds, quad, version)
   }
 
   private async paintOcrHighlight(
     window: BrowserWindow,
     bounds: Rectangle,
+    quad: Point[] | undefined,
     version: number
   ): Promise<void> {
     const content = window.getContentBounds()
@@ -471,8 +477,25 @@ export class WindowManager {
     }
     try {
       const cssText = `left:${painted.x}px;top:${painted.y}px;right:auto;bottom:auto;width:${painted.width}px;height:${painted.height}px`
+      const points = quad?.map((point) => ({ x: point.x - content.x, y: point.y - content.y }))
       const painting = window.webContents.executeJavaScript(
-        `(() => { const element = document.getElementById('highlight'); if (!element) return false; element.style.cssText = ${JSON.stringify(cssText)}; return true })()`
+        `(() => {
+          const highlight = document.getElementById('highlight');
+          const underline = document.getElementById('underline');
+          if (!highlight || !underline) return false;
+          const points = ${JSON.stringify(points ?? null)};
+          if (points) {
+            const polygon = points.map(p => p.x + 'px ' + p.y + 'px').join(',');
+            highlight.style.cssText = 'inset:0;border-bottom:none;clip-path:polygon(' + polygon + ')';
+            const dx = points[2].x - points[3].x;
+            const dy = points[2].y - points[3].y;
+            underline.style.cssText = 'display:block;left:' + points[3].x + 'px;top:' + (points[3].y - 2) + 'px;width:' + Math.hypot(dx, dy) + 'px;transform:rotate(' + Math.atan2(dy, dx) + 'rad)';
+          } else {
+            underline.style.display = 'none';
+            highlight.style.cssText = ${JSON.stringify(cssText)};
+          }
+          return true;
+        })()`
       )
       if (
         this.ocrHighlightWindow === window &&
@@ -488,10 +511,9 @@ export class WindowManager {
       if (
         this.ocrHighlightWindow === window &&
         !window.isDestroyed() &&
-        this.ocrHighlightRequested &&
         this.ocrHighlightVersion === version
       ) {
-        window.showInactive()
+        window.hide()
       }
     }
   }
@@ -499,6 +521,7 @@ export class WindowManager {
   hideOcrHighlight(): void {
     this.ocrHighlightRequested = false
     this.ocrHighlightBounds = undefined
+    this.ocrHighlightQuad = undefined
     ++this.ocrHighlightVersion
     const window = this.ocrHighlightWindow
     if (window && !window.isDestroyed()) window.hide()

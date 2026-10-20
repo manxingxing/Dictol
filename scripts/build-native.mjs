@@ -19,7 +19,7 @@ const getTarget = () => {
 const verifyWindowsX64Binding = (directory) => {
   const binaryPath = join(directory, 'dictol-mdict-node.win32-x64-msvc.node')
   const binary = readFileSync(binaryPath)
-  const requiredExports = ['Mdx', 'Mdd', 'MddList', 'hashFile', 'recognizeWindowsText']
+  const requiredExports = ['Mdx', 'Mdd', 'MddList', 'hashFile']
   const missingExports = requiredExports.filter((name) => !binary.includes(Buffer.from(name)))
 
   if (missingExports.length > 0) {
@@ -28,11 +28,11 @@ const verifyWindowsX64Binding = (directory) => {
     )
   }
 
-  const macOnlyExports = ['recognizeMacText', 'chineseWordRange']
-  const unexpectedExports = macOnlyExports.filter((name) => binary.includes(Buffer.from(name)))
+  const ocrExports = ['recognizeMacText', 'recognizeWindowsText', 'chineseWordRange']
+  const unexpectedExports = ocrExports.filter((name) => binary.includes(Buffer.from(name)))
   if (unexpectedExports.length > 0) {
     throw new Error(
-      `Windows x64 native binding contains macOS-only exports: ${unexpectedExports.join(', ')}`
+      `Windows MDict binding still contains OCR exports: ${unexpectedExports.join(', ')}`
     )
   }
   const screenCaptureExports = [
@@ -51,12 +51,12 @@ const verifyWindowsX64Binding = (directory) => {
     )
   }
   const generatedJs = readFileSync(join(directory, 'index.js'), 'utf8')
-  const unexpectedJsExports = macOnlyExports.filter((name) =>
+  const unexpectedJsExports = ocrExports.filter((name) =>
     generatedJs.includes(`module.exports.${name} =`)
   )
   if (unexpectedJsExports.length > 0) {
     throw new Error(
-      `Windows x64 JS binding contains macOS-only exports: ${unexpectedJsExports.join(', ')}`
+      `Windows MDict JS binding still contains OCR exports: ${unexpectedJsExports.join(', ')}`
     )
   }
 
@@ -163,6 +163,20 @@ if (shouldBuildScreenCapture) {
   execFileSync(
     process.execPath,
     ['native/screen-capture/build.mjs', ...(target ? ['--target', target] : [])],
+    {
+      stdio: 'inherit'
+    }
+  )
+}
+
+const shouldBuildOcr = target
+  ? (target.endsWith('-apple-darwin') && process.platform === 'darwin') ||
+    (target.endsWith('-pc-windows-msvc') && process.platform === 'win32')
+  : ['darwin', 'win32'].includes(process.platform)
+if (shouldBuildOcr) {
+  execFileSync(
+    process.execPath,
+    ['native/ocr/build.mjs', ...(target ? ['--target', target] : [])],
     {
       stdio: 'inherit'
     }

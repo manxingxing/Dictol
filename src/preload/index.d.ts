@@ -1,4 +1,8 @@
 import type { WordCaptureStatus, WordCaptureShortcutResult } from '../main/controller/word-capture'
+import type {
+  ScreenshotTranslationSettingResult,
+  ScreenshotTranslationStatus
+} from '../shared/screenshot-translation'
 import type { ToastPayload } from '../shared/notification'
 import type { TtsConfig, TtsPlayback, TtsVoice } from '../shared/tts'
 import type { MainWindowSearchRequest } from '../shared/search-request'
@@ -480,6 +484,13 @@ declare global {
         ) => () => void
       }
       translation: {
+        getScreenshotStatus: () => Promise<ScreenshotTranslationStatus | null>
+        setScreenshotEnabled: (
+          enabled: boolean
+        ) => Promise<ScreenshotTranslationSettingResult | null>
+        setScreenshotShortcut: (
+          shortcut: string
+        ) => Promise<ScreenshotTranslationSettingResult | null>
         getConfig: () => Promise<TranslationPublicConfig | null>
         saveProvider: (
           request: TranslationSaveProviderRequest
