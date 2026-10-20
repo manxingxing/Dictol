@@ -32,20 +32,15 @@ export function mapOcrBoundsToRegion(region: Rect, word: Rect, padding?: BoundsP
   return {
     x,
     y,
-    width: Math.max(
-      1,
-      Math.min(region.x + region.width, Math.ceil(right + horizontalPadding)) - x
-    ),
-    height: Math.max(
-      1,
-      Math.min(region.y + region.height, Math.ceil(bottom + verticalPadding)) - y
-    )
+    width: Math.max(1, Math.min(region.x + region.width, Math.ceil(right + horizontalPadding)) - x),
+    height: Math.max(1, Math.min(region.y + region.height, Math.ceil(bottom + verticalPadding)) - y)
   }
 }
 
 export function mapOcrQuadToRegion(
   region: Rect,
-  quad: Point[]
+  quad: Point[],
+  padding?: BoundsPadding
 ): { bounds: Rect; quad: Point[] } | null {
   const [topLeft, topRight, bottomRight, bottomLeft] = quad.map((point) => ({
     x: region.x + point.x * region.width,
@@ -62,8 +57,8 @@ export function mapOcrQuadToRegion(
     x: (bottomLeft.x - topLeft.x) / axisLength,
     y: (bottomLeft.y - topLeft.y) / axisLength
   }
-  const horizontalPadding = Math.max(2, Math.min(5, inlineLength * 0.05))
-  const verticalPadding = Math.max(1, Math.min(3, axisLength * 0.1))
+  const horizontalPadding = padding?.horizontal ?? Math.max(2, Math.min(5, inlineLength * 0.05))
+  const verticalPadding = padding?.vertical ?? Math.max(1, Math.min(3, axisLength * 0.1))
   const extend = (point: Point, horizontal: number, vertical: number): Point => ({
     x: point.x + inline.x * horizontal * horizontalPadding + axis.x * vertical * verticalPadding,
     y: point.y + inline.y * horizontal * horizontalPadding + axis.y * vertical * verticalPadding

@@ -9,7 +9,7 @@ export type CapturedImage = {
   size: { width: number; height: number }
   pointer: { x: number; y: number }
   region: Rectangle
-  mapBounds: (bounds: Rectangle) => Rectangle
+  mapBounds: (bounds: Rectangle, padding?: { horizontal: number; vertical: number }) => Rectangle
 }
 
 export type OcrDisplaySnapshot = { image: Screenshot }
@@ -92,6 +92,6 @@ function toCapturedImage(image: Screenshot, pointer: Point): CapturedImage {
       y: (pointer.y - image.bounds.y) / image.bounds.height
     },
     region: image.bounds,
-    mapBounds: (bounds) => mapOcrBoundsToRegion(image.bounds, bounds)
+    mapBounds: (bounds, padding) => mapOcrBoundsToRegion(image.bounds, bounds, padding)
   }
 }

@@ -157,7 +157,10 @@ export function selectOcrTextHit(
   const mixedCjkLatin = hasMixedCjkLatin(target.text)
   const visualWidths = characters.map((character) => characterWidth(character, mixedCjkLatin))
   const targetVisualWidth = visualWidths.reduce((total, width) => total + width, 0)
-  const pointerVisualOffset = ((pointer.x - target.x) / target.width) * targetVisualWidth
+  const pointerVisualOffset =
+    (target.quad?.length === 4
+      ? inlineFraction(pointer, target.quad, aspectRatio)
+      : (pointer.x - target.x) / target.width) * targetVisualWidth
   let approximateIndex = 0
   let precedingVisualWidth = 0
   while (
@@ -168,7 +171,7 @@ export function selectOcrTextHit(
     approximateIndex++
   }
   const characterOffset =
-    characterOffsetFromBoxes(target, pointer.x) ??
+    characterOffsetFromBoxes(target, pointer, aspectRatio) ??
     characters.slice(0, approximateIndex).join('').length
 
   const rows = buildTextRows(lines, target, aspectRatio)
@@ -300,11 +303,16 @@ export function selectOcrTextHit(
   }
 }
 
-function characterOffsetFromBoxes(line: Line, pointerX: number): number | null {
+function characterOffsetFromBoxes(line: Line, pointer: Point, aspectRatio: number): number | null {
   const boxes = line.characters?.filter((box) => box.width > 0 && box.length > 0)
   if (!boxes?.length) return null
-  const distance = (box: (typeof boxes)[number]): number =>
-    Math.max(box.x - pointerX, 0, pointerX - box.x - box.width)
+  const distance = (box: (typeof boxes)[number]): number => {
+    if (box.quad?.length === 4) return pointToQuadDistance(pointer, box.quad, aspectRatio)
+    const top = 1 - box.y - box.height
+    const dx = Math.max(box.x - pointer.x, 0, pointer.x - box.x - box.width) * aspectRatio
+    const dy = Math.max(top - pointer.y, 0, pointer.y - top - box.height)
+    return Math.hypot(dx, dy)
+  }
   const nearest = boxes.reduce((best, box) => (distance(box) < distance(best) ? box : best))
   const sameWord = boxes.filter(
     (box) =>
@@ -313,8 +321,44 @@ function characterOffsetFromBoxes(line: Line, pointerX: number): number | null {
       Math.abs(box.y - nearest.y) < 0.0001 &&
       Math.abs(box.height - nearest.height) < 0.0001
   )
-  const position = Math.max(0, Math.min(0.999, (pointerX - nearest.x) / nearest.width))
+  const position = Math.max(
+    0,
+    Math.min(
+      0.999,
+      nearest.quad?.length === 4
+        ? inlineFraction(pointer, nearest.quad, aspectRatio)
+        : (pointer.x - nearest.x) / nearest.width
+    )
+  )
   return sameWord[Math.floor(position * sameWord.length)].start
+}
+
+function inlineFraction(point: Point, quad: Point[], aspectRatio: number): number {
+  const [start, end] = quad
+  const dx = (end.x - start.x) * aspectRatio
+  const dy = end.y - start.y
+  const lengthSquared = dx * dx + dy * dy
+  if (!lengthSquared) return 0
+  return ((point.x - start.x) * aspectRatio * dx + (point.y - start.y) * dy) / lengthSquared
+}
+
+function pointToQuadDistance(point: Point, quad: Point[], aspectRatio: number): number {
+  if (pointInQuad(point, quad)) return 0
+  const px = point.x * aspectRatio
+  return Math.min(
+    ...quad.map((start, index) => {
+      const end = quad[(index + 1) % quad.length]
+      const x = start.x * aspectRatio
+      const y = start.y
+      const dx = end.x * aspectRatio - x
+      const dy = end.y - y
+      const lengthSquared = dx * dx + dy * dy
+      const fraction = lengthSquared
+        ? Math.max(0, Math.min(1, ((px - x) * dx + (point.y - y) * dy) / lengthSquared))
+        : 0
+      return Math.hypot(px - x - fraction * dx, point.y - y - fraction * dy)
+    })
+  )
 }
 
 function wordBoundsFromBoxes(line: Line, start: number, end: number): OcrTextHit['bounds'] | null {
@@ -428,12 +472,15 @@ function buildTextRows(lines: Line[], target: Line, aspectRatio: number): TextRo
         .filter((box) => box.width > 0 && box.height > 0)
         .map((box) => {
           const top = 1 - box.y - box.height
-          const glyph = [
-            { x: box.x, y: top },
-            { x: box.x + box.width, y: top },
-            { x: box.x + box.width, y: top + box.height },
-            { x: box.x, y: top + box.height }
-          ]
+          const glyph =
+            box.quad?.length === 4
+              ? box.quad
+              : [
+                  { x: box.x, y: top },
+                  { x: box.x + box.width, y: top },
+                  { x: box.x + box.width, y: top + box.height },
+                  { x: box.x, y: top + box.height }
+                ]
           const range = interval(glyph, axis)
           return range.end - range.start
         })

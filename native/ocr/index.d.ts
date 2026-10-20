@@ -33,6 +33,8 @@ export interface WindowsOcrResult {
   processedWidth: number
   processedHeight: number
   maxImageDimension: number
+  /** Clockwise text rotation in degrees, when detected by Windows OCR. */
+  textAngle?: number
 }
 
 export interface WordRange {

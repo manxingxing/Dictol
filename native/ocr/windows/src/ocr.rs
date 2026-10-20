@@ -9,7 +9,15 @@ pub struct WindowsOcrObservation {
     pub y: f64,
     pub width: f64,
     pub height: f64,
+    pub quad: Vec<WindowsOcrPoint>,
     pub characters: Vec<WindowsOcrCharacterBox>,
+}
+
+#[napi(object)]
+#[derive(Clone)]
+pub struct WindowsOcrPoint {
+    pub x: f64,
+    pub y: f64,
 }
 
 #[napi(object)]
@@ -20,6 +28,7 @@ pub struct WindowsOcrCharacterBox {
     pub y: f64,
     pub width: f64,
     pub height: f64,
+    pub quad: Vec<WindowsOcrPoint>,
 }
 
 #[napi(object)]
@@ -31,6 +40,66 @@ pub struct WindowsOcrResult {
     pub processed_width: u32,
     pub processed_height: u32,
     pub max_image_dimension: u32,
+    pub text_angle: Option<f64>,
+}
+
+#[cfg(windows)]
+struct RotatedBox {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    quad: Vec<WindowsOcrPoint>,
+}
+
+#[cfg(windows)]
+fn rotated_box(
+    left: f32,
+    top: f32,
+    right: f32,
+    bottom: f32,
+    angle: f64,
+    image_width: f64,
+    image_height: f64,
+) -> RotatedBox {
+    let radians = angle.to_radians();
+    let (sin, cos) = radians.sin_cos();
+    let center_x = image_width / 2.0;
+    let center_y = image_height / 2.0;
+    let quad: Vec<_> = [(left, top), (right, top), (right, bottom), (left, bottom)]
+        .into_iter()
+        .map(|(x, y)| {
+            let dx = x as f64 - center_x;
+            let dy = y as f64 - center_y;
+            WindowsOcrPoint {
+                x: (center_x + dx * cos - dy * sin) / image_width,
+                y: (center_y + dx * sin + dy * cos) / image_height,
+            }
+        })
+        .collect();
+    let x = quad
+        .iter()
+        .map(|point| point.x)
+        .fold(f64::INFINITY, f64::min);
+    let top = quad
+        .iter()
+        .map(|point| point.y)
+        .fold(f64::INFINITY, f64::min);
+    let right = quad
+        .iter()
+        .map(|point| point.x)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let bottom = quad
+        .iter()
+        .map(|point| point.y)
+        .fold(f64::NEG_INFINITY, f64::max);
+    RotatedBox {
+        x,
+        y: 1.0 - bottom,
+        width: right - x,
+        height: bottom - top,
+        quad,
+    }
 }
 
 #[cfg(any(windows, test))]
@@ -198,7 +267,13 @@ fn recognize(png: &[u8], language: Option<&str>) -> windows::core::Result<Window
     };
     let image_width = bitmap.PixelWidth()? as f64;
     let image_height = bitmap.PixelHeight()? as f64;
-    let lines = engine.RecognizeAsync(&bitmap)?.join()?.Lines()?;
+    let ocr_result = engine.RecognizeAsync(&bitmap)?.join()?;
+    let text_angle = ocr_result
+        .TextAngle()
+        .ok()
+        .and_then(|angle| angle.Value().ok())
+        .filter(|angle| angle.is_finite());
+    let lines = ocr_result.Lines()?;
     let mut observations = Vec::with_capacity(lines.Size()? as usize);
     for line in lines {
         let text = line.Text()?.to_string();
@@ -230,6 +305,15 @@ fn recognize(png: &[u8], language: Option<&str>) -> windows::core::Result<Window
             continue;
         }
         let text = repair_split_latin_words(&text, &recognized_words);
+        let line_box = rotated_box(
+            left,
+            top,
+            right,
+            bottom,
+            text_angle.unwrap_or(0.0),
+            image_width,
+            image_height,
+        );
         let mut characters = Vec::new();
         let mut cursor = 0;
         for word in &recognized_words {
@@ -238,20 +322,26 @@ fn recognize(png: &[u8], language: Option<&str>) -> windows::core::Result<Window
             };
             let start = cursor + relative_start;
             let utf16_start = text[..start].encode_utf16().count() as u32;
-            let box_x = word.left as f64 / image_width;
-            let box_y = 1.0 - word.bottom as f64 / image_height;
-            let box_width = (word.right - word.left) as f64 / image_width;
-            let box_height = (word.bottom - word.top) as f64 / image_height;
+            let word_box = rotated_box(
+                word.left,
+                word.top,
+                word.right,
+                word.bottom,
+                text_angle.unwrap_or(0.0),
+                image_width,
+                image_height,
+            );
             let mut offset = utf16_start;
             for ch in word.text.chars() {
                 let length = ch.len_utf16() as u32;
                 characters.push(WindowsOcrCharacterBox {
                     start: offset,
                     length,
-                    x: box_x,
-                    y: box_y,
-                    width: box_width,
-                    height: box_height,
+                    x: word_box.x,
+                    y: word_box.y,
+                    width: word_box.width,
+                    height: word_box.height,
+                    quad: word_box.quad.clone(),
                 });
                 offset += length;
             }
@@ -259,10 +349,11 @@ fn recognize(png: &[u8], language: Option<&str>) -> windows::core::Result<Window
         }
         observations.push(WindowsOcrObservation {
             text,
-            x: left as f64 / image_width,
-            y: 1.0 - bottom as f64 / image_height,
-            width: (right - left) as f64 / image_width,
-            height: (bottom - top) as f64 / image_height,
+            x: line_box.x,
+            y: line_box.y,
+            width: line_box.width,
+            height: line_box.height,
+            quad: line_box.quad,
             characters,
         });
     }
@@ -274,6 +365,7 @@ fn recognize(png: &[u8], language: Option<&str>) -> windows::core::Result<Window
         processed_width: image_width as u32,
         processed_height: image_height as u32,
         max_image_dimension: max_dimension,
+        text_angle,
     })
 }
 
