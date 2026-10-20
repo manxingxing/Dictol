@@ -193,7 +193,7 @@ type WordCaptureStatus = {
   ocrAiShortcut: string
   ocrDictionaryRegistered: boolean
   ocrAiRegistered: boolean
-  screenCapturePermission: string | null
+  screenCapturePermission: 'granted' | 'not-granted' | 'not-required' | null
 }
 
 type WordCaptureEvent =

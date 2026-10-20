@@ -9,7 +9,7 @@ import {
   type CapturedImage
 } from './ocr-screen-capture'
 import { selectOcrTextHit, type OcrTextHit } from './ocr-text'
-import type { OcrCapture } from './mac-ocr-capture'
+import type { OcrCapture } from './ocr-capture-types'
 
 const dictionaryCaptureSize = { width: 850, height: 320 }
 const aiCaptureSize = { width: 1024, height: 500 }
@@ -105,7 +105,7 @@ function expandedCaptureSize(
 
 export async function captureWindowsTextUnderCursor(
   mode: OcrLookupMode,
-  onScreenshotCaptured?: () => void
+  onCaptureReady?: () => void
 ): Promise<OcrCapture | null> {
   const pointer = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(pointer)
@@ -113,7 +113,7 @@ export async function captureWindowsTextUnderCursor(
   let captured = snapshot
     ? cropOcrDisplay(snapshot, pointer, aiCaptureSize)
     : await captureOcrImage(display, pointer, dictionaryCaptureSize)
-  if (snapshot) onScreenshotCaptured?.()
+  if (snapshot) onCaptureReady?.()
   let captureMs = captured.captureMs
   let recognition = await recognize(captured, mode)
   let { hit } = recognition

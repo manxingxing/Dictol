@@ -2,9 +2,10 @@ import {
   captureScreenRegion,
   captureWindowsDisplayAtPoint,
   captureWindowsScreenRegion,
-  getWindowsDisplayBoundsAtPoint
-} from '@dictol/mdict-native'
-import { desktopCapturer, screen, systemPreferences, type Display, type Rectangle } from 'electron'
+  getWindowsDisplayBoundsAtPoint,
+  getPermissionStatus
+} from '@dictol/screen-capture-native'
+import { desktopCapturer, screen, type Display, type Rectangle } from 'electron'
 import { mapWindowsCaptureRegion } from './windows-capture-geometry'
 
 export type Screenshot = {
@@ -23,8 +24,8 @@ export type CaptureRequest = {
 }
 
 function supportsMacNativeCapture(): boolean {
-  const [major, minor] = process.getSystemVersion().split('.').map(Number)
-  return major > 15 || (major === 15 && minor >= 2)
+  const [major] = process.getSystemVersion().split('.').map(Number)
+  return major >= 14
 }
 
 function validateRegion(display: Display, region: Rectangle): void {
@@ -90,7 +91,13 @@ export async function captureScreen(request: CaptureRequest): Promise<Screenshot
   if (process.platform === 'darwin') {
     if (supportsMacNativeCapture()) {
       try {
-        const image = await captureScreenRegion(bounds.x, bounds.y, bounds.width, bounds.height)
+        const image = await captureScreenRegion(
+          display.id,
+          bounds.x,
+          bounds.y,
+          bounds.width,
+          bounds.height
+        )
         return {
           data: image.png,
           mimeType: 'image/png',
@@ -106,7 +113,7 @@ export async function captureScreen(request: CaptureRequest): Promise<Screenshot
     try {
       return await captureElectronFallback(display, bounds)
     } catch (error) {
-      if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') {
+      if (getPermissionStatus() !== 'granted') {
         throw new Error(
           '未获得屏幕录制权限。请在「系统设置 → 隐私与安全性 → 屏幕与系统音频录制」中允许启动开发版的终端或 IDE（安装版为 Dictol），然后完全退出并重新启动。'
         )

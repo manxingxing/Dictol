@@ -62,9 +62,14 @@ export function mapOcrBoundsToRegion(region: Rect, word: Rect, padding?: BoundsP
   )
 }
 
-export function contextTouchesCropEdge(display: Rect, region: Rect, context: Rect): boolean {
-  const horizontalMargin = 64 / region.width
-  const verticalMargin = 64 / region.height
+export function contextTouchesCropEdge(
+  display: Rect,
+  region: Rect,
+  context: Rect,
+  margin: BoundsPadding = { horizontal: 64, vertical: 64 }
+): boolean {
+  const horizontalMargin = margin.horizontal / region.width
+  const verticalMargin = margin.vertical / region.height
   return (
     (region.x > display.x && context.x <= horizontalMargin) ||
     (region.y > display.y && context.y <= verticalMargin) ||

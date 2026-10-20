@@ -1,6 +1,6 @@
 import { nativeTheme } from 'electron'
 import type { BrowserWindow } from 'electron'
-import { stopWindowsScreenCaptureSessions } from '@dictol/mdict-native'
+import { stopWindowsScreenCaptureSessions } from '@dictol/screen-capture-native'
 
 import { AppConfigStore, type AppConfig } from './app-config'
 import { AiLookupService } from './ai-service'

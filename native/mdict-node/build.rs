@@ -12,20 +12,18 @@ fn main() {
         return;
     }
 
-    build_macos_selection_panel(&target);
+    build_macos_bridges(&target);
 }
 
-fn build_macos_selection_panel(target: &str) {
-    // Keep the AppKit panel, screenshot capture, and tokenizer in one archive;
-    // Rust exposes their C entry points through the same N-API addon.
-    const SOURCES: [&str; 5] = [
+fn build_macos_bridges(target: &str) {
+    // Keep the remaining AppKit features in this addon. Accessibility is
+    // compiled by the separate native/accessibility addon.
+    const SOURCES: [&str; 3] = [
         "src/selection_panel.m",
-        "src/screen_capture.m",
         "src/macos_ocr.m",
-        "src/macos_accessibility.m",
         "src/word_tokenizer.m",
     ];
-    const ARCHIVE: &str = "libdictol_macos_selection_panel.a";
+    const ARCHIVE: &str = "libdictol_macos_bridges.a";
 
     for source in SOURCES {
         println!("cargo:rerun-if-changed={source}");
@@ -88,7 +86,7 @@ fn build_macos_selection_panel(target: &str) {
     let mut archive_command = Command::new(env::var("AR").unwrap_or_else(|_| "ar".to_owned()));
     archive_command.arg("crs").arg(&archive);
     archive_command.args(&objects);
-    run(archive_command, "archiving the macOS window bridge");
+    run(archive_command, "archiving the remaining macOS bridges");
 
     println!("cargo:rustc-link-search=native={}", out_dir.display());
     println!(
@@ -96,8 +94,6 @@ fn build_macos_selection_panel(target: &str) {
         ARCHIVE.trim_end_matches(".a").trim_start_matches("lib")
     );
     println!("cargo:rustc-link-lib=framework=AppKit");
-    // ScreenCaptureKit is unavailable on older macOS releases supported by Electron.
-    println!("cargo:rustc-link-arg=-Wl,-weak_framework,ScreenCaptureKit");
     println!("cargo:rustc-link-lib=framework=ImageIO");
     println!("cargo:rustc-link-lib=framework=NaturalLanguage");
     println!("cargo:rustc-link-lib=framework=Vision");

@@ -112,10 +112,12 @@ Dictol 会按功能引导用户开启必要的系统权限：
 ## 开发
 
 ```bash
-nvm use            # Node 22.12+（.nvmrc 固定 22.15.1）
+nvm use            # Node 24+（.nvmrc 使用 26.7.0）
 npm install
 npm run dev        # 构建原生模块并启动开发模式
 ```
+
+macOS 悬停取词优先读取辅助功能文本，失败时使用 RapidOCR（PP-OCRv6 small）。开发和打包命令会预先下载并校验模型；设置 `DICTOL_OCR_ENGINE=vision` 可临时切换到保留的 Apple Vision 实现。
 
 ## 常用命令
 

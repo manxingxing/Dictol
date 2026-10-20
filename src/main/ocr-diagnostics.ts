@@ -1,18 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { MacOcrResult } from '@dictol/mdict-native'
 import { app, type Point } from 'electron'
 import type { CapturedImage } from './ocr-screen-capture'
-import type { OcrTextHit } from './ocr-text'
+import type { OcrObservation, OcrTextHit } from './ocr-text'
 
 /** Explicit opt-in: screenshots and recognized text can contain private screen content. */
 export async function recordMacOcrDiagnostic(
   mode: 'dictionary' | 'ai',
-  pass: 'initial' | 'japanese-fallback' | 'expanded',
+  pass: 'initial' | 'focused' | 'japanese-fallback' | 'expanded',
   captured: CapturedImage,
   pointer: Point,
-  result: MacOcrResult,
+  result: { observations: OcrObservation[] },
   hit: OcrTextHit | null
 ): Promise<void> {
   if (process.env.DICTOL_OCR_DIAGNOSTICS !== '1') return
@@ -32,7 +31,7 @@ export async function recordMacOcrDiagnostic(
     const seen = new Set<string>()
     const wordRects = result.observations
       .flatMap((line) =>
-        line.characters.flatMap((box) => {
+        (line.characters ?? []).flatMap((box) => {
           const key = [box.x, box.y, box.width, box.height]
             .map((value) => value.toFixed(4))
             .join(',')

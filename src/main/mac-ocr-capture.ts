@@ -1,21 +1,30 @@
 import { chineseWordRange, recognizeMacText } from '@dictol/mdict-native'
-import { screen, type Rectangle } from 'electron'
+import { nativeImage, screen } from 'electron'
 import type { OcrLookupMode } from './app-runtime'
 import { contextTouchesCropEdge } from './ocr-crop'
 import { recordMacOcrDiagnostic } from './ocr-diagnostics'
 import { captureOcrDisplay, captureOcrImage, cropOcrDisplay } from './ocr-screen-capture'
-import { selectOcrTextHit, type OcrSelection } from './ocr-text'
-
-export type OcrCapture = { selection: OcrSelection; wordBounds: Rectangle }
+import { selectOcrTextHit } from './ocr-text'
+import type { OcrCapture } from './ocr-capture-types'
+import { recognizeRapidText } from './rapid-ocr'
 
 const dictionaryCaptureSize = { width: 700, height: 300 }
 const aiCaptureSize = { width: 1024, height: 500 }
+const expandedAiCaptureSize = { width: 1280, height: 650 }
+const focusedAiCaptureSize = { width: 420, height: 240 }
+// Wider margins repeatedly re-OCR fully visible lines in multi-column pages.
+const aiCropEdgeMargin = { horizontal: 16, vertical: 24 }
 const ocrLanguages = ['zh-Hans', 'en-US', 'ja-JP', 'zh-Hant']
 const japaneseOcrLanguages = ['ja-JP', 'zh-Hans', 'en-US', 'zh-Hant']
+const useVisionOcr = process.env.DICTOL_OCR_ENGINE === 'vision'
+
+function recognizeText(png: Buffer): ReturnType<typeof recognizeRapidText> {
+  return useVisionOcr ? recognizeMacText(png, ocrLanguages, true) : recognizeRapidText(png)
+}
 
 export async function captureTextUnderCursor(
   mode: OcrLookupMode,
-  onScreenshotCaptured?: () => void
+  onCaptureReady?: () => void
 ): Promise<OcrCapture | null> {
   if (process.platform !== 'darwin') return null
   const pointer = screen.getCursorScreenPoint()
@@ -24,11 +33,11 @@ export async function captureTextUnderCursor(
   let captured = snapshot
     ? cropOcrDisplay(snapshot, pointer, aiCaptureSize)
     : await captureOcrImage(display, pointer, dictionaryCaptureSize)
-  if (snapshot) onScreenshotCaptured?.()
+  if (snapshot) onCaptureReady?.()
   let captureMs = captured.captureMs
 
   const ocrStartedAt = performance.now()
-  let result = await recognizeMacText(captured.buffer, ocrLanguages, true)
+  let result = await recognizeText(captured.buffer)
   const firstPassOcrMs = performance.now() - ocrStartedAt
   const firstSelectionStartedAt = performance.now()
   let hit = selectOcrTextHit(
@@ -39,8 +48,39 @@ export async function captureTextUnderCursor(
   )
   let selectionMs = performance.now() - firstSelectionStartedAt
   await recordMacOcrDiagnostic(mode, 'initial', captured, pointer, result, hit)
+  let focusedOcrMs = 0
+  if (mode === 'ai' && !useVisionOcr && !hit && snapshot) {
+    const focusedCaptureStartedAt = performance.now()
+    const focusedCapture = cropOcrDisplay(snapshot, pointer, focusedAiCaptureSize)
+    const focusedImage = nativeImage.createFromBuffer(focusedCapture.buffer)
+    const enlargedImage =
+      focusedCapture.size.height < 384 ? focusedImage.resize({ height: 384 }) : focusedImage
+    const focused = {
+      ...focusedCapture,
+      buffer: enlargedImage.toPNG(),
+      size: enlargedImage.getSize()
+    }
+    captureMs += performance.now() - focusedCaptureStartedAt
+    const focusedOcrStartedAt = performance.now()
+    const focusedResult = await recognizeRapidText(focused.buffer)
+    focusedOcrMs = performance.now() - focusedOcrStartedAt
+    const focusedSelectionStartedAt = performance.now()
+    const focusedHit = selectOcrTextHit(
+      focusedResult.observations,
+      focused.pointer,
+      focused.size.width / focused.size.height,
+      chineseWordRange
+    )
+    selectionMs += performance.now() - focusedSelectionStartedAt
+    await recordMacOcrDiagnostic(mode, 'focused', focused, pointer, focusedResult, focusedHit)
+    if (focusedHit) {
+      captured = focused
+      result = focusedResult
+      hit = focusedHit
+    }
+  }
   let japaneseFallbackMs = 0
-  if (!hit) {
+  if (useVisionOcr && !hit) {
     const fallbackStartedAt = performance.now()
     const fallbackResult = await recognizeMacText(captured.buffer, japaneseOcrLanguages, true)
     japaneseFallbackMs = performance.now() - fallbackStartedAt
@@ -71,13 +111,20 @@ export async function captureTextUnderCursor(
     snapshot &&
     (captured.region.width < display.bounds.width ||
       captured.region.height < display.bounds.height) &&
-    (!hit || contextTouchesCropEdge(display.bounds, captured.region, hit.contextBounds))
+    (!hit ||
+      (!hit.hasBothAdjacentSentences &&
+        contextTouchesCropEdge(
+          display.bounds,
+          captured.region,
+          hit.contextBounds,
+          aiCropEdgeMargin
+        )))
   ) {
     expanded = true
-    const expandedCapture = cropOcrDisplay(snapshot, pointer, null)
+    const expandedCapture = cropOcrDisplay(snapshot, pointer, expandedAiCaptureSize)
     captureMs += expandedCapture.captureMs
     const expandedOcrStartedAt = performance.now()
-    const expandedResult = await recognizeMacText(expandedCapture.buffer, ocrLanguages, true)
+    const expandedResult = await recognizeText(expandedCapture.buffer)
     expandedOcrMs = performance.now() - expandedOcrStartedAt
     const expandedSelectionStartedAt = performance.now()
     const expandedHit = selectOcrTextHit(
@@ -110,10 +157,12 @@ export async function captureTextUnderCursor(
   }
   console.debug('[OCR] capture and recognition', {
     mode,
+    recognitionBackend: useVisionOcr ? 'vision' : 'rapidocr',
     captureBackend: captured.backend,
     captureMs,
-    ocrMs: firstPassOcrMs + japaneseFallbackMs + expandedOcrMs,
-    accurateOcrMs: firstPassOcrMs,
+    ocrMs: firstPassOcrMs + focusedOcrMs + japaneseFallbackMs + expandedOcrMs,
+    initialOcrMs: firstPassOcrMs,
+    focusedOcrMs: focusedOcrMs || undefined,
     japaneseFallbackMs: japaneseFallbackMs || undefined,
     expandedOcrMs: expandedOcrMs || undefined,
     expanded,

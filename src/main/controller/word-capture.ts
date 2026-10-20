@@ -5,6 +5,11 @@ import {
   type IpcMainInvokeEvent,
   type WebContents
 } from 'electron'
+import {
+  getPermissionStatus,
+  openPermissionSettings,
+  type ScreenCapturePermissionStatus
+} from '@dictol/screen-capture-native'
 
 import {
   LOOKUP_WORD_ON_SHORTCUT,
@@ -30,7 +35,7 @@ export type WordCaptureStatus = {
   ocrAiShortcut: string
   ocrDictionaryRegistered: boolean
   ocrAiRegistered: boolean
-  screenCapturePermission: string | null
+  screenCapturePermission: ScreenCapturePermissionStatus | null
 }
 
 export type WordCaptureShortcutResult = {
@@ -46,8 +51,6 @@ export type OpenInputMonitoringSettingsResult = {
 
 const MACOS_INPUT_MONITORING_SETTINGS_URL =
   'x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent'
-const MACOS_SCREEN_CAPTURE_SETTINGS_URL =
-  'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
 
 export class WordCaptureController extends BaseController {
   override mount(): void {
@@ -100,7 +103,7 @@ export class WordCaptureController extends BaseController {
     if (!this.acceptsSender(event.sender)) return null
     if (process.platform !== 'darwin') return { ok: false, error: '仅适用于 macOS。' }
     try {
-      await shell.openExternal(MACOS_SCREEN_CAPTURE_SETTINGS_URL)
+      await openPermissionSettings()
       return { ok: true }
     } catch {
       return { ok: false, error: '无法打开屏幕录制设置。' }
@@ -360,8 +363,7 @@ export class WordCaptureController extends BaseController {
       ocrAiShortcut: config.shortcuts.ocrAi,
       ocrDictionaryRegistered: this.runtime.shortcutRegister.isRegistered(OCR_DICTIONARY_SHORTCUT),
       ocrAiRegistered: this.runtime.shortcutRegister.isRegistered(OCR_AI_SHORTCUT),
-      screenCapturePermission:
-        process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : null
+      screenCapturePermission: process.platform === 'darwin' ? getPermissionStatus() : null
     }
   }
 

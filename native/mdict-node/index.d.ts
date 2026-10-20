@@ -153,14 +153,6 @@ export declare class MdxKeyScanner {
   nextBatch(batchSize?: number | undefined | null): Promise<KeyBatch>
 }
 
-export declare function captureScreenRegion(x: number, y: number, width: number, height: number): Promise<ScreenCaptureImage>
-
-export declare function captureWindowsDisplayAtPoint(x: number, y: number): Promise<WindowsScreenCaptureImage>
-
-export declare function captureWindowsScreenRegion(x: number, y: number, width: number, height: number): Promise<WindowsScreenCaptureImage>
-
-export declare function stopWindowsScreenCaptureSessions(): void
-
 export declare function chineseWordRange(text: string, offset: number): WordRange | null
 
 /** Configure an Electron-managed panel window without moving its Chromium content view. */
@@ -248,8 +240,6 @@ export interface EntryBatch {
 
 export declare function getSelectionPanelBounds(panelId: number): SelectionPanelBounds
 
-export declare function getWindowsDisplayBoundsAtPoint(x: number, y: number): WindowsDisplayBounds
-
 /** 使用 XXH3-128 计算文件 checksum。小文件读取全部内容，大文件读取头、中、尾各 64 KiB。 */
 export declare function hashFile(path: string): Promise<string>
 
@@ -259,21 +249,6 @@ export declare function hideSelectionPanel(panelId: number): void
 export interface KeyBatch {
   entries: Array<DictionaryEntry>
   done: boolean
-}
-
-export interface MacAccessibleLookup {
-  result?: MacAccessibleText
-  failure?: string
-}
-
-export interface MacAccessibleText {
-  text: string
-  offset: number
-  word: string
-  x: number
-  y: number
-  width: number
-  height: number
 }
 
 export interface MacOcrCharacterBox {
@@ -337,19 +312,9 @@ export interface OpenOptions {
   keyFile?: string
 }
 
-export declare function readMacAccessibleText(x: number, y: number, includeContext: boolean): Promise<MacAccessibleLookup>
-
-export declare function readWindowsAccessibleText(x: number, y: number): Promise<WindowsAccessibleLookup>
-
 export declare function recognizeMacText(png: Buffer, languages: Array<string>, accurate: boolean): Promise<MacOcrResult>
 
 export declare function recognizeWindowsText(png: Buffer, language?: string | undefined | null): Promise<WindowsOcrResult>
-
-export interface ScreenCaptureImage {
-  png: Buffer
-  width: number
-  height: number
-}
 
 export interface SelectionPanelBounds {
   x: number
@@ -366,22 +331,9 @@ export declare function showSelectionPanel(panelId: number, focus: boolean): voi
 
 export declare function showSelectionPanelDisableMenu(panelId: number, enabled: boolean): void
 
-export interface WindowsDisplayBounds {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-export interface WindowsAccessibleLookup {
-  result?: WindowsAccessibleText
-  failure?: string
-}
-
-export interface WindowsAccessibleText {
-  text: string
-  offset: number
-  word: string
+export interface WindowsOcrCharacterBox {
+  start: number
+  length: number
   x: number
   y: number
   width: number
@@ -397,15 +349,6 @@ export interface WindowsOcrObservation {
   characters: Array<WindowsOcrCharacterBox>
 }
 
-export interface WindowsOcrCharacterBox {
-  start: number
-  length: number
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
 export interface WindowsOcrResult {
   observations: Array<WindowsOcrObservation>
   recognizerLanguage: string
@@ -414,13 +357,6 @@ export interface WindowsOcrResult {
   processedWidth: number
   processedHeight: number
   maxImageDimension: number
-}
-
-export interface WindowsScreenCaptureImage {
-  png: Buffer
-  width: number
-  height: number
-  backend: string
 }
 
 export interface WordRange {

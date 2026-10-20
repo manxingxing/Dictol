@@ -1,0 +1,15 @@
+{
+  "name": "@dictol/accessibility-native",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "prebuilds/**/*.node"
+  ],
+  "scripts": {
+    "build": "node build.mjs"
+  }
+}

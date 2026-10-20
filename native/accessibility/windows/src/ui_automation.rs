@@ -1,9 +1,4 @@
-use napi::bindgen_prelude::AsyncTask;
-use napi::{Env, Result, Task};
-use napi_derive::napi;
-
-#[napi(object)]
-pub struct WindowsAccessibleText {
+pub struct AccessibleText {
     pub text: String,
     pub offset: u32,
     pub word: String,
@@ -13,61 +8,21 @@ pub struct WindowsAccessibleText {
     pub height: f64,
 }
 
-#[napi(object)]
-pub struct WindowsAccessibleLookup {
-    pub result: Option<WindowsAccessibleText>,
-    pub failure: Option<String>,
-}
-
-pub struct ReadWindowsAccessibleTextTask {
+#[cfg(windows)]
+pub fn read_accessible_text(
     x: i32,
     y: i32,
-}
-
-impl Task for ReadWindowsAccessibleTextTask {
-    type Output = WindowsAccessibleLookup;
-    type JsValue = WindowsAccessibleLookup;
-
-    fn compute(&mut self) -> Result<Self::Output> {
-        #[cfg(windows)]
-        {
-            match read_accessible_text(self.x, self.y) {
-                Ok(Some(result)) => Ok(WindowsAccessibleLookup {
-                    result: Some(result),
-                    failure: None,
-                }),
-                Ok(None) => Ok(WindowsAccessibleLookup {
-                    result: None,
-                    failure: Some("no-text-at-point".into()),
-                }),
-                Err(error) => Ok(WindowsAccessibleLookup {
-                    result: None,
-                    failure: Some(format!("uia-error: {error}")),
-                }),
-            }
-        }
-        #[cfg(not(windows))]
-        {
-            let _ = (self.x, self.y);
-            Ok(WindowsAccessibleLookup {
-                result: None,
-                failure: Some("unsupported-platform".into()),
-            })
-        }
-    }
-
-    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
-        Ok(output)
-    }
-}
-
-#[napi(ts_return_type = "Promise<WindowsAccessibleLookup>")]
-pub fn read_windows_accessible_text(x: i32, y: i32) -> AsyncTask<ReadWindowsAccessibleTextTask> {
-    AsyncTask::new(ReadWindowsAccessibleTextTask { x, y })
+    include_context: bool,
+) -> Result<Option<AccessibleText>, String> {
+    read_accessible_text_impl(x, y, include_context).map_err(|error| error.to_string())
 }
 
 #[cfg(windows)]
-fn read_accessible_text(x: i32, y: i32) -> windows::core::Result<Option<WindowsAccessibleText>> {
+fn read_accessible_text_impl(
+    x: i32,
+    y: i32,
+    include_context: bool,
+) -> windows::core::Result<Option<AccessibleText>> {
     use windows::Win32::Foundation::POINT;
     use windows::Win32::System::Com::{
         CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
@@ -139,23 +94,28 @@ fn read_accessible_text(x: i32, y: i32) -> windows::core::Result<Option<WindowsA
         return Ok(None);
     }
 
-    let paragraph = unsafe { at_point.Clone()? };
-    unsafe { paragraph.ExpandToEnclosingUnit(TextUnit_Paragraph)? };
-    let prefix = unsafe { paragraph.Clone()? };
-    unsafe {
-        prefix.MoveEndpointByRange(
-            TextPatternRangeEndpoint_End,
-            &word_range,
-            TextPatternRangeEndpoint_Start,
-        )?;
-    }
-    let before = unsafe { prefix.GetText(16_384)? }.to_string();
-    let text = unsafe { paragraph.GetText(16_384)? }.to_string();
-    let offset = before.encode_utf16().count();
-    if offset >= text.encode_utf16().count() {
-        return Ok(None);
-    }
-    Ok(Some(WindowsAccessibleText {
+    let (text, offset) = if include_context {
+        let paragraph = unsafe { at_point.Clone()? };
+        unsafe { paragraph.ExpandToEnclosingUnit(TextUnit_Paragraph)? };
+        let prefix = unsafe { paragraph.Clone()? };
+        unsafe {
+            prefix.MoveEndpointByRange(
+                TextPatternRangeEndpoint_End,
+                &word_range,
+                TextPatternRangeEndpoint_Start,
+            )?;
+        }
+        let before = unsafe { prefix.GetText(16_384)? }.to_string();
+        let text = unsafe { paragraph.GetText(16_384)? }.to_string();
+        let offset = before.encode_utf16().count();
+        if offset >= text.encode_utf16().count() {
+            return Ok(None);
+        }
+        (text, offset)
+    } else {
+        (word.clone(), 0)
+    };
+    Ok(Some(AccessibleText {
         text,
         offset: offset as u32,
         word,
@@ -164,6 +124,15 @@ fn read_accessible_text(x: i32, y: i32) -> windows::core::Result<Option<WindowsA
         width,
         height,
     }))
+}
+
+#[cfg(not(windows))]
+pub fn read_accessible_text(
+    _x: i32,
+    _y: i32,
+    _include_context: bool,
+) -> Result<Option<AccessibleText>, String> {
+    Err("unsupported-platform".to_owned())
 }
 
 #[cfg(windows)]

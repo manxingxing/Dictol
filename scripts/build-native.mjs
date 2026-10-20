@@ -19,16 +19,7 @@ const getTarget = () => {
 const verifyWindowsX64Binding = (directory) => {
   const binaryPath = join(directory, 'dictol-mdict-node.win32-x64-msvc.node')
   const binary = readFileSync(binaryPath)
-  const requiredExports = [
-    'Mdx',
-    'Mdd',
-    'MddList',
-    'hashFile',
-    'recognizeWindowsText',
-    'captureWindowsDisplayAtPoint',
-    'captureWindowsScreenRegion',
-    'getWindowsDisplayBoundsAtPoint'
-  ]
+  const requiredExports = ['Mdx', 'Mdd', 'MddList', 'hashFile', 'recognizeWindowsText']
   const missingExports = requiredExports.filter((name) => !binary.includes(Buffer.from(name)))
 
   if (missingExports.length > 0) {
@@ -37,16 +28,26 @@ const verifyWindowsX64Binding = (directory) => {
     )
   }
 
-  const macOnlyExports = [
-    'captureScreenRegion',
-    'recognizeMacText',
-    'readMacAccessibleText',
-    'chineseWordRange'
-  ]
+  const macOnlyExports = ['recognizeMacText', 'chineseWordRange']
   const unexpectedExports = macOnlyExports.filter((name) => binary.includes(Buffer.from(name)))
   if (unexpectedExports.length > 0) {
     throw new Error(
       `Windows x64 native binding contains macOS-only exports: ${unexpectedExports.join(', ')}`
+    )
+  }
+  const screenCaptureExports = [
+    'captureScreenRegion',
+    'captureWindowsDisplayAtPoint',
+    'captureWindowsScreenRegion',
+    'getWindowsDisplayBoundsAtPoint',
+    'stopWindowsScreenCaptureSessions'
+  ]
+  const unexpectedCaptureExports = screenCaptureExports.filter((name) =>
+    binary.includes(Buffer.from(name))
+  )
+  if (unexpectedCaptureExports.length > 0) {
+    throw new Error(
+      `Windows mdict binding contains screen capture exports: ${unexpectedCaptureExports.join(', ')}`
     )
   }
   const generatedJs = readFileSync(join(directory, 'index.js'), 'utf8')
@@ -90,7 +91,7 @@ const prepareWindowsCrossCompileEnvironment = () => {
   }
 }
 
-const run = (directory) => {
+const run = (directory, { includeAllPlatformTypes = false } = {}) => {
   const target = getTarget()
   const args = ['--prefix', directory, 'run', 'build']
   const shouldCrossCompileWindows =
@@ -101,7 +102,10 @@ const run = (directory) => {
   }
   // Keep the shared declaration file complete for typechecking both platform
   // implementations when building Windows from a macOS checkout.
-  if (!(target?.includes('apple-darwin') ?? process.platform === 'darwin')) {
+  if (
+    includeAllPlatformTypes &&
+    !(target?.includes('apple-darwin') ?? process.platform === 'darwin')
+  ) {
     if (!target) args.push('--')
     args.push('--dts', 'target/non-macos-index.d.ts')
   }
@@ -126,9 +130,41 @@ const run = (directory) => {
     crossCompileEnvironment?.cleanup()
   }
 
-  if (target === WINDOWS_X64_TARGET) {
+  if (directory.endsWith('mdict-node') && target === WINDOWS_X64_TARGET) {
     verifyWindowsX64Binding(directory)
   }
 }
 
-run('native/mdict-node')
+run('native/mdict-node', { includeAllPlatformTypes: true })
+const target = getTarget()
+if (target?.endsWith('-apple-darwin') || target?.endsWith('-pc-windows-msvc')) {
+  const shouldCrossCompileWindows =
+    target.endsWith('-pc-windows-msvc') && process.platform !== 'win32'
+  const crossCompileEnvironment = shouldCrossCompileWindows
+    ? prepareWindowsCrossCompileEnvironment()
+    : undefined
+  try {
+    execFileSync(process.execPath, ['native/accessibility/build.mjs', '--target', target], {
+      stdio: 'inherit',
+      env: crossCompileEnvironment?.env
+    })
+  } finally {
+    crossCompileEnvironment?.cleanup()
+  }
+} else if (!target && ['darwin', 'win32'].includes(process.platform)) {
+  execFileSync(process.execPath, ['native/accessibility/build.mjs'], { stdio: 'inherit' })
+}
+
+const shouldBuildScreenCapture = target
+  ? (target.endsWith('-apple-darwin') && process.platform === 'darwin') ||
+    (target.endsWith('-pc-windows-msvc') && process.platform === 'win32')
+  : ['darwin', 'win32'].includes(process.platform)
+if (shouldBuildScreenCapture) {
+  execFileSync(
+    process.execPath,
+    ['native/screen-capture/build.mjs', ...(target ? ['--target', target] : [])],
+    {
+      stdio: 'inherit'
+    }
+  )
+}

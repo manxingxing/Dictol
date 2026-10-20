@@ -101,11 +101,43 @@ function pruneAndVerifyNativeModules(appPath, arch) {
   const otherArch = arch === 'x64' ? 'arm64' : 'x64'
   const expected = [
     join(unpacked, '@dictol', 'mdict-native', `dictol-mdict-node.darwin-${arch}.node`),
+    join(
+      unpacked,
+      '@dictol',
+      'accessibility-native',
+      'prebuilds',
+      `darwin-${arch}`,
+      'accessibility.node'
+    ),
+    join(
+      unpacked,
+      '@dictol',
+      'screen-capture-native',
+      'prebuilds',
+      `darwin-${arch}`,
+      'screen-capture.node'
+    ),
     join(unpacked, 'better-sqlite3', 'prebuilds', `darwin-${arch}.node`),
     join(unpacked, 'selection-hook', 'prebuilds', `darwin-${arch}`, 'selection-hook.node')
   ]
   const opposite = [
     join(unpacked, '@dictol', 'mdict-native', `dictol-mdict-node.darwin-${otherArch}.node`),
+    join(
+      unpacked,
+      '@dictol',
+      'accessibility-native',
+      'prebuilds',
+      `darwin-${otherArch}`,
+      'accessibility.node'
+    ),
+    join(
+      unpacked,
+      '@dictol',
+      'screen-capture-native',
+      'prebuilds',
+      `darwin-${otherArch}`,
+      'screen-capture.node'
+    ),
     join(unpacked, 'better-sqlite3', 'prebuilds', `darwin-${otherArch}.node`),
     join(unpacked, 'selection-hook', 'prebuilds', `darwin-${otherArch}`, 'selection-hook.node')
   ]
@@ -133,11 +165,112 @@ function pruneAndVerifyNativeModules(appPath, arch) {
   console.log(`  • verified macOS native modules arch=${arch} count=${expected.length}`)
 }
 
+function verifyRapidOcrAssets(appPath, architectures) {
+  const unpacked = join(appPath, 'Contents', 'Resources', 'app.asar.unpacked')
+  const models = join(unpacked, 'resources', 'rapidocr')
+  for (const name of [
+    'PP-OCRv6_det_small.onnx',
+    'PP-OCRv6_rec_small.onnx',
+    'ch_ppocr_mobile_v2.0_cls_mobile.onnx',
+    'multi_PP-OCRv6_rec_small-dictionary.txt'
+  ]) {
+    const path = join(models, name)
+    if (!existsSync(path)) throw new Error(`Missing packaged RapidOCR model: ${path}`)
+  }
+
+  const ortBin = join(unpacked, 'node_modules', 'onnxruntime-node', 'bin', 'napi-v6')
+  for (const platform of ['linux', 'win32']) {
+    rmSync(join(ortBin, platform), { recursive: true, force: true })
+  }
+  for (const arch of ['x64', 'arm64']) {
+    if (!architectures.includes(arch)) {
+      rmSync(join(ortBin, 'darwin', arch), { recursive: true, force: true })
+      continue
+    }
+    const expectedArchitecture = arch === 'x64' ? 'x86_64' : 'arm64'
+    const ortArchDirectory = join(ortBin, 'darwin', arch)
+    const ortLibrary = existsSync(ortArchDirectory)
+      ? readdirSync(ortArchDirectory).find((name) => /^libonnxruntime\..*\.dylib$/.test(name))
+      : undefined
+    if (!ortLibrary) throw new Error(`Missing packaged ONNX Runtime library: ${ortArchDirectory}`)
+    const nativePaths = [
+      join(ortArchDirectory, 'onnxruntime_binding.node'),
+      join(ortArchDirectory, ortLibrary)
+    ]
+    const imgRoot = join(unpacked, 'node_modules', '@img')
+    const sharpLib = join(imgRoot, `sharp-darwin-${arch}`, 'lib')
+    const vipsLib = join(imgRoot, `sharp-libvips-darwin-${arch}`, 'lib')
+    for (const [directory, suffix] of [
+      [sharpLib, '.node'],
+      [vipsLib, '.dylib']
+    ]) {
+      const name = existsSync(directory)
+        ? readdirSync(directory).find((entry) => entry.endsWith(suffix))
+        : undefined
+      if (!name) throw new Error(`Missing packaged RapidOCR dependency: ${directory}`)
+      nativePaths.push(join(directory, name))
+    }
+    for (const path of nativePaths) {
+      if (!existsSync(path) || !fileArchitecture(path).includes(expectedArchitecture)) {
+        throw new Error(`Wrong or missing ${arch} RapidOCR native dependency: ${path}`)
+      }
+    }
+  }
+
+  console.log(
+    `  • verified RapidOCR models and native dependencies arch=${architectures.join(', ')}`
+  )
+}
+
 function verifyUniversalNativeModules(appPath) {
   const unpacked = join(appPath, 'Contents', 'Resources', 'app.asar.unpacked', 'node_modules')
   const expected = [
     [join(unpacked, '@dictol', 'mdict-native', 'dictol-mdict-node.darwin-x64.node'), 'x86_64'],
     [join(unpacked, '@dictol', 'mdict-native', 'dictol-mdict-node.darwin-arm64.node'), 'arm64'],
+    [
+      join(
+        unpacked,
+        '@dictol',
+        'accessibility-native',
+        'prebuilds',
+        'darwin-x64',
+        'accessibility.node'
+      ),
+      'x86_64'
+    ],
+    [
+      join(
+        unpacked,
+        '@dictol',
+        'accessibility-native',
+        'prebuilds',
+        'darwin-arm64',
+        'accessibility.node'
+      ),
+      'arm64'
+    ],
+    [
+      join(
+        unpacked,
+        '@dictol',
+        'screen-capture-native',
+        'prebuilds',
+        'darwin-x64',
+        'screen-capture.node'
+      ),
+      'x86_64'
+    ],
+    [
+      join(
+        unpacked,
+        '@dictol',
+        'screen-capture-native',
+        'prebuilds',
+        'darwin-arm64',
+        'screen-capture.node'
+      ),
+      'arm64'
+    ],
     [join(unpacked, 'better-sqlite3', 'prebuilds', 'darwin-x64.node'), 'x86_64'],
     [join(unpacked, 'better-sqlite3', 'prebuilds', 'darwin-arm64.node'), 'arm64'],
     [join(unpacked, 'selection-hook', 'prebuilds', 'darwin-x64', 'selection-hook.node'), 'x86_64'],
@@ -173,6 +306,22 @@ function verifyWindowsNativeModules(appOutDir, arch) {
   const unpacked = join(appOutDir, 'resources', 'app.asar.unpacked', 'node_modules')
   const expected = [
     join(unpacked, '@dictol', 'mdict-native', 'dictol-mdict-node.win32-x64-msvc.node'),
+    join(
+      unpacked,
+      '@dictol',
+      'accessibility-native',
+      'prebuilds',
+      'win32-x64',
+      'accessibility.node'
+    ),
+    join(
+      unpacked,
+      '@dictol',
+      'screen-capture-native',
+      'prebuilds',
+      'win32-x64',
+      'screen-capture.node'
+    ),
     join(unpacked, 'adblock-rs', 'js', 'index.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', 'win32-x64.node'),
     join(unpacked, 'selection-hook', 'prebuilds', 'win32-x64', 'selection-hook.node')
@@ -180,6 +329,8 @@ function verifyWindowsNativeModules(appOutDir, arch) {
 
   const nativePackageRoots = [
     join(unpacked, '@dictol', 'mdict-native'),
+    join(unpacked, '@dictol', 'accessibility-native'),
+    join(unpacked, '@dictol', 'screen-capture-native'),
     join(unpacked, 'adblock-rs'),
     join(unpacked, 'better-sqlite3'),
     join(unpacked, 'selection-hook')
@@ -226,16 +377,47 @@ function verifyWindowsNativeModules(appOutDir, arch) {
       `Packaged Windows mdict binding is missing exports: ${missingExports.join(', ')}`
     )
   }
-  const macOnlyExports = [
-    'captureScreenRegion',
-    'recognizeMacText',
-    'readMacAccessibleText',
-    'chineseWordRange'
-  ]
+  const macOnlyExports = ['recognizeMacText', 'chineseWordRange']
   const unexpectedExports = macOnlyExports.filter((name) => mdictBinary.includes(Buffer.from(name)))
   if (unexpectedExports.length > 0) {
     throw new Error(
       `Packaged Windows mdict binding contains macOS-only exports: ${unexpectedExports.join(', ')}`
+    )
+  }
+  const screenCaptureAddonExports = [
+    'captureScreenRegion',
+    'captureWindowsDisplayAtPoint',
+    'captureWindowsScreenRegion',
+    'getWindowsDisplayBoundsAtPoint',
+    'stopWindowsScreenCaptureSessions'
+  ]
+  const unexpectedCaptureExports = screenCaptureAddonExports.filter((name) =>
+    mdictBinary.includes(Buffer.from(name))
+  )
+  if (unexpectedCaptureExports.length > 0) {
+    throw new Error(
+      `Packaged Windows mdict binding contains screen capture exports: ${unexpectedCaptureExports.join(', ')}`
+    )
+  }
+
+  const accessibilityBinary = readFileSync(expected[1])
+  if (!accessibilityBinary.includes(Buffer.from('readAccessibleText'))) {
+    throw new Error('Packaged Windows Accessibility binding is missing readAccessibleText')
+  }
+
+  const screenCaptureBinary = readFileSync(expected[2])
+  const screenCaptureExports = [
+    'captureWindowsDisplayAtPoint',
+    'captureWindowsScreenRegion',
+    'getWindowsDisplayBoundsAtPoint',
+    'stopWindowsScreenCaptureSessions'
+  ]
+  const missingCaptureExports = screenCaptureExports.filter(
+    (name) => !screenCaptureBinary.includes(Buffer.from(name))
+  )
+  if (missingCaptureExports.length > 0) {
+    throw new Error(
+      `Packaged Windows screen capture binding is missing exports: ${missingCaptureExports.join(', ')}`
     )
   }
 
@@ -257,10 +439,12 @@ export default async function stripMacOSSignatures(context) {
   if (universal || process.env.DICTOL_MAC_UNIVERSAL === '1') {
     verifySystemTranslationHelper(appPath, ['x86_64', 'arm64'])
     verifyUniversalNativeModules(appPath)
+    verifyRapidOcrAssets(appPath, ['x64', 'arm64'])
   } else {
     const arch = targetDarwinArch(context)
     verifySystemTranslationHelper(appPath, [arch === 'x64' ? 'x86_64' : 'arm64'])
     pruneAndVerifyNativeModules(appPath, arch)
+    verifyRapidOcrAssets(appPath, [arch])
   }
 
   const { bundles, files } = collectCandidates(appPath)

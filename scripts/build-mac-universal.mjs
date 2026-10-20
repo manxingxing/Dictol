@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -19,6 +19,7 @@ if (!existsSync(addonPath)) throw new Error(`Missing adblock-rs addon: ${addonPa
 const tempDirectory = mkdtempSync(join(tmpdir(), 'dictol-mac-universal-'))
 const originalAddon = join(tempDirectory, 'adblock-index.original.node')
 copyFileSync(addonPath, originalAddon)
+const addedOptionalPackages = []
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const binary = (name) => {
@@ -42,7 +43,10 @@ const runBinary = (name, args, env = {}) =>
   })
 
 const buildNativeForTarget = (target) => {
-  runNpm(['run', 'native:build'], { DICTOL_NATIVE_TARGET: target.rust })
+  runNpm(['run', 'native:build'], {
+    DICTOL_NATIVE_TARGET: target.rust,
+    MACOSX_DEPLOYMENT_TARGET: '14.0'
+  })
   const addon = join(nativeDirectory, `dictol-mdict-node.${target.napi}.node`)
   if (!existsSync(addon)) {
     throw new Error(`Native binding build did not produce ${target.napi}: ${addon}`)
@@ -66,6 +70,33 @@ const verifyArchitecture = (path, architecture) => {
   }
 }
 
+const ensureSharpDependencies = () => {
+  const lock = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8'))
+  for (const arch of ['x64', 'arm64']) {
+    for (const prefix of ['sharp-darwin', 'sharp-libvips-darwin']) {
+      const name = `@img/${prefix}-${arch}`
+      const destination = join(root, 'node_modules', '@img', `${prefix}-${arch}`)
+      if (existsSync(join(destination, 'package.json'))) continue
+      const version = lock.packages[`node_modules/${name}`]?.version
+      if (!version) throw new Error(`Missing optional Sharp package in lockfile: ${name}`)
+      const tarball = execFileSync(
+        npm,
+        ['pack', `${name}@${version}`, '--pack-destination', tempDirectory, '--silent'],
+        { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }
+      ).trim()
+      mkdirSync(destination, { recursive: true })
+      addedOptionalPackages.push(destination)
+      execFileSync('tar', [
+        '-xzf',
+        join(tempDirectory, tarball),
+        '--strip-components=1',
+        '-C',
+        destination
+      ])
+    }
+  }
+}
+
 try {
   for (const target of targets) buildNativeForTarget(target)
   runNpm(['run', 'system-translation:build', '--', '--universal'])
@@ -83,12 +114,15 @@ try {
   })
   copyFileSync(universalAdblock, addonPath)
 
+  runNpm(['run', 'rapidocr:prepare'])
+  ensureSharpDependencies()
   runNpm(['run', 'typecheck'])
   runBinary('electron-vite', ['build'])
   runBinary('electron-builder', ['--mac', '--universal', ...process.argv.slice(2)], {
     DICTOL_MAC_UNIVERSAL: '1'
   })
 } finally {
+  for (const path of addedOptionalPackages) rmSync(path, { recursive: true, force: true })
   copyFileSync(originalAddon, addonPath)
   rmSync(tempDirectory, { recursive: true, force: true })
 }

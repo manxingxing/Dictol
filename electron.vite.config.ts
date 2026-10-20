@@ -16,6 +16,7 @@ export default defineConfig({
         input: {
           index: resolve('src/main/index.ts'),
           'dictionary-import-worker': resolve('src/main/dictionary-import-worker.ts'),
+          'rapid-ocr-worker': resolve('src/main/rapid-ocr-worker.ts'),
           'wordbook-export-worker': resolve('src/main/wordbook-export-worker.ts')
         }
       }

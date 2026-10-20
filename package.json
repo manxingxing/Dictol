@@ -6,7 +6,7 @@
   "author": "Alan Mann",
   "private": true,
   "engines": {
-    "node": ">=22.12.0 <24.0.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "format": "prettier --write .",
@@ -15,8 +15,9 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "start": "electron-vite preview",
-    "dev": "npm run native:build && npm run system-translation:build && electron-vite dev",
-    "build": "npm run native:build && npm run system-translation:build && npm run adblock:build && npm run typecheck && electron-vite build",
+    "dev": "npm run native:build && npm run system-translation:build && npm run rapidocr:prepare && electron-vite dev",
+    "build": "npm run native:build && npm run system-translation:build && npm run adblock:build && npm run rapidocr:prepare && npm run typecheck && electron-vite build",
+    "rapidocr:prepare": "node scripts/prepare-rapidocr-models.mjs",
     "native:build": "node scripts/build-native.mjs",
     "system-translation:build": "node scripts/build-system-translation.mjs",
     "native:build:win-x64": "node scripts/build-native.mjs --target x86_64-pc-windows-msvc",
@@ -43,6 +44,8 @@
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@dictol/mdict-native": "file:native/mdict-node",
+    "@dictol/accessibility-native": "file:native/accessibility",
+    "@dictol/screen-capture-native": "file:native/screen-capture",
     "@electron-toolkit/utils": "^4.0.0",
     "@radix-ui/react-popover": "^1.1.23",
     "@tiptap/core": "^3.31.4",
@@ -61,7 +64,13 @@
     "postcss": "^8.5.25",
     "postcss-selector-parser": "^7.1.6",
     "postcss-value-parser": "^4.2.0",
+    "rapidocr-node": "0.2.3",
     "selection-hook": "^2.1.1"
+  },
+  "overrides": {
+    "rapidocr-node": {
+      "onnxruntime-node": "1.23.0"
+    }
   },
   "devDependencies": {
     "@assistant-ui/react": "^0.15.11",
@@ -92,7 +101,7 @@
     "@tanstack/react-virtual": "^3.14.13",
     "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "latest",
-    "@types/node": "^22.19.1",
+    "@types/node": "^24.19.2",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",

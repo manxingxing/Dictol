@@ -107,7 +107,7 @@ export class SelectionToolbarController extends BaseController {
     const version = ++this.ocrCaptureVersion
     const anchor = createCursorAnchor()
     let ocrAiVersion: number | undefined
-    const onScreenshotCaptured =
+    const onCaptureReady =
       mode === 'ai'
         ? (): void => {
             if (version !== this.ocrCaptureVersion) return
@@ -120,12 +120,12 @@ export class SelectionToolbarController extends BaseController {
       this.explanation.prepareForOcrCapture()
       this.dismissForMainExplanation()
       if (mode === 'ai') this.explanation.prewarmExplanationWindow()
-      const capture = await captureTextUnderCursor(mode, onScreenshotCaptured)
+      const capture = await captureTextUnderCursor(mode, onCaptureReady)
       if (version !== this.ocrCaptureVersion) return
       this.explanation.setAnchor(anchor)
       if (!capture) {
         if (mode === 'ai' && ocrAiVersion !== undefined) {
-          this.explanation.showOcrAiRecognitionError(ocrAiVersion, '鼠标下没有识别到英文内容。')
+          this.explanation.showOcrAiRecognitionError(ocrAiVersion, '鼠标下没有识别到可解释的文字。')
         } else {
           this.explanation.showOcrError(mode, '鼠标下没有识别到词语。')
         }

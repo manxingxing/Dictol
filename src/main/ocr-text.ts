@@ -5,7 +5,9 @@ export type OcrObservation = {
   width: number
   height: number
   confidence?: number
-  /** UTF-16 ranges and Vision-normalized boxes; accurate recognition has word-level geometry. */
+  /** Text quadrilateral in reading order, normalized with a top-left origin. */
+  quad?: Array<{ x: number; y: number }>
+  /** UTF-16 ranges and normalized boxes with a bottom-left origin. */
   characters?: Array<{
     start: number
     length: number
@@ -27,6 +29,8 @@ export type OcrTextHit = {
   confidence?: number
   bounds: { x: number; y: number; width: number; height: number }
   contextBounds: { x: number; y: number; width: number; height: number }
+  /** The current OCR crop already contains a sentence on each side. */
+  hasBothAdjacentSentences: boolean
 }
 
 type WordRange = { start: number; length: number }
@@ -38,6 +42,8 @@ type SentenceContext = {
   context: string
   start: number
   end: number
+  hasPrevious: boolean
+  hasNext: boolean
 }
 
 const wordSegmenter = new Intl.Segmenter(undefined, { granularity: 'word' })
@@ -82,11 +88,13 @@ export function sentenceContextAt(text: string, offset: number): SentenceContext
     sentence: sentences[current].text,
     context: text.slice(start, end).trim(),
     start,
-    end
+    end,
+    hasPrevious: current > 0,
+    hasNext: current < sentences.length - 1
   }
 }
 
-/** Vision boxes use a bottom-left origin; pointer coordinates use a top-left origin. */
+/** OCR boxes use a bottom-left origin; pointer coordinates use a top-left origin. */
 export function selectOcrText(
   observations: OcrObservation[],
   pointer: { x: number; y: number },
@@ -105,13 +113,27 @@ export function selectOcrTextHit(
     .filter((item) => item.text.trim() && item.width > 0 && item.height > 0)
     .map((item) => ({ ...item, top: 1 - item.y - item.height, bottom: 1 - item.y }))
     .sort((a, b) => a.top - b.top || a.x - b.x)
-  const hit = lines.findIndex(
+  let hit = lines.findIndex(
     (line) =>
       pointer.x >= line.x &&
       pointer.x <= line.x + line.width &&
       pointer.y >= line.top &&
       pointer.y <= line.bottom
   )
+  if (hit < 0) {
+    // OCR boxes can be a little narrower than the rendered glyphs. Pick the
+    // closest nearby line, as Flow Translate does, before giving up on the hover.
+    const nearby = lines
+      .map((line, index) => ({
+        index,
+        dx: Math.max(line.x - pointer.x, 0, pointer.x - line.x - line.width) * aspectRatio,
+        dy: Math.max(line.top - pointer.y, 0, pointer.y - line.bottom),
+        height: line.height
+      }))
+      .filter(({ dx, dy, height }) => dx <= height * 0.9 && dy <= height * 0.5)
+      .sort((a, b) => a.dx ** 2 + a.dy ** 2 - (b.dx ** 2 + b.dy ** 2))
+    hit = nearby[0]?.index ?? -1
+  }
   if (hit < 0) return null
 
   const target = lines[hit]
@@ -130,17 +152,25 @@ export function selectOcrTextHit(
     approximateIndex++
   }
   const characterOffset =
-    characterOffsetFromVision(target, pointer.x) ??
+    characterOffsetFromBoxes(target, pointer.x) ??
     characters.slice(0, approximateIndex).join('').length
 
+  const columnBoundaries = findColumnBoundaries(lines, aspectRatio)
+  const columnLeft = columnBoundaries.filter((boundary) => boundary < pointer.x).at(-1) ?? 0
+  const columnRight = columnBoundaries.find((boundary) => boundary > pointer.x) ?? 1
+  const columnLines = lines.filter((line) => {
+    const center = line.x + line.width / 2
+    return line === target || (center > columnLeft && center < columnRight)
+  })
   const paragraph = [target]
   for (const preceding of [true, false]) {
     let edge = target
     for (let count = 0; count < 40; count++) {
-      const next = lines
+      const next = columnLines
         .filter(
           (line) =>
-            !paragraph.includes(line) && isAdjacentLine(edge, line, target, preceding, aspectRatio)
+            !paragraph.includes(line) &&
+            isAdjacentLine(edge, line, target, preceding, aspectRatio)
         )
         .sort(
           (a, b) =>
@@ -216,7 +246,7 @@ export function selectOcrTextHit(
   const targetTextVisualWidth = visualWidth(targetText, mixedCjkLatin)
   const wordLeft = visualWidth(targetText.slice(0, wordStart), mixedCjkLatin)
   const wordRight = visualWidth(targetText.slice(0, wordEnd), mixedCjkLatin)
-  const visionBounds = wordBoundsFromVision(
+  const measuredBounds = wordBoundsFromBoxes(
     target,
     wordStart + target.text.length - target.text.trimStart().length,
     wordEnd + target.text.length - target.text.trimStart().length
@@ -228,7 +258,7 @@ export function selectOcrTextHit(
       context: sentenceContext.context
     },
     confidence: target.confidence,
-    bounds: visionBounds ?? {
+    bounds: measuredBounds ?? {
       x: target.x + (wordLeft / targetTextVisualWidth) * target.width,
       y: target.top,
       width: ((wordRight - wordLeft) / targetTextVisualWidth) * target.width,
@@ -239,11 +269,12 @@ export function selectOcrTextHit(
       y: contextTop,
       width: contextRight - contextLeft,
       height: contextBottom - contextTop
-    }
+    },
+    hasBothAdjacentSentences: sentenceContext.hasPrevious && sentenceContext.hasNext
   }
 }
 
-function characterOffsetFromVision(line: Line, pointerX: number): number | null {
+function characterOffsetFromBoxes(line: Line, pointerX: number): number | null {
   const boxes = line.characters?.filter((box) => box.width > 0 && box.length > 0)
   if (!boxes?.length) return null
   const distance = (box: (typeof boxes)[number]): number =>
@@ -260,7 +291,7 @@ function characterOffsetFromVision(line: Line, pointerX: number): number | null 
   return sameWord[Math.floor(position * sameWord.length)].start
 }
 
-function wordBoundsFromVision(line: Line, start: number, end: number): OcrTextHit['bounds'] | null {
+function wordBoundsFromBoxes(line: Line, start: number, end: number): OcrTextHit['bounds'] | null {
   const boxes = line.characters?.filter(
     (box) => box.start < end && box.start + box.length > start && box.width > 0 && box.height > 0
   )
@@ -318,27 +349,122 @@ function isAdjacentLine(
     const horizontalGap = preceding
       ? edge.x - candidate.x - candidate.width
       : candidate.x - edge.x - edge.width
+    // OCR may split a printed row at a style change. Join only across a
+    // word-sized gap; a larger gap can be the gutter between PDF columns.
     return (
       (preceding ? candidate.x < edge.x : candidate.x > edge.x) &&
       heightRatio >= 0.7 &&
       heightRatio <= 1.4 &&
       horizontalGap * aspectRatio >= -lineHeight * 0.25 &&
-      horizontalGap * aspectRatio <= lineHeight * 1.5
+      horizontalGap * aspectRatio <= lineHeight * 0.5
     )
+  }
+  if (heightRatio >= 0.7 && heightRatio <= 1.4 && areStackedTextLines(upper, lower, aspectRatio)) {
+    return true
   }
   return (
     (preceding ? candidate.top < edge.top : candidate.top > edge.top) &&
     heightRatio >= 0.7 &&
     heightRatio <= 1.4 &&
-    verticalGap >= -lineHeight * 0.25 &&
-    verticalGap <= lineHeight * 0.45 &&
+    verticalGap >= -lineHeight * 0.15 &&
+    verticalGap <= lineHeight * 1.1 &&
     Math.abs(candidate.x - anchor.x) * aspectRatio <= anchor.height * 2
+  )
+}
+
+function areStackedTextLines(upper: Line, lower: Line, aspectRatio: number): boolean {
+  const upperQuad = upper.quad
+  const lowerQuad = lower.quad
+  if (upperQuad?.length !== 4 || lowerQuad?.length !== 4) return false
+  const vector = (
+    from: { x: number; y: number },
+    to: { x: number; y: number }
+  ): { x: number; y: number } => ({
+    x: (to.x - from.x) * aspectRatio,
+    y: to.y - from.y
+  })
+  const upperBaseline = vector(upperQuad[0], upperQuad[1])
+  const lowerBaseline = vector(lowerQuad[0], lowerQuad[1])
+  const upperLength = Math.hypot(upperBaseline.x, upperBaseline.y)
+  const lowerLength = Math.hypot(lowerBaseline.x, lowerBaseline.y)
+  if (!upperLength || !lowerLength) return false
+  const tangent = { x: upperBaseline.x / upperLength, y: upperBaseline.y / upperLength }
+  if (
+    (upperBaseline.x * lowerBaseline.x + upperBaseline.y * lowerBaseline.y) /
+      (upperLength * lowerLength) <
+    0.95
+  ) {
+    return false
+  }
+  const normal = { x: -tangent.y, y: tangent.x }
+  const thickness = (quad: Array<{ x: number; y: number }>): number => {
+    const edge = vector(quad[0], quad[3])
+    return edge.x * normal.x + edge.y * normal.y
+  }
+  const lineHeight = Math.min(thickness(upperQuad), thickness(lowerQuad))
+  if (lineHeight <= 0) return false
+  const center = (quad: Array<{ x: number; y: number }>): { x: number; y: number } => ({
+    x: (quad.reduce((sum, point) => sum + point.x, 0) * aspectRatio) / 4,
+    y: quad.reduce((sum, point) => sum + point.y, 0) / 4
+  })
+  const first = center(upperQuad)
+  const second = center(lowerQuad)
+  const difference = { x: second.x - first.x, y: second.y - first.y }
+  const rowSpacing = difference.x * normal.x + difference.y * normal.y
+  const tangentShift = difference.x * tangent.x + difference.y * tangent.y
+  return (
+    rowSpacing >= lineHeight * 0.35 &&
+    rowSpacing <= lineHeight * 1.5 &&
+    Math.abs(tangentShift) <= lineHeight * 1.5
   )
 }
 
 function sharesVisualLine(first: Line, second: Line): boolean {
   const overlap = Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top)
   return overlap >= Math.min(first.height, second.height) * 0.65
+}
+
+function findColumnBoundaries(lines: Line[], aspectRatio: number): number[] {
+  const gaps = lines.flatMap((right) => {
+    let left: Line | undefined
+    for (const line of lines) {
+      if (
+        line !== right &&
+        sharesVisualLine(line, right) &&
+        line.x + line.width <= right.x &&
+        (!left || line.x + line.width > left.x + left.width)
+      ) {
+        left = line
+      }
+    }
+    if (!left) return []
+    const gap = right.x - left.x - left.width
+    const height = Math.max(left.height, right.height)
+    if (gap * aspectRatio < height * 0.4) return []
+    return [{ x: left.x + left.width + gap / 2, y: (left.top + right.top) / 2, height }]
+  })
+
+  const clusters: (typeof gaps)[] = []
+  for (const gap of gaps.sort((a, b) => a.x - b.x)) {
+    const cluster = clusters.find(
+      (items) =>
+        Math.abs(items[0].x - gap.x) * aspectRatio <=
+        Math.max(items[0].height, gap.height) * 1.25
+    )
+    if (cluster) cluster.push(gap)
+    else clusters.push([gap])
+  }
+  return clusters
+    .filter((items) =>
+      items.some(
+        (first) =>
+          items.some(
+            (second) =>
+              Math.abs(first.y - second.y) >= Math.min(first.height, second.height) * 0.75
+          )
+      )
+    )
+    .map((items) => items[Math.floor(items.length / 2)].x)
 }
 
 function isHeadingBoundary(upper: Line, lower: Line): boolean {

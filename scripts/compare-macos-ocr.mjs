@@ -12,6 +12,24 @@ const metadataPath = resolve(input)
 const metadata = JSON.parse(await readFile(metadataPath, 'utf8'))
 const png = await readFile(metadataPath.replace(/\.json$/u, '.png'))
 const pointer = metadata.pointerInImage
+const hoveredLine = (observations) =>
+  observations.find(
+    (item) =>
+      pointer.x >= item.x &&
+      pointer.x <= item.x + item.width &&
+      pointer.y >= 1 - item.y - item.height &&
+      pointer.y <= 1 - item.y
+  )
+
+console.log(
+  JSON.stringify({
+    profile: 'captured-app-ocr',
+    hoveredLine: hoveredLine(metadata.observations)?.text ?? null,
+    selectedWord: metadata.selected?.selection.word ?? null,
+    observations: metadata.observations.length
+  })
+)
+
 const profiles = [
   ['default', ['ja-JP', 'zh-Hans', 'en-US', 'zh-Hant']],
   ['simplified-chinese', ['zh-Hans']],
@@ -22,13 +40,7 @@ const profiles = [
 for (const [name, languages] of profiles) {
   const started = performance.now()
   const result = await native.recognizeMacText(png, languages, true)
-  const line = result.observations.find(
-    (item) =>
-      pointer.x >= item.x &&
-      pointer.x <= item.x + item.width &&
-      pointer.y >= 1 - item.y - item.height &&
-      pointer.y <= 1 - item.y
-  )
+  const line = hoveredLine(result.observations)
   console.log(
     JSON.stringify({
       profile: name,
