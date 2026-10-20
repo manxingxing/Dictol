@@ -152,6 +152,8 @@ function rewriteResourceHref(href: string, dictionaryId: number): string {
     return href
   }
 
+  if (/^file:\/\//i.test(trimmed)) return rewriteDictionaryHref(trimmed, dictionaryId)
+
   try {
     const url = new URL(trimmed, `dictol-entry://dictionary-${dictionaryId}.dictol/`)
     if (url.pathname.toLowerCase().endsWith('.css')) {
