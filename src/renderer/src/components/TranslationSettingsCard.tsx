@@ -38,9 +38,9 @@ const providerNames: Record<ConfigurableProviderKind, string> = {
   microsoft: 'Microsoft 翻译',
   deepl: 'DeepL 翻译',
   volcano: '火山翻译',
-  'youdao-web': '有道-网页版',
-  'google-web': 'Google 翻译 - 网页版',
-  'bing-web': 'Bing 翻译 - 网页版',
+  'youdao-web': '有道在线翻译',
+  'google-web': 'Google 在线翻译',
+  'bing-web': 'Bing 在线翻译',
   'openai-compatible': 'OpenAI 兼容 LLM'
 }
 const webProviderKinds: TranslationProviderKind[] = ['youdao-web', 'google-web', 'bing-web']
