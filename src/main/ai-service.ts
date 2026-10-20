@@ -111,7 +111,7 @@ export class AiLookupService {
         body: JSON.stringify(
           createAiCompletionBody({
             model: config.model,
-            stream: true,
+            stream: promptTarget !== 'ocr-context',
             purpose: 'lookup',
             messages: [{ role: 'system', content: systemPrompt }, ...requestMessages]
           })
@@ -122,6 +122,21 @@ export class AiLookupService {
       if (!response.ok) {
         const text = await response.text().catch(() => '')
         throw new Error(formatProviderError(response.status, text))
+      }
+      if (promptTarget === 'ocr-context') {
+        const completion = (await response.json()) as {
+          choices?: Array<{ message?: { content?: unknown }; finish_reason?: unknown }>
+        } | null
+        const choice = completion?.choices?.[0]
+        if (choice?.finish_reason === 'length' || choice?.finish_reason === 'max_tokens') {
+          throw new Error('AI 输出达到长度上限，结果不完整，请重试。')
+        }
+        const content = choice?.message?.content
+        if (typeof content !== 'string') throw new Error('AI 未返回有效的 JSON 解释。')
+        const event: AiStreamEvent = { type: 'delta', text: content }
+        send(event)
+        yield event
+        return
       }
       if (!response.body) throw new Error('服务没有返回可读取的响应。')
 
