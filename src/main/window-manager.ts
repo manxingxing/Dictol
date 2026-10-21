@@ -416,6 +416,7 @@ export class WindowManager {
       window = highlightWindow
       this.ocrHighlightWindow = highlightWindow
       highlightWindow.setIgnoreMouseEvents(true)
+      if (process.platform === 'win32') applySelectionWindowBehavior(highlightWindow)
       void highlightWindow
         .loadURL(ocrHighlightPage)
         .then(() => {
@@ -504,6 +505,17 @@ export class WindowManager {
         this.ocrHighlightVersion === version
       ) {
         window.showInactive()
+        if (process.platform === 'win32') {
+          window.moveTop()
+          const explanation = this.selectionExplanationWindow
+          if (
+            explanation instanceof BrowserWindow &&
+            !explanation.isDestroyed() &&
+            explanation.isVisible()
+          ) {
+            explanation.moveTop()
+          }
+        }
       }
       if (!(await painting)) throw new Error('OCR highlight element is missing')
     } catch (error) {

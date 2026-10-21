@@ -28,6 +28,7 @@ export function showSelectionWindowInactive(
   }
 
   window.showInactive()
+  if (process.platform === 'win32') window.moveTop()
 }
 
 /**
