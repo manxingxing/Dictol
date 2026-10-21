@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { BookOpenText } from 'lucide-react'
 import { toast } from 'sonner'
 import { AiLookupButton } from '@/components/AiLookupButton'
@@ -22,6 +22,7 @@ import { SearchResultToolbar } from './search-result/SearchResultToolbar'
 
 export function SearchResultPage(): React.JSX.Element {
   const { term } = useParams()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const normalizedTerm = term?.trim()
   const anchor = searchParams.get(DICTIONARY_ENTRY_ANCHOR_PARAM) ?? undefined
