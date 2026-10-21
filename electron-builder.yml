@@ -24,6 +24,7 @@ files:
   - '!docs/**'
   - '!native/**'
   - '!scripts/**'
+  - '!node_modules/**/*.map'
   - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules}/**'
   - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,index.d.ts,package-lock.json}'
   - '!node_modules/@dictol/accessibility-native/{macos,windows,target,test,node_modules}/**'
@@ -87,6 +88,7 @@ win:
     - '!docs/**'
     - '!native/**'
     - '!scripts/**'
+    - '!node_modules/**/*.map'
     - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules}/**'
     - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,index.d.ts,package-lock.json}'
     - '!node_modules/@dictol/accessibility-native/{macos,windows,target,test,node_modules}/**'
@@ -149,7 +151,7 @@ mac:
   artifactName: ${name}-${version}-${arch}-mac.${ext}
   # The native files with architecture-specific names are present in both
   # universal staging apps; adblock-rs and system translation are lipo-merged.
-  x64ArchFiles: '**/{app.asar.unpacked/{node_modules/@dictol/mdict-native/*.darwin-*.node,node_modules/@dictol/accessibility-native/prebuilds/darwin-x64/accessibility.node,node_modules/@dictol/screen-capture-native/prebuilds/darwin-x64/screen-capture.node,node_modules/@dictol/ocr-native/prebuilds/darwin-x64/ocr.node,node_modules/better-sqlite3/prebuilds/darwin-*.node,node_modules/selection-hook/prebuilds/darwin-*/selection-hook.node,resources/system-translation/dictol-system-translation,resources/sqlite-simple/darwin-*/libsimple.dylib},sqlite-simple/darwin-*/libsimple.dylib}'
+  x64ArchFiles: '**/{app.asar.unpacked/{node_modules/@dictol/mdict-native/*.darwin-*.node,node_modules/@dictol/accessibility-native/prebuilds/darwin-x64/accessibility.node,node_modules/@dictol/screen-capture-native/prebuilds/darwin-x64/screen-capture.node,node_modules/@dictol/ocr-native/prebuilds/darwin-x64/ocr.node,node_modules/better-sqlite3/prebuilds/darwin-*.node,node_modules/selection-hook/prebuilds/darwin-*/selection-hook.node,resources/system-translation/dictol-system-translation},sqlite-simple/darwin-*/libsimple.dylib}'
   # Do not let electron-builder sign with a fallback identity. The afterPack
   # hook ad-hoc signs executable code on both macOS architectures; the app has
   # no Developer ID identity and is not notarized.
@@ -167,6 +169,7 @@ mac:
     - drizzle/**
     - resources/**
     - '!resources/ecdict/**'
+    - '!resources/sqlite-simple/**'
     - '!**/.vscode/*'
     - '!src/*'
     - '!electron.vite.config.{js,ts,mjs,cjs}'
@@ -179,6 +182,7 @@ mac:
     - '!docs/**'
     - '!native/**'
     - '!scripts/**'
+    - '!node_modules/**/*.map'
     - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules}/**'
     - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,index.d.ts,package-lock.json}'
     - '!node_modules/@dictol/accessibility-native/{macos,windows,target,test,node_modules}/**'
@@ -236,6 +240,7 @@ linux:
     - '!resources/sqlite-simple/**'
     - '!native/**'
     - '!scripts/**'
+    - '!node_modules/**/*.map'
     - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules}/**'
     - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,index.d.ts,package-lock.json}'
     - '!node_modules/@dictol/mdict-native/*.darwin-*.node'

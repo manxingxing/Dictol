@@ -90,6 +90,27 @@ function resolveAppBundle(appOutDir) {
   return join(appOutDir, appBundle)
 }
 
+function pruneSqliteSimple(resourcesPath, platform, arch) {
+  const driversPath = join(resourcesPath, 'sqlite-simple')
+  const targets =
+    platform === 'darwin'
+      ? arch === 'universal'
+        ? ['darwin-x64', 'darwin-arm64']
+        : [`darwin-${arch}`]
+      : [`${platform}-${arch}`]
+
+  for (const target of targets) {
+    if (!existsSync(join(driversPath, target))) {
+      throw new Error(`Missing packaged SQLite driver: ${join(driversPath, target)}`)
+    }
+  }
+
+  for (const entry of readdirSync(driversPath)) {
+    if (!targets.includes(entry)) rmSync(join(driversPath, entry), { recursive: true, force: true })
+  }
+  console.log(`  • kept SQLite driver(s) ${targets.join(', ')}`)
+}
+
 function verifySystemTranslationHelper(appPath, architectures) {
   const helper = join(
     appPath,
@@ -403,7 +424,18 @@ function verifyWindowsNativeModules(appOutDir, arch) {
 export default async function verifyAndSignNativePackages(context) {
   if (context.electronPlatformName === 'win32') {
     const arch = context.arch === 1 || context.arch === 'x64' ? 'x64' : String(context.arch)
+    pruneSqliteSimple(join(context.appOutDir, 'resources'), 'win32', arch)
     verifyWindowsNativeModules(context.appOutDir, arch)
+    return
+  }
+  if (context.electronPlatformName === 'linux') {
+    const arch =
+      context.arch === 1 || context.arch === 'x64'
+        ? 'x64'
+        : context.arch === 3 || context.arch === 'arm64'
+          ? 'arm64'
+          : String(context.arch)
+    pruneSqliteSimple(join(context.appOutDir, 'resources'), 'linux', arch)
     return
   }
   if (context.electronPlatformName !== 'darwin') return
@@ -412,11 +444,12 @@ export default async function verifyAndSignNativePackages(context) {
   if (!existsSync(appPath)) throw new Error(`Packaged app does not exist: ${appPath}`)
 
   const universal = context.arch === 4 || context.arch === 'universal'
+  const arch = universal ? 'universal' : targetDarwinArch(context)
+  pruneSqliteSimple(join(appPath, 'Contents', 'Resources'), 'darwin', arch)
   if (universal || process.env.DICTOL_MAC_UNIVERSAL === '1') {
     verifySystemTranslationHelper(appPath, ['x86_64', 'arm64'])
     verifyUniversalNativeModules(appPath)
   } else {
-    const arch = targetDarwinArch(context)
     verifySystemTranslationHelper(appPath, [arch === 'x64' ? 'x86_64' : 'arm64'])
     pruneAndVerifyNativeModules(appPath, arch)
   }
