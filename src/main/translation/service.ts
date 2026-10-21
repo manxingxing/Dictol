@@ -55,6 +55,13 @@ export class TranslationService {
     if (index >= 0 && providers[index].kind !== input.kind) {
       throw new Error('不能改变现有服务的类型。')
     }
+    if (
+      index < 0 &&
+      ['youdao-web', 'google-web', 'bing-web'].includes(input.kind) &&
+      providers.some((provider) => provider.kind === input.kind)
+    ) {
+      throw new Error('该网页版翻译服务已添加。')
+    }
     const provider: TranslationProviderConfig = {
       id: input.id,
       kind: input.kind,
@@ -140,6 +147,7 @@ export class TranslationService {
     if (!this.isReady(provider, credentials)) throw new Error('请先完成服务配置。')
     const targetLanguage = provider.kind === 'system' ? config.translation.targetLanguage : 'zh'
     const sourceLanguage = targetLanguage === 'en' ? 'zh' : 'en'
+    const verificationText = sourceLanguage === 'zh' ? '你好' : 'Hello'
     const controller = new AbortController()
     const timeout = setTimeout(
       () => controller.abort(),
@@ -151,7 +159,7 @@ export class TranslationService {
         credentials,
         request: {
           providerId: id,
-          text: sourceLanguage === 'zh' ? '你好' : 'Hello',
+          text: provider.kind === 'youdao-web' ? 'This is a test.' : verificationText,
           sourceLanguage,
           targetLanguage
         },
@@ -238,6 +246,10 @@ export class TranslationService {
         return Boolean(options.baseUrl && options.model)
       case 'system':
         return isSystemTranslationAvailable()
+      case 'youdao-web':
+      case 'google-web':
+      case 'bing-web':
+        return true
       case 'volcano':
         return Boolean(credentials.accessKeyId && credentials.secretAccessKey)
       case 'google':
@@ -295,7 +307,10 @@ function normalizeOptions(
     microsoft: ['region', 'endpoint'],
     volcano: [],
     deepl: ['plan'],
-    'openai-compatible': ['baseUrl', 'model']
+    'openai-compatible': ['baseUrl', 'model'],
+    'youdao-web': [],
+    'google-web': [],
+    'bing-web': []
   }
   const options: Record<string, string> = {}
   for (const [key, item] of Object.entries(value)) {

@@ -18,7 +18,15 @@ export const SELECTION_TRANSLATION_INITIAL_HEIGHT = 264
 export const SELECTION_TRANSLATION_MAX_HEIGHT = 760
 
 export type TranslationProviderKind =
-  'system' | 'google' | 'microsoft' | 'volcano' | 'deepl' | 'openai-compatible'
+  | 'system'
+  | 'google'
+  | 'microsoft'
+  | 'volcano'
+  | 'deepl'
+  | 'openai-compatible'
+  | 'youdao-web'
+  | 'google-web'
+  | 'bing-web'
 
 export type TranslationProviderConfig = {
   id: string

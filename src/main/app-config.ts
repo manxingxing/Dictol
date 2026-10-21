@@ -318,8 +318,16 @@ function normalizeTranslationProviders(value: unknown): TranslationProviderConfi
     'microsoft',
     'volcano',
     'deepl',
-    'openai-compatible'
+    'openai-compatible',
+    'youdao-web',
+    'google-web',
+    'bing-web'
   ]
+  const renamedWebProviders: Partial<Record<TranslationProviderKind, [string, string]>> = {
+    'youdao-web': ['有道-网页版', '有道在线翻译'],
+    'google-web': ['Google 翻译 - 网页版', 'Google 在线翻译'],
+    'bing-web': ['Bing 翻译 - 网页版', 'Bing 在线翻译']
+  }
   for (const item of value) {
     if (!item || typeof item !== 'object') continue
     const provider = item as Record<string, unknown>
@@ -341,7 +349,10 @@ function normalizeTranslationProviders(value: unknown): TranslationProviderConfi
       microsoft: ['region', 'endpoint'],
       volcano: [],
       deepl: ['plan'],
-      'openai-compatible': ['baseUrl', 'model']
+      'openai-compatible': ['baseUrl', 'model'],
+      'youdao-web': [],
+      'google-web': [],
+      'bing-web': []
     }
     if (provider.options && typeof provider.options === 'object') {
       for (const [key, option] of Object.entries(provider.options)) {
@@ -354,15 +365,16 @@ function normalizeTranslationProviders(value: unknown): TranslationProviderConfi
         }
       }
     }
+    const kind = provider.kind as TranslationProviderKind
+    const name =
+      typeof provider.name === 'string' && provider.name.trim() && provider.name.length <= 100
+        ? provider.name.trim()
+        : kind
+    const renamed = renamedWebProviders[kind]
     providers.push({
       id: provider.id,
-      kind: provider.kind as TranslationProviderKind,
-      name:
-        provider.kind === 'system'
-          ? '系统翻译'
-          : typeof provider.name === 'string' && provider.name.trim() && provider.name.length <= 100
-            ? provider.name.trim()
-            : (provider.kind as TranslationProviderKind),
+      kind,
+      name: kind === 'system' ? '系统翻译' : renamed && name === renamed[0] ? renamed[1] : name,
       enabled: provider.enabled === true,
       options: provider.kind === 'system' ? {} : options
     })

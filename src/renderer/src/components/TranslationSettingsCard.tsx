@@ -38,8 +38,12 @@ const providerNames: Record<ConfigurableProviderKind, string> = {
   microsoft: 'Microsoft 翻译',
   deepl: 'DeepL 翻译',
   volcano: '火山翻译',
+  'youdao-web': '有道在线翻译',
+  'google-web': 'Google 在线翻译',
+  'bing-web': 'Bing 在线翻译',
   'openai-compatible': 'OpenAI 兼容 LLM'
 }
+const webProviderKinds: TranslationProviderKind[] = ['youdao-web', 'google-web', 'bing-web']
 
 export function TranslationSettingsCard(): React.JSX.Element {
   const [config, setConfig] = useState<TranslationPublicConfig | null>(null)
@@ -110,7 +114,7 @@ export function TranslationSettingsCard(): React.JSX.Element {
   }
 
   const beginAdd = (kind: ConfigurableProviderKind): void => {
-    setDraft({
+    const provider: TranslationSaveProviderRequest = {
       id: crypto.randomUUID(),
       kind,
       name: providerNames[kind],
@@ -122,7 +126,12 @@ export function TranslationSettingsCard(): React.JSX.Element {
             ? { baseUrl: 'https://api.openai.com/v1', model: '' }
             : {},
       credentials: {}
-    })
+    }
+    if (webProviderKinds.includes(kind)) {
+      void apply(provider.id, () => window.dictol.translation.saveProvider(provider))
+      return
+    }
+    setDraft(provider)
     setError('')
   }
 
@@ -315,7 +324,7 @@ export function TranslationSettingsCard(): React.JSX.Element {
               </p>
             </div>
             <div className="flex items-center gap-1">
-              {provider.kind !== 'system' && (
+              {provider.kind !== 'system' && !webProviderKinds.includes(provider.kind) && (
                 <Button
                   disabled={Boolean(busyOperation)}
                   onClick={() => beginEdit(provider)}
@@ -391,14 +400,20 @@ export function TranslationSettingsCard(): React.JSX.Element {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              {Object.entries(providerNames).map(([kind, name]) => (
-                <DropdownMenuItem
-                  key={kind}
-                  onSelect={() => beginAdd(kind as ConfigurableProviderKind)}
-                >
-                  {name}
-                </DropdownMenuItem>
-              ))}
+              {Object.entries(providerNames)
+                .filter(
+                  ([kind]) =>
+                    !webProviderKinds.includes(kind as TranslationProviderKind) ||
+                    !config?.providers.some((provider) => provider.kind === kind)
+                )
+                .map(([kind, name]) => (
+                  <DropdownMenuItem
+                    key={kind}
+                    onSelect={() => beginAdd(kind as ConfigurableProviderKind)}
+                  >
+                    {name}
+                  </DropdownMenuItem>
+                ))}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
