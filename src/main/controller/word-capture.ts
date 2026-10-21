@@ -5,8 +5,18 @@ import {
   type IpcMainInvokeEvent,
   type WebContents
 } from 'electron'
+import {
+  getPermissionStatus,
+  openPermissionSettings,
+  type ScreenCapturePermissionStatus
+} from '@dictol/screen-capture-native'
 
-import { LOOKUP_WORD_ON_SHORTCUT } from '../app-runtime'
+import {
+  LOOKUP_WORD_ON_SHORTCUT,
+  OCR_AI_SHORTCUT,
+  OCR_DICTIONARY_SHORTCUT,
+  OCR_SUPPORTED
+} from '../app-runtime'
 import type { AppConfig } from '../app-config'
 import { BaseController } from './base-controller'
 
@@ -19,6 +29,13 @@ export type WordCaptureStatus = {
   lookupWordOnSelection: boolean
   selectionDictionaryGroupId: string | null
   excludedPrograms: string[]
+  ocrSupported: boolean
+  ocrEnabled: boolean
+  ocrDictionaryShortcut: string
+  ocrAiShortcut: string
+  ocrDictionaryRegistered: boolean
+  ocrAiRegistered: boolean
+  screenCapturePermission: ScreenCapturePermissionStatus | null
 }
 
 export type WordCaptureShortcutResult = {
@@ -40,10 +57,13 @@ export class WordCaptureController extends BaseController {
     ipcMain.handle('word-capture:status', this.getStatus)
     ipcMain.handle('word-capture:request-access', this.requestAccess)
     ipcMain.handle('word-capture:open-input-monitoring-settings', this.openInputMonitoringSettings)
+    ipcMain.handle('word-capture:open-screen-capture-settings', this.openScreenCaptureSettings)
     ipcMain.handle('word-capture:set-shortcut', this.setShortcut)
     ipcMain.handle('word-capture:set-selection-enabled', this.setSelectionEnabled)
     ipcMain.handle('word-capture:set-selection-dictionary-group', this.setSelectionDictionaryGroup)
     ipcMain.handle('word-capture:remove-excluded-program', this.removeExcludedProgram)
+    ipcMain.handle('word-capture:set-ocr-enabled', this.setOcrEnabled)
+    ipcMain.handle('word-capture:set-ocr-shortcut', this.setOcrShortcut)
   }
 
   getStatus = (event: IpcMainInvokeEvent): WordCaptureStatus | null => {
@@ -74,6 +94,19 @@ export class WordCaptureController extends BaseController {
         ok: false,
         error: '无法打开系统设置，请手动前往“隐私与安全性 > 输入监控”。'
       }
+    }
+  }
+
+  openScreenCaptureSettings = async (
+    event: IpcMainInvokeEvent
+  ): Promise<OpenInputMonitoringSettingsResult | null> => {
+    if (!this.acceptsSender(event.sender)) return null
+    if (process.platform !== 'darwin') return { ok: false, error: '仅适用于 macOS。' }
+    try {
+      await openPermissionSettings()
+      return { ok: true }
+    } catch {
+      return { ok: false, error: '无法打开屏幕录制设置。' }
     }
   }
 
@@ -231,6 +264,84 @@ export class WordCaptureController extends BaseController {
     }
   }
 
+  setOcrEnabled = (
+    event: IpcMainInvokeEvent,
+    enabled: unknown
+  ): WordCaptureShortcutResult | null => {
+    if (!this.acceptsSender(event.sender)) return null
+    if (typeof enabled !== 'boolean' || !OCR_SUPPORTED) {
+      return { ok: false, status: this.createStatus(), error: '当前平台无法开启悬停取词。' }
+    }
+    const previous = this.runtime.appConfig.load()
+    try {
+      this.runtime.appConfig.save({
+        ...previous,
+        featureFlags: { ...previous.featureFlags, ocrLookup: enabled }
+      })
+      this.runtime.restartOcrShortcuts()
+      if (enabled && !this.areOcrShortcutsRegistered()) throw new Error('OCR 快捷键不可用')
+      return { ok: true, status: this.createStatus() }
+    } catch (error) {
+      console.error('Failed to update OCR lookup setting', error)
+      this.restoreOcrConfig(previous)
+      return {
+        ok: false,
+        status: this.createStatus(),
+        error: '悬停取词快捷键被系统或其他应用占用。'
+      }
+    }
+  }
+
+  setOcrShortcut = (
+    event: IpcMainInvokeEvent,
+    mode: unknown,
+    shortcut: unknown
+  ): WordCaptureShortcutResult | null => {
+    if (!this.acceptsSender(event.sender)) return null
+    if (
+      !OCR_SUPPORTED ||
+      (mode !== 'dictionary' && mode !== 'ai') ||
+      typeof shortcut !== 'string' ||
+      !shortcut.trim() ||
+      shortcut.length > 64
+    ) {
+      return { ok: false, status: this.createStatus(), error: '无效的悬停取词快捷键。' }
+    }
+    const previous = this.runtime.appConfig.load()
+    const key = mode === 'dictionary' ? 'ocrDictionary' : 'ocrAi'
+    try {
+      this.runtime.appConfig.save({
+        ...previous,
+        shortcuts: { ...previous.shortcuts, [key]: shortcut.trim() }
+      })
+      this.runtime.restartOcrShortcuts()
+      if (previous.featureFlags.ocrLookup && !this.areOcrShortcutsRegistered()) {
+        throw new Error('OCR 快捷键不可用')
+      }
+      return { ok: true, status: this.createStatus() }
+    } catch (error) {
+      console.error('Failed to update OCR shortcut', error)
+      this.restoreOcrConfig(previous)
+      return { ok: false, status: this.createStatus(), error: '这个快捷键无效或已被占用。' }
+    }
+  }
+
+  private areOcrShortcutsRegistered(): boolean {
+    return (
+      this.runtime.shortcutRegister.isRegistered(OCR_DICTIONARY_SHORTCUT) &&
+      this.runtime.shortcutRegister.isRegistered(OCR_AI_SHORTCUT)
+    )
+  }
+
+  private restoreOcrConfig(config: AppConfig): void {
+    try {
+      this.runtime.appConfig.save(config)
+      this.runtime.restartOcrShortcuts()
+    } catch (error) {
+      console.error('Failed to restore OCR configuration', error)
+    }
+  }
+
   private createStatus(): WordCaptureStatus {
     const config = this.runtime.appConfig.load()
     const capabilities = this.runtime.selectionHookService.getCapabilities()
@@ -245,7 +356,14 @@ export class WordCaptureController extends BaseController {
         this.runtime.selectionDictionaryGroupId === undefined
           ? null
           : String(this.runtime.selectionDictionaryGroupId),
-      excludedPrograms: [...config.selection.excludedPrograms]
+      excludedPrograms: [...config.selection.excludedPrograms],
+      ocrSupported: OCR_SUPPORTED,
+      ocrEnabled: config.featureFlags.ocrLookup,
+      ocrDictionaryShortcut: config.shortcuts.ocrDictionary,
+      ocrAiShortcut: config.shortcuts.ocrAi,
+      ocrDictionaryRegistered: this.runtime.shortcutRegister.isRegistered(OCR_DICTIONARY_SHORTCUT),
+      ocrAiRegistered: this.runtime.shortcutRegister.isRegistered(OCR_AI_SHORTCUT),
+      screenCapturePermission: process.platform === 'darwin' ? getPermissionStatus() : null
     }
   }
 

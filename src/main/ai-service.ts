@@ -8,15 +8,21 @@ import type {
 import { randomUUID } from 'node:crypto'
 import { AppConfigStore } from './app-config'
 import { AiCredentialStore } from './ai-credentials'
-import { getExcerptNoteSystemPrompt, getLookupSystemPrompt, prepareLookupMessages } from './language-task-prompts'
+import {
+  getExcerptNoteSystemPrompt,
+  getOcrContextSystemPrompt,
+  getLookupSystemPrompt,
+  prepareLookupMessages
+} from './language-task-prompts'
 import { createAiCompletionBody } from './ai-model-adapter'
+import type { OcrAiExplanation } from '../shared/ocr-explanation'
 
 const MAX_MESSAGES = 100
 const MAX_MESSAGE_LENGTH = 20_000
 const REQUEST_TIMEOUT_MS = 120_000
 
 export type AiStreamHandler = (event: AiStreamEvent) => void
-export type AiPromptTarget = 'sidebar' | 'selection-toolbar' | 'excerpt'
+export type AiPromptTarget = 'sidebar' | 'excerpt' | 'ocr-context'
 type AiLookupContext = NonNullable<AiChatRequest['lookupContext']> & {
   hasRelatedTerms?: boolean
 }
@@ -83,7 +89,9 @@ export class AiLookupService {
       let systemPrompt: string
       let requestMessages = bodyMessages
 
-      if (promptTarget === 'excerpt') {
+      if (promptTarget === 'ocr-context') {
+        systemPrompt = getOcrContextSystemPrompt()
+      } else if (promptTarget === 'excerpt') {
         systemPrompt = getExcerptNoteSystemPrompt(lookupContext?.hasRelatedTerms ?? true)
         if (!lookupContext) throw new Error('摘抄上下文缺失。')
         requestMessages = prepareLookupMessages(lookupContext.sourceText, bodyMessages)
@@ -103,7 +111,7 @@ export class AiLookupService {
         body: JSON.stringify(
           createAiCompletionBody({
             model: config.model,
-            stream: true,
+            stream: promptTarget !== 'ocr-context',
             purpose: 'lookup',
             messages: [{ role: 'system', content: systemPrompt }, ...requestMessages]
           })
@@ -114,6 +122,21 @@ export class AiLookupService {
       if (!response.ok) {
         const text = await response.text().catch(() => '')
         throw new Error(formatProviderError(response.status, text))
+      }
+      if (promptTarget === 'ocr-context') {
+        const completion = (await response.json()) as {
+          choices?: Array<{ message?: { content?: unknown }; finish_reason?: unknown }>
+        } | null
+        const choice = completion?.choices?.[0]
+        if (choice?.finish_reason === 'length' || choice?.finish_reason === 'max_tokens') {
+          throw new Error('AI 输出达到长度上限，结果不完整，请重试。')
+        }
+        const content = choice?.message?.content
+        if (typeof content !== 'string') throw new Error('AI 未返回有效的 JSON 解释。')
+        const event: AiStreamEvent = { type: 'delta', text: content }
+        send(event)
+        yield event
+        return
       }
       if (!response.body) throw new Error('服务没有返回可读取的响应。')
 
@@ -166,16 +189,6 @@ export class AiLookupService {
     }
   }
 
-  start(
-    requestId: string,
-    messages: AiChatMessage[],
-    promptTarget: AiPromptTarget,
-    onEvent: AiStreamHandler,
-    lookupContext?: AiLookupContext
-  ): void {
-    void this.consume(requestId, messages, promptTarget, lookupContext, onEvent)
-  }
-
   async generateExcerptNote(excerpt: string, relatedTerms: string[]): Promise<string> {
     const hasRelatedTerms = relatedTerms.length > 0
     const sourceText = JSON.stringify(
@@ -201,6 +214,57 @@ export class AiLookupService {
     const note = responseText.trim()
     if (!note) throw new Error('AI 没有生成笔记内容。')
     return note
+  }
+
+  async explainOcrContext(
+    requestId: string,
+    input: { word: string; sentence: string; context: string }
+  ): Promise<OcrAiExplanation> {
+    let responseText = ''
+    for await (const event of this.stream(
+      requestId,
+      [{ role: 'user', content: JSON.stringify(input) }],
+      'ocr-context'
+    )) {
+      if (event.type === 'delta') responseText += event.text
+      if (event.type === 'error') throw new Error(event.message)
+    }
+    const normalized = responseText
+      .trim()
+      .replace(/^```(?:json)?\s*/iu, '')
+      .replace(/\s*```$/u, '')
+    let value: unknown
+    try {
+      value = JSON.parse(normalized)
+    } catch {
+      throw new Error('AI 未返回有效的 JSON 解释。')
+    }
+    if (!value || typeof value !== 'object') throw new Error('AI 解释格式无效。')
+    const explanation = value as Record<string, unknown>
+    if (
+      typeof explanation.sentenceMeaning !== 'string' ||
+      !explanation.sentenceMeaning.trim() ||
+      typeof explanation.wordMeaning !== 'string' ||
+      !explanation.wordMeaning.trim() ||
+      typeof explanation.usage !== 'string'
+    ) {
+      throw new Error('AI 解释缺少必要内容。')
+    }
+    return {
+      sentenceMeaning: explanation.sentenceMeaning.trim(),
+      wordMeaning: explanation.wordMeaning.trim(),
+      usage: explanation.usage.trim()
+    }
+  }
+
+  start(
+    requestId: string,
+    messages: AiChatMessage[],
+    promptTarget: AiPromptTarget,
+    onEvent: AiStreamHandler,
+    lookupContext?: AiLookupContext
+  ): void {
+    void this.consume(requestId, messages, promptTarget, lookupContext, onEvent)
   }
 
   cancel(requestId: string): void {

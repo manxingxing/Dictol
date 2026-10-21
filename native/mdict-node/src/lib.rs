@@ -40,26 +40,39 @@ impl Ld2 {
     /// Build DIDX using LD2 physical row locators.
     #[napi(ts_return_type = "Promise<DidxBuildResult>")]
     pub fn build_index(&self, output_path: String) -> Result<AsyncTask<BuildLd2IndexTask>> {
-        Ok(AsyncTask::new(BuildLd2IndexTask { dictionary: self.dictionary.get()?, output_path }))
+        Ok(AsyncTask::new(BuildLd2IndexTask {
+            dictionary: self.dictionary.get()?,
+            output_path,
+        }))
     }
 
     /// Open a DIDX index only if it matches this LD2 source and codecs.
     #[napi(ts_return_type = "Promise<DidxIndex>")]
     pub fn open_index(&self, index_path: String) -> Result<AsyncTask<OpenLd2IndexTask>> {
-        Ok(AsyncTask::new(OpenLd2IndexTask { dictionary: self.dictionary.get()?, index_path }))
+        Ok(AsyncTask::new(OpenLd2IndexTask {
+            dictionary: self.dictionary.get()?,
+            index_path,
+        }))
     }
 
     /// Return raw Lingoes XML fragments, including directly referenced definitions.
     #[napi(ts_return_type = "Promise<Array<string>>")]
     pub fn read_index_record(&self, locator: Buffer) -> Result<AsyncTask<ReadLd2RecordTask>> {
-        Ok(AsyncTask::new(ReadLd2RecordTask { dictionary: self.dictionary.get()?, locator: locator.to_vec() }))
+        Ok(AsyncTask::new(ReadLd2RecordTask {
+            dictionary: self.dictionary.get()?,
+            locator: locator.to_vec(),
+        }))
     }
 
     #[napi]
-    pub fn close(&self) -> Result<bool> { self.dictionary.close() }
+    pub fn close(&self) -> Result<bool> {
+        self.dictionary.close()
+    }
 }
 
-pub struct OpenLd2Task { path: String }
+pub struct OpenLd2Task {
+    path: String,
+}
 impl Task for OpenLd2Task {
     type Output = mdict::Ld2;
     type JsValue = Ld2;
@@ -67,41 +80,65 @@ impl Task for OpenLd2Task {
         mdict::Ld2::open(&self.path).map_err(to_napi_error)
     }
     fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
-        Ok(Ld2 { dictionary: CloseableDictionary::new(output) })
+        Ok(Ld2 {
+            dictionary: CloseableDictionary::new(output),
+        })
     }
 }
 
-pub struct BuildLd2IndexTask { dictionary: Arc<mdict::Ld2>, output_path: String }
+pub struct BuildLd2IndexTask {
+    dictionary: Arc<mdict::Ld2>,
+    output_path: String,
+}
 impl Task for BuildLd2IndexTask {
     type Output = DidxBuildResult;
     type JsValue = DidxBuildResult;
     fn compute(&mut self) -> Result<Self::Output> {
-        self.dictionary.build_index(&self.output_path).map(Into::into).map_err(to_napi_error)
+        self.dictionary
+            .build_index(&self.output_path)
+            .map(Into::into)
+            .map_err(to_napi_error)
     }
-    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> { Ok(output) }
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output)
+    }
 }
 
-pub struct OpenLd2IndexTask { dictionary: Arc<mdict::Ld2>, index_path: String }
+pub struct OpenLd2IndexTask {
+    dictionary: Arc<mdict::Ld2>,
+    index_path: String,
+}
 impl Task for OpenLd2IndexTask {
     type Output = CoreDidxIndex;
     type JsValue = DidxIndex;
     fn compute(&mut self) -> Result<Self::Output> {
-        let fingerprint = mdict::Ld2IndexSource(&self.dictionary).fingerprint().map_err(to_napi_error)?;
+        let fingerprint = mdict::Ld2IndexSource(&self.dictionary)
+            .fingerprint()
+            .map_err(to_napi_error)?;
         CoreDidxIndex::open_for_source(&self.index_path, fingerprint).map_err(to_napi_error)
     }
     fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
-        Ok(DidxIndex { index: CloseableDictionary::new(output) })
+        Ok(DidxIndex {
+            index: CloseableDictionary::new(output),
+        })
     }
 }
 
-pub struct ReadLd2RecordTask { dictionary: Arc<mdict::Ld2>, locator: Vec<u8> }
+pub struct ReadLd2RecordTask {
+    dictionary: Arc<mdict::Ld2>,
+    locator: Vec<u8>,
+}
 impl Task for ReadLd2RecordTask {
     type Output = Vec<String>;
     type JsValue = Vec<String>;
     fn compute(&mut self) -> Result<Self::Output> {
-        self.dictionary.read_index_record(&self.locator).map_err(to_napi_error)
+        self.dictionary
+            .read_index_record(&self.locator)
+            .map_err(to_napi_error)
     }
-    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> { Ok(output) }
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output)
+    }
 }
 
 const DEFAULT_BATCH_SIZE: u32 = 2_048;

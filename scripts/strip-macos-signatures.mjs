@@ -2,12 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
-/**
- * electron-builder skips the outer app signature when mac.identity is null,
- * but native addons and downloaded Electron frameworks can still carry
- * ad-hoc signatures. Remove those signatures too so the macOS artifact is
- * consistently unsigned.
- */
+/** Sign packaged macOS executable code without a Developer ID identity. */
 function collectCandidates(root) {
   const files = []
   const bundles = []
@@ -26,7 +21,8 @@ function collectCandidates(root) {
       path.includes('/Contents/MacOS/') ||
       path.includes('/Contents/Frameworks/') ||
       path.endsWith('.node') ||
-      path.endsWith('.dylib')
+      path.endsWith('.dylib') ||
+      (stat.mode & 0o111) !== 0
     ) {
       files.push(path)
     }
@@ -45,6 +41,33 @@ function targetDarwinArch(context) {
 
 function fileArchitecture(path) {
   return execFileSync('file', ['-b', path], { encoding: 'utf8' }).trim()
+}
+
+function signMacOSApp(appPath, bundles, files) {
+  const deepestFirst = (left, right) => right.length - left.length
+  let signed = 0
+  for (const path of [...files].sort(deepestFirst)) {
+    if (!fileArchitecture(path).includes('Mach-O')) continue
+    execFileSync('codesign', ['--force', '--sign', '-', '--timestamp=none', path], {
+      stdio: 'inherit'
+    })
+    signed += 1
+  }
+  for (const path of bundles.filter((path) => path !== appPath).sort(deepestFirst)) {
+    execFileSync('codesign', ['--force', '--sign', '-', '--timestamp=none', path], {
+      stdio: 'inherit'
+    })
+  }
+  execFileSync('codesign', ['--force', '--sign', '-', '--timestamp=none', appPath], {
+    stdio: 'inherit'
+  })
+  execFileSync('codesign', ['--verify', '--deep', '--strict', appPath], { stdio: 'inherit' })
+  for (const path of files) {
+    if (path.endsWith('.node')) {
+      execFileSync('codesign', ['--verify', path], { stdio: 'inherit' })
+    }
+  }
+  console.log(`  • ad-hoc signed macOS app and executable files count=${signed}`)
 }
 
 function isWindowsX64Pe(path) {
@@ -101,11 +124,45 @@ function pruneAndVerifyNativeModules(appPath, arch) {
   const otherArch = arch === 'x64' ? 'arm64' : 'x64'
   const expected = [
     join(unpacked, '@dictol', 'mdict-native', `dictol-mdict-node.darwin-${arch}.node`),
+    join(
+      unpacked,
+      '@dictol',
+      'accessibility-native',
+      'prebuilds',
+      `darwin-${arch}`,
+      'accessibility.node'
+    ),
+    join(
+      unpacked,
+      '@dictol',
+      'screen-capture-native',
+      'prebuilds',
+      `darwin-${arch}`,
+      'screen-capture.node'
+    ),
+    join(unpacked, '@dictol', 'ocr-native', 'prebuilds', `darwin-${arch}`, 'ocr.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', `darwin-${arch}.node`),
     join(unpacked, 'selection-hook', 'prebuilds', `darwin-${arch}`, 'selection-hook.node')
   ]
   const opposite = [
     join(unpacked, '@dictol', 'mdict-native', `dictol-mdict-node.darwin-${otherArch}.node`),
+    join(
+      unpacked,
+      '@dictol',
+      'accessibility-native',
+      'prebuilds',
+      `darwin-${otherArch}`,
+      'accessibility.node'
+    ),
+    join(
+      unpacked,
+      '@dictol',
+      'screen-capture-native',
+      'prebuilds',
+      `darwin-${otherArch}`,
+      'screen-capture.node'
+    ),
+    join(unpacked, '@dictol', 'ocr-native', 'prebuilds', `darwin-${otherArch}`, 'ocr.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', `darwin-${otherArch}.node`),
     join(unpacked, 'selection-hook', 'prebuilds', `darwin-${otherArch}`, 'selection-hook.node')
   ]
@@ -138,6 +195,52 @@ function verifyUniversalNativeModules(appPath) {
   const expected = [
     [join(unpacked, '@dictol', 'mdict-native', 'dictol-mdict-node.darwin-x64.node'), 'x86_64'],
     [join(unpacked, '@dictol', 'mdict-native', 'dictol-mdict-node.darwin-arm64.node'), 'arm64'],
+    [
+      join(
+        unpacked,
+        '@dictol',
+        'accessibility-native',
+        'prebuilds',
+        'darwin-x64',
+        'accessibility.node'
+      ),
+      'x86_64'
+    ],
+    [
+      join(
+        unpacked,
+        '@dictol',
+        'accessibility-native',
+        'prebuilds',
+        'darwin-arm64',
+        'accessibility.node'
+      ),
+      'arm64'
+    ],
+    [
+      join(
+        unpacked,
+        '@dictol',
+        'screen-capture-native',
+        'prebuilds',
+        'darwin-x64',
+        'screen-capture.node'
+      ),
+      'x86_64'
+    ],
+    [
+      join(
+        unpacked,
+        '@dictol',
+        'screen-capture-native',
+        'prebuilds',
+        'darwin-arm64',
+        'screen-capture.node'
+      ),
+      'arm64'
+    ],
+    [join(unpacked, '@dictol', 'ocr-native', 'prebuilds', 'darwin-x64', 'ocr.node'), 'x86_64'],
+    [join(unpacked, '@dictol', 'ocr-native', 'prebuilds', 'darwin-arm64', 'ocr.node'), 'arm64'],
     [join(unpacked, 'better-sqlite3', 'prebuilds', 'darwin-x64.node'), 'x86_64'],
     [join(unpacked, 'better-sqlite3', 'prebuilds', 'darwin-arm64.node'), 'arm64'],
     [join(unpacked, 'selection-hook', 'prebuilds', 'darwin-x64', 'selection-hook.node'), 'x86_64'],
@@ -173,6 +276,23 @@ function verifyWindowsNativeModules(appOutDir, arch) {
   const unpacked = join(appOutDir, 'resources', 'app.asar.unpacked', 'node_modules')
   const expected = [
     join(unpacked, '@dictol', 'mdict-native', 'dictol-mdict-node.win32-x64-msvc.node'),
+    join(
+      unpacked,
+      '@dictol',
+      'accessibility-native',
+      'prebuilds',
+      'win32-x64',
+      'accessibility.node'
+    ),
+    join(
+      unpacked,
+      '@dictol',
+      'screen-capture-native',
+      'prebuilds',
+      'win32-x64',
+      'screen-capture.node'
+    ),
+    join(unpacked, '@dictol', 'ocr-native', 'prebuilds', 'win32-x64', 'ocr.node'),
     join(unpacked, 'adblock-rs', 'js', 'index.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', 'win32-x64.node'),
     join(unpacked, 'selection-hook', 'prebuilds', 'win32-x64', 'selection-hook.node')
@@ -180,6 +300,9 @@ function verifyWindowsNativeModules(appOutDir, arch) {
 
   const nativePackageRoots = [
     join(unpacked, '@dictol', 'mdict-native'),
+    join(unpacked, '@dictol', 'accessibility-native'),
+    join(unpacked, '@dictol', 'screen-capture-native'),
+    join(unpacked, '@dictol', 'ocr-native'),
     join(unpacked, 'adblock-rs'),
     join(unpacked, 'better-sqlite3'),
     join(unpacked, 'selection-hook')
@@ -226,11 +349,58 @@ function verifyWindowsNativeModules(appOutDir, arch) {
       `Packaged Windows mdict binding is missing exports: ${missingExports.join(', ')}`
     )
   }
+  const ocrExports = ['recognizeMacText', 'recognizeWindowsText', 'chineseWordRange']
+  const unexpectedExports = ocrExports.filter((name) => mdictBinary.includes(Buffer.from(name)))
+  if (unexpectedExports.length > 0) {
+    throw new Error(
+      `Packaged Windows MDict binding still contains OCR exports: ${unexpectedExports.join(', ')}`
+    )
+  }
+  const screenCaptureAddonExports = [
+    'captureScreenRegion',
+    'captureWindowsDisplayAtPoint',
+    'captureWindowsScreenRegion',
+    'getWindowsDisplayBoundsAtPoint',
+    'stopWindowsScreenCaptureSessions'
+  ]
+  const unexpectedCaptureExports = screenCaptureAddonExports.filter((name) =>
+    mdictBinary.includes(Buffer.from(name))
+  )
+  if (unexpectedCaptureExports.length > 0) {
+    throw new Error(
+      `Packaged Windows mdict binding contains screen capture exports: ${unexpectedCaptureExports.join(', ')}`
+    )
+  }
+
+  const accessibilityBinary = readFileSync(expected[1])
+  if (!accessibilityBinary.includes(Buffer.from('readAccessibleText'))) {
+    throw new Error('Packaged Windows Accessibility binding is missing readAccessibleText')
+  }
+
+  const screenCaptureBinary = readFileSync(expected[2])
+  const screenCaptureExports = [
+    'captureWindowsDisplayAtPoint',
+    'captureWindowsScreenRegion',
+    'getWindowsDisplayBoundsAtPoint',
+    'stopWindowsScreenCaptureSessions'
+  ]
+  const missingCaptureExports = screenCaptureExports.filter(
+    (name) => !screenCaptureBinary.includes(Buffer.from(name))
+  )
+  if (missingCaptureExports.length > 0) {
+    throw new Error(
+      `Packaged Windows screen capture binding is missing exports: ${missingCaptureExports.join(', ')}`
+    )
+  }
+
+  if (!readFileSync(expected[3]).includes(Buffer.from('recognizeWindowsText'))) {
+    throw new Error('Packaged Windows OCR binding is missing recognizeWindowsText')
+  }
 
   console.log(`  • verified Windows native modules arch=${arch} count=${expected.length}`)
 }
 
-export default async function stripMacOSSignatures(context) {
+export default async function verifyAndSignNativePackages(context) {
   if (context.electronPlatformName === 'win32') {
     const arch = context.arch === 1 || context.arch === 'x64' ? 'x64' : String(context.arch)
     verifyWindowsNativeModules(context.appOutDir, arch)
@@ -252,17 +422,6 @@ export default async function stripMacOSSignatures(context) {
   }
 
   const { bundles, files } = collectCandidates(appPath)
-  const candidates = [appPath, ...bundles, ...files]
-  let removed = 0
-
-  for (const candidate of candidates) {
-    try {
-      execFileSync('codesign', ['--remove-signature', candidate], { stdio: 'ignore' })
-      removed += 1
-    } catch {
-      // Non-signable files and already unsigned objects are expected here.
-    }
-  }
-
-  console.log(`  • stripped macOS code signatures count=${removed}`)
+  // Sign nested code before its parent to keep every resource seal valid.
+  signMacOSApp(appPath, bundles, files)
 }

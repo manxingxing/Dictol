@@ -1,4 +1,4 @@
-import { BrowserWindow, Menu, nativeTheme, screen } from 'electron'
+import { BrowserWindow, Menu, nativeTheme, screen, type Point, type Rectangle } from 'electron'
 
 import icon from '../../resources/icon.png?asset'
 import {
@@ -24,6 +24,13 @@ export type SelectionSurfaceWindow = BrowserWindow | NativeSelectionPanel
 const getMainWindowBackgroundColor = (useDarkColors: boolean): string =>
   process.platform === 'darwin' ? '#00000000' : useDarkColors ? '#232323' : '#faf9f7'
 
+const ocrHighlightPage = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:transparent}
+#highlight{position:fixed;inset:0;border-bottom:2px solid rgba(187,126,0,.95);background:rgba(255,193,7,.42)}
+#underline{position:fixed;display:none;height:2px;background:rgba(187,126,0,.95);transform-origin:left center}
+</style></head><body><div id="highlight"></div><div id="underline"></div></body></html>`)}`
+
 export class WindowManager {
   mainWindow: BrowserWindow | undefined
   dictionaryView: WebContentsViewManager | undefined
@@ -32,6 +39,12 @@ export class WindowManager {
   searchPopoverView: WebContentsViewManager | undefined
   selectionToolbarWindow: SelectionSurfaceWindow | undefined
   selectionExplanationWindow: SelectionSurfaceWindow | undefined
+  private ocrHighlightWindow: BrowserWindow | undefined
+  private ocrHighlightReady = false
+  private ocrHighlightRequested = false
+  private ocrHighlightBounds: Rectangle | undefined
+  private ocrHighlightQuad: Point[] | undefined
+  private ocrHighlightVersion = 0
   readonly excerptCaptureWindows = new Set<BrowserWindow>()
   selectionTranslationWindow: BrowserWindow | undefined
   selectionExplanationView: WebContentsViewManager | undefined
@@ -366,6 +379,154 @@ export class WindowManager {
     return surface
   }
 
+  showOcrHighlight(bounds: Rectangle, quad?: Point[]): void {
+    let window = this.ocrHighlightWindow
+    this.ocrHighlightRequested = true
+    this.ocrHighlightBounds = bounds
+    this.ocrHighlightQuad = quad
+    const version = ++this.ocrHighlightVersion
+    // Windows can enforce a minimum size even for a frameless window. Keep the
+    // surface transparent and position the painted rectangle independently.
+    const windowBounds =
+      process.platform === 'win32'
+        ? {
+            x: bounds.x,
+            y: bounds.y - Math.floor((Math.max(64, bounds.height) - bounds.height) / 2),
+            width: Math.max(64, bounds.width),
+            height: Math.max(64, bounds.height)
+          }
+        : bounds
+    if (!window || window.isDestroyed()) {
+      this.ocrHighlightReady = false
+      const highlightWindow = new BrowserWindow({
+        ...windowBounds,
+        show: false,
+        frame: false,
+        type: process.platform === 'darwin' ? 'panel' : undefined,
+        transparent: true,
+        backgroundColor: '#00000000',
+        hasShadow: false,
+        focusable: false,
+        resizable: false,
+        movable: false,
+        skipTaskbar: true,
+        alwaysOnTop: true,
+        webPreferences: { sandbox: true, nodeIntegration: false, contextIsolation: true }
+      })
+      window = highlightWindow
+      this.ocrHighlightWindow = highlightWindow
+      highlightWindow.setIgnoreMouseEvents(true)
+      void highlightWindow
+        .loadURL(ocrHighlightPage)
+        .then(() => {
+          if (this.ocrHighlightWindow !== highlightWindow || highlightWindow.isDestroyed()) return
+          this.ocrHighlightReady = true
+          if (this.ocrHighlightRequested && this.ocrHighlightBounds) {
+            void this.paintOcrHighlight(
+              highlightWindow,
+              this.ocrHighlightBounds,
+              this.ocrHighlightQuad,
+              this.ocrHighlightVersion
+            )
+          }
+        })
+        .catch((error: unknown) => {
+          console.error('Failed to load OCR highlight surface', error)
+          if (this.ocrHighlightWindow === highlightWindow) {
+            this.ocrHighlightReady = false
+            this.ocrHighlightRequested = false
+          }
+        })
+      if (process.platform === 'darwin') {
+        highlightWindow.setVisibleOnAllWorkspaces(true, {
+          visibleOnFullScreen: true,
+          skipTransformProcessType: true
+        })
+      }
+      highlightWindow.on('closed', () => {
+        if (this.ocrHighlightWindow === highlightWindow) {
+          this.ocrHighlightWindow = undefined
+          this.ocrHighlightReady = false
+          this.ocrHighlightRequested = false
+          this.ocrHighlightBounds = undefined
+          this.ocrHighlightQuad = undefined
+        }
+      })
+    }
+    window.hide()
+    window.setBounds(windowBounds, false)
+    if (this.ocrHighlightReady) void this.paintOcrHighlight(window, bounds, quad, version)
+  }
+
+  private async paintOcrHighlight(
+    window: BrowserWindow,
+    bounds: Rectangle,
+    quad: Point[] | undefined,
+    version: number
+  ): Promise<void> {
+    const content = window.getContentBounds()
+    const height =
+      process.platform === 'win32'
+        ? Math.min(bounds.height, Math.max(12, Math.round(bounds.height * 0.8)))
+        : bounds.height
+    const painted = {
+      x: bounds.x - content.x,
+      y: bounds.y + Math.floor((bounds.height - height) / 2) - content.y,
+      width: bounds.width,
+      height
+    }
+    try {
+      const cssText = `left:${painted.x}px;top:${painted.y}px;right:auto;bottom:auto;width:${painted.width}px;height:${painted.height}px`
+      const points = quad?.map((point) => ({ x: point.x - content.x, y: point.y - content.y }))
+      const painting = window.webContents.executeJavaScript(
+        `(() => {
+          const highlight = document.getElementById('highlight');
+          const underline = document.getElementById('underline');
+          if (!highlight || !underline) return false;
+          const points = ${JSON.stringify(points ?? null)};
+          if (points) {
+            const polygon = points.map(p => p.x + 'px ' + p.y + 'px').join(',');
+            highlight.style.cssText = 'inset:0;border-bottom:none;clip-path:polygon(' + polygon + ')';
+            const dx = points[2].x - points[3].x;
+            const dy = points[2].y - points[3].y;
+            underline.style.cssText = 'display:block;left:' + points[3].x + 'px;top:' + (points[3].y - 2) + 'px;width:' + Math.hypot(dx, dy) + 'px;transform:rotate(' + Math.atan2(dy, dx) + 'rad)';
+          } else {
+            underline.style.display = 'none';
+            highlight.style.cssText = ${JSON.stringify(cssText)};
+          }
+          return true;
+        })()`
+      )
+      if (
+        this.ocrHighlightWindow === window &&
+        !window.isDestroyed() &&
+        this.ocrHighlightRequested &&
+        this.ocrHighlightVersion === version
+      ) {
+        window.showInactive()
+      }
+      if (!(await painting)) throw new Error('OCR highlight element is missing')
+    } catch (error) {
+      console.error('Failed to paint OCR highlight', error)
+      if (
+        this.ocrHighlightWindow === window &&
+        !window.isDestroyed() &&
+        this.ocrHighlightVersion === version
+      ) {
+        window.hide()
+      }
+    }
+  }
+
+  hideOcrHighlight(): void {
+    this.ocrHighlightRequested = false
+    this.ocrHighlightBounds = undefined
+    this.ocrHighlightQuad = undefined
+    ++this.ocrHighlightVersion
+    const window = this.ocrHighlightWindow
+    if (window && !window.isDestroyed()) window.hide()
+  }
+
   createExcerptCaptureWindow(): BrowserWindow {
     const window = new BrowserWindow({
       width: 520,
@@ -584,6 +745,9 @@ export class WindowManager {
     if (this.selectionExplanationWindow && !this.selectionExplanationWindow.isDestroyed()) {
       this.selectionExplanationWindow.destroy()
     }
+    if (this.ocrHighlightWindow && !this.ocrHighlightWindow.isDestroyed()) {
+      this.ocrHighlightWindow.destroy()
+    }
     this.excerptCaptureWindows.forEach((window) => {
       if (!window.isDestroyed()) window.destroy()
     })
@@ -602,6 +766,9 @@ export class WindowManager {
     this.searchPopoverView = undefined
     this.selectionToolbarWindow = undefined
     this.selectionExplanationWindow = undefined
+    this.ocrHighlightWindow = undefined
+    this.ocrHighlightReady = false
+    this.ocrHighlightRequested = false
     this.excerptCaptureWindows.clear()
     this.selectionTranslationWindow = undefined
     this.selectionExplanationView = undefined

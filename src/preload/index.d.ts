@@ -1,3 +1,8 @@
+import type { WordCaptureStatus, WordCaptureShortcutResult } from '../main/controller/word-capture'
+import type {
+  ScreenshotTranslationSettingResult,
+  ScreenshotTranslationStatus
+} from '../shared/screenshot-translation'
 import type { ToastPayload } from '../shared/notification'
 import type { TtsConfig, TtsPlayback, TtsVoice } from '../shared/tts'
 import type { MainWindowSearchRequest } from '../shared/search-request'
@@ -479,6 +484,13 @@ declare global {
         ) => () => void
       }
       translation: {
+        getScreenshotStatus: () => Promise<ScreenshotTranslationStatus | null>
+        setScreenshotEnabled: (
+          enabled: boolean
+        ) => Promise<ScreenshotTranslationSettingResult | null>
+        setScreenshotShortcut: (
+          shortcut: string
+        ) => Promise<ScreenshotTranslationSettingResult | null>
         getConfig: () => Promise<TranslationPublicConfig | null>
         saveProvider: (
           request: TranslationSaveProviderRequest
@@ -515,86 +527,21 @@ declare global {
         onScopeMenuOpen: (callback: (open: boolean) => void) => () => void
       }
       wordCapture: {
-        getStatus: () => Promise<{
-          supported: boolean
-          limitation: string | null
-          trusted: boolean
-          registered: boolean
+        getStatus: () => Promise<WordCaptureStatus | null>
+        requestAccess: () => Promise<WordCaptureStatus | null>
+        openInputMonitoringSettings: () => Promise<{ ok: boolean; error?: string } | null>
+        openScreenCaptureSettings: () => Promise<{ ok: boolean; error?: string } | null>
+        setShortcut: (shortcut: string) => Promise<WordCaptureShortcutResult | null>
+        setSelectionEnabled: (enabled: boolean) => Promise<WordCaptureShortcutResult | null>
+        setSelectionDictionaryGroup: (
+          groupId: string | null
+        ) => Promise<WordCaptureShortcutResult | null>
+        removeExcludedProgram: (programName: string) => Promise<WordCaptureShortcutResult | null>
+        setOcrEnabled: (enabled: boolean) => Promise<WordCaptureShortcutResult | null>
+        setOcrShortcut: (
+          mode: 'dictionary' | 'ai',
           shortcut: string
-          lookupWordOnSelection: boolean
-          selectionDictionaryGroupId: string | null
-          excludedPrograms: string[]
-        } | null>
-        requestAccess: () => Promise<{
-          supported: boolean
-          limitation: string | null
-          trusted: boolean
-          registered: boolean
-          shortcut: string
-          lookupWordOnSelection: boolean
-          selectionDictionaryGroupId: string | null
-          excludedPrograms: string[]
-        } | null>
-        openInputMonitoringSettings: () => Promise<{
-          ok: boolean
-          error?: string
-        } | null>
-        setShortcut: (shortcut: string) => Promise<{
-          ok: boolean
-          status: {
-            supported: boolean
-            limitation: string | null
-            trusted: boolean
-            registered: boolean
-            shortcut: string
-            lookupWordOnSelection: boolean
-            selectionDictionaryGroupId: string | null
-            excludedPrograms: string[]
-          }
-          error?: string
-        } | null>
-        setSelectionEnabled: (enabled: boolean) => Promise<{
-          ok: boolean
-          status: {
-            supported: boolean
-            limitation: string | null
-            trusted: boolean
-            registered: boolean
-            shortcut: string
-            lookupWordOnSelection: boolean
-            selectionDictionaryGroupId: string | null
-            excludedPrograms: string[]
-          }
-          error?: string
-        } | null>
-        removeExcludedProgram: (programName: string) => Promise<{
-          ok: boolean
-          status: {
-            supported: boolean
-            limitation: string | null
-            trusted: boolean
-            registered: boolean
-            shortcut: string
-            lookupWordOnSelection: boolean
-            selectionDictionaryGroupId: string | null
-            excludedPrograms: string[]
-          }
-          error?: string
-        } | null>
-        setSelectionDictionaryGroup: (groupId: string | null) => Promise<{
-          ok: boolean
-          status: {
-            supported: boolean
-            limitation: string | null
-            trusted: boolean
-            registered: boolean
-            shortcut: string
-            lookupWordOnSelection: boolean
-            selectionDictionaryGroupId: string | null
-            excludedPrograms: string[]
-          }
-          error?: string
-        } | null>
+        ) => Promise<WordCaptureShortcutResult | null>
         onEvent: (
           callback: (
             event:

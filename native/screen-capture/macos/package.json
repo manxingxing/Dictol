@@ -1,0 +1,14 @@
+{
+  "name": "@dictol/screen-capture-macos-build",
+  "private": true,
+  "scripts": {
+    "build": "MACOSX_DEPLOYMENT_TARGET=14.0 napi build --platform --release --no-js"
+  },
+  "napi": {
+    "binaryName": "dictol-screen-capture",
+    "targets": [
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin"
+    ]
+  }
+}

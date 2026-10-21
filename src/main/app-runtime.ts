@@ -1,5 +1,6 @@
 import { nativeTheme } from 'electron'
 import type { BrowserWindow } from 'electron'
+import { stopWindowsScreenCaptureSessions } from '@dictol/screen-capture-native'
 
 import { AppConfigStore, type AppConfig } from './app-config'
 import { AiLookupService } from './ai-service'
@@ -27,6 +28,11 @@ import type { DictionaryLayout } from '../shared/dictionary-layout'
 
 export const LOOKUP_WORD_ON_SHORTCUT = 'lookupWordOnShortcut'
 export const SHOW_MAIN_WINDOW_SHORTCUT = 'showMainWindow'
+export const OCR_DICTIONARY_SHORTCUT = 'ocrDictionary'
+export const OCR_AI_SHORTCUT = 'ocrAi'
+export const SCREENSHOT_TRANSLATION_SHORTCUT = 'screenshotTranslation'
+export const OCR_SUPPORTED = process.platform === 'darwin' || process.platform === 'win32'
+export type OcrLookupMode = 'dictionary' | 'ai'
 
 type MainWindowInitializer = (mainWindow: BrowserWindow) => void
 
@@ -53,6 +59,8 @@ export class AppRuntime {
   dictionaryLayout: DictionaryLayout = 'single'
   dictionarySearchScope: DictionarySearchScope = new DictionarySearchScope()
   selectionDictionaryGroupId: number | undefined
+  ocrShortcutHandler: ((mode: OcrLookupMode) => Promise<void>) | undefined
+  screenshotTranslationHandler: (() => Promise<void>) | undefined
 
   get isInitialized(): boolean {
     return this.initialized
@@ -202,6 +210,50 @@ export class AppRuntime {
     if (config.featureFlags.lookupWordOnShortcut) {
       this.registerLookupWordShortCut(config.shortcuts)
     }
+    if (OCR_SUPPORTED) this.registerOcrShortcuts(config)
+    if (OCR_SUPPORTED) this.registerScreenshotTranslationShortcut(config)
+  }
+
+  private registerOcrShortcuts(config: AppConfig): void {
+    if (!OCR_SUPPORTED) return
+    this.shortcutRegister.unregister(OCR_DICTIONARY_SHORTCUT)
+    this.shortcutRegister.unregister(OCR_AI_SHORTCUT)
+    if (!config.featureFlags.ocrLookup || !this.ocrShortcutHandler) {
+      return
+    }
+    this.shortcutRegister.register(OCR_DICTIONARY_SHORTCUT, config.shortcuts.ocrDictionary, {
+      handleShortcut: () => this.ocrShortcutHandler?.('dictionary')
+    })
+    this.shortcutRegister.register(OCR_AI_SHORTCUT, config.shortcuts.ocrAi, {
+      handleShortcut: () => this.ocrShortcutHandler?.('ai')
+    })
+  }
+
+  restartOcrShortcuts(): void {
+    const config = this.appConfig.load()
+    this.registerOcrShortcuts(config)
+    if (process.platform === 'win32' && !config.featureFlags.ocrLookup) {
+      stopWindowsScreenCaptureSessions()
+    }
+  }
+
+  restartScreenshotTranslationShortcut(): void {
+    this.registerScreenshotTranslationShortcut(this.appConfig.load())
+  }
+
+  private registerScreenshotTranslationShortcut(config: AppConfig): void {
+    this.shortcutRegister.unregister(SCREENSHOT_TRANSLATION_SHORTCUT)
+    if (
+      !OCR_SUPPORTED ||
+      !config.featureFlags.screenshotTranslation ||
+      !this.screenshotTranslationHandler
+    )
+      return
+    this.shortcutRegister.register(
+      SCREENSHOT_TRANSLATION_SHORTCUT,
+      config.shortcuts.screenshotTranslation,
+      { handleShortcut: () => this.screenshotTranslationHandler?.() }
+    )
   }
 
   restartMainWindowShortcut(): void {
@@ -232,6 +284,9 @@ export class AppRuntime {
 
   restartInputServices(): void {
     this.shortcutRegister.unregister(LOOKUP_WORD_ON_SHORTCUT)
+    this.shortcutRegister.unregister(OCR_DICTIONARY_SHORTCUT)
+    this.shortcutRegister.unregister(OCR_AI_SHORTCUT)
+    this.shortcutRegister.unregister(SCREENSHOT_TRANSLATION_SHORTCUT)
     const config = this.appConfig.load()
     this.initSelectionHook(config)
     this.registerGlobalShortCuts(config)
@@ -240,10 +295,13 @@ export class AppRuntime {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    if (process.platform === 'win32') stopWindowsScreenCaptureSessions()
     this.shortcutRegister.unregisterAll()
     this.mainWindowShortcutRouter?.dispose()
     this.mainWindowShortcutRouter = undefined
     this.selectionHookService.dispose()
+    this.ocrShortcutHandler = undefined
+    this.screenshotTranslationHandler = undefined
     this.trayManager.dispose()
     this.adBlockService.dispose()
     this.windowManager.dispose()

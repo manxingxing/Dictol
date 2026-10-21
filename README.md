@@ -112,10 +112,12 @@ Dictol 会按功能引导用户开启必要的系统权限：
 ## 开发
 
 ```bash
-nvm use            # Node 22.12+（.nvmrc 固定 22.15.1）
+nvm use            # Node 24+（.nvmrc 使用 26.7.0）
 npm install
-npm run dev        # 构建原生模块并启动开发模式
+npm run dev        # 启动开发模式（使用已构建的 .node 文件）
 ```
+
+macOS 悬停取词优先读取辅助功能文本，失败时使用 Apple Vision OCR；Windows 优先读取 UI Automation 文本，失败时使用 Windows 原生 OCR。
 
 ## 常用命令
 

@@ -42,7 +42,10 @@ const runBinary = (name, args, env = {}) =>
   })
 
 const buildNativeForTarget = (target) => {
-  runNpm(['run', 'native:build'], { DICTOL_NATIVE_TARGET: target.rust })
+  runNpm(['run', 'native:build'], {
+    DICTOL_NATIVE_TARGET: target.rust,
+    MACOSX_DEPLOYMENT_TARGET: '14.0'
+  })
   const addon = join(nativeDirectory, `dictol-mdict-node.${target.napi}.node`)
   if (!existsSync(addon)) {
     throw new Error(`Native binding build did not produce ${target.napi}: ${addon}`)

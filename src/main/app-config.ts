@@ -22,10 +22,15 @@ export type AppConfig = {
   featureFlags: {
     lookupWordOnShortcut: boolean
     lookupWordOnSelection: boolean
+    ocrLookup: boolean
+    screenshotTranslation: boolean
   }
   shortcuts: {
     lookupWordOnShortcut: string
     showMainWindow: string
+    ocrDictionary: string
+    ocrAi: string
+    screenshotTranslation: string
   }
   selection: {
     dictionaryGroupId: number | undefined
@@ -48,11 +53,16 @@ const DEFAULT_CONFIG: AppConfig = {
   dictionaryDisplay: 'icon',
   featureFlags: {
     lookupWordOnShortcut: true,
-    lookupWordOnSelection: false
+    lookupWordOnSelection: false,
+    ocrLookup: false,
+    screenshotTranslation: process.platform === 'darwin'
   },
   shortcuts: {
     lookupWordOnShortcut: 'Alt+D',
-    showMainWindow: 'CommandOrControl+Alt+D'
+    showMainWindow: 'CommandOrControl+Alt+D',
+    ocrDictionary: 'Alt+S',
+    ocrAi: 'Alt+T',
+    screenshotTranslation: 'Alt+R'
   },
   selection: {
     dictionaryGroupId: undefined,
@@ -161,8 +171,16 @@ function parseConfig(value: unknown): AppConfig {
     featureFlags?: {
       lookupWordOnShortcut?: unknown
       lookupWordOnSelection?: unknown
+      ocrLookup?: unknown
+      screenshotTranslation?: unknown
     }
-    shortcuts?: { lookupWordOnShortcut?: unknown; showMainWindow?: unknown }
+    shortcuts?: {
+      lookupWordOnShortcut?: unknown
+      showMainWindow?: unknown
+      ocrDictionary?: unknown
+      ocrAi?: unknown
+      screenshotTranslation?: unknown
+    }
     selection?: { dictionaryGroupId?: unknown; excludedPrograms?: unknown }
     aiLookup?: {
       enabled?: unknown
@@ -194,7 +212,15 @@ function parseConfig(value: unknown): AppConfig {
       lookupWordOnSelection:
         typeof candidate.featureFlags?.lookupWordOnSelection === 'boolean'
           ? candidate.featureFlags.lookupWordOnSelection
-          : DEFAULT_CONFIG.featureFlags.lookupWordOnSelection
+          : DEFAULT_CONFIG.featureFlags.lookupWordOnSelection,
+      ocrLookup:
+        typeof candidate.featureFlags?.ocrLookup === 'boolean'
+          ? candidate.featureFlags.ocrLookup
+          : DEFAULT_CONFIG.featureFlags.ocrLookup,
+      screenshotTranslation:
+        typeof candidate.featureFlags?.screenshotTranslation === 'boolean'
+          ? candidate.featureFlags.screenshotTranslation
+          : DEFAULT_CONFIG.featureFlags.screenshotTranslation
     },
     shortcuts: {
       lookupWordOnShortcut:
@@ -206,7 +232,18 @@ function parseConfig(value: unknown): AppConfig {
         typeof candidate.shortcuts?.showMainWindow === 'string' &&
         candidate.shortcuts.showMainWindow.trim()
           ? candidate.shortcuts.showMainWindow.trim()
-          : DEFAULT_CONFIG.shortcuts.showMainWindow
+          : DEFAULT_CONFIG.shortcuts.showMainWindow,
+      ocrDictionary: normalizeConfigString(
+        candidate.shortcuts?.ocrDictionary,
+        DEFAULT_CONFIG.shortcuts.ocrDictionary,
+        64
+      ),
+      ocrAi: normalizeConfigString(candidate.shortcuts?.ocrAi, DEFAULT_CONFIG.shortcuts.ocrAi, 64),
+      screenshotTranslation: normalizeConfigString(
+        candidate.shortcuts?.screenshotTranslation,
+        DEFAULT_CONFIG.shortcuts.screenshotTranslation,
+        64
+      )
     },
     selection: {
       dictionaryGroupId: normalizeDictionaryGroupId(candidate.selection?.dictionaryGroupId),

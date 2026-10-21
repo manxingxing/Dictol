@@ -14,6 +14,7 @@ import { SearchPopoverController } from './search-popover'
 import { SelectionToolbarController } from './selection-toolbar'
 import { SelectionExplanationController } from './selection-explanation'
 import { TranslationController } from './translation'
+import { ScreenshotTranslationController } from './screenshot-translation'
 import { TtsController } from './tts'
 import { WordCaptureController } from './word-capture'
 import { WordLookupController } from './word-lookup'
@@ -44,7 +45,12 @@ export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
     new SearchPopoverController(appRuntime),
     selectionExplanationController,
     translationController,
-    new SelectionToolbarController(appRuntime, selectionExplanationController, translationController),
+    new ScreenshotTranslationController(appRuntime, translationController),
+    new SelectionToolbarController(
+      appRuntime,
+      selectionExplanationController,
+      translationController
+    ),
     new WordCaptureController(appRuntime),
     new WordLookupController(appRuntime),
     new WordbookController(appRuntime),
@@ -54,4 +60,6 @@ export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
   ]
 
   controllers.forEach((controller) => controller.mount())
+  appRuntime.restartOcrShortcuts()
+  appRuntime.restartScreenshotTranslationShortcut()
 }

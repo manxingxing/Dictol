@@ -29,7 +29,9 @@ export default defineConfig({
         resolveId(source, importer) {
           // Sandboxed Electron preloads cannot require a Rollup shared chunk.
           // Give each preload its own copy while keeping one TTS source module.
-          if (source === './tts' && importer?.startsWith(resolve('src/preload/'))) {
+          const preloadRoot = resolve('src/preload').replaceAll('\\', '/').toLowerCase()
+          const importerPath = importer?.replaceAll('\\', '/').toLowerCase()
+          if (source === './tts' && importer && importerPath?.startsWith(`${preloadRoot}/`)) {
             return `${resolve('src/preload/tts.ts')}?preload=${basename(importer)}`
           }
           return null
@@ -45,6 +47,7 @@ export default defineConfig({
           'selection-toolbar': resolve('src/preload/selection-toolbar.ts'),
           'selection-explanation': resolve('src/preload/selection-explanation.ts'),
           'selection-translation': resolve('src/preload/selection-translation.ts'),
+          'screenshot-area': resolve('src/preload/screenshot-area.ts'),
           'external-excerpt': resolve('src/preload/external-excerpt.ts'),
           'selection-entry': resolve('src/preload/selection-entry.ts'),
           'custom-css-editor': resolve('src/preload/custom-css-editor.ts'),
@@ -63,6 +66,8 @@ export default defineConfig({
           'selection-toolbar': resolve('src/renderer/selection-toolbar.html'),
           'selection-explanation': resolve('src/renderer/selection-explanation.html'),
           'selection-translation': resolve('src/renderer/selection-translation.html'),
+          'screenshot-area': resolve('src/renderer/screenshot-area.html'),
+          'screenshot-progress': resolve('src/renderer/screenshot-progress.html'),
           'external-excerpt': resolve('src/renderer/external-excerpt.html'),
           'find-bar': resolve('src/renderer/find-bar.html'),
           'custom-css-editor': resolve('src/renderer/custom-css-editor.html'),

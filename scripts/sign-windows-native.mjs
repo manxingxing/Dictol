@@ -14,6 +14,7 @@ if (!certificatePassword) {
 
 const files = [
   join(root, 'native', 'mdict-node', 'dictol-mdict-node.win32-x64-msvc.node'),
+  join(root, 'native', 'ocr', 'prebuilds', 'win32-x64', 'ocr.node'),
   join(root, 'node_modules', 'adblock-rs', 'js', 'index.node'),
   join(root, 'node_modules', 'better-sqlite3', 'prebuilds', 'win32-x64.node'),
   join(root, 'node_modules', 'selection-hook', 'prebuilds', 'win32-x64', 'selection-hook.node')

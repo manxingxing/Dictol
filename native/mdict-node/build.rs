@@ -12,13 +12,13 @@ fn main() {
         return;
     }
 
-    build_macos_selection_panel(&target);
+    build_macos_bridges(&target);
 }
 
-fn build_macos_selection_panel(target: &str) {
-    // Compile the AppKit selection panel into the native addon.
+fn build_macos_bridges(target: &str) {
+    // Selection panel is the only remaining AppKit bridge in this addon.
     const SOURCES: [&str; 1] = ["src/selection_panel.m"];
-    const ARCHIVE: &str = "libdictol_macos_selection_panel.a";
+    const ARCHIVE: &str = "libdictol_macos_bridges.a";
 
     for source in SOURCES {
         println!("cargo:rerun-if-changed={source}");
@@ -81,7 +81,7 @@ fn build_macos_selection_panel(target: &str) {
     let mut archive_command = Command::new(env::var("AR").unwrap_or_else(|_| "ar".to_owned()));
     archive_command.arg("crs").arg(&archive);
     archive_command.args(&objects);
-    run(archive_command, "archiving the macOS window bridge");
+    run(archive_command, "archiving the remaining macOS bridges");
 
     println!("cargo:rustc-link-search=native={}", out_dir.display());
     println!(
@@ -89,6 +89,7 @@ fn build_macos_selection_panel(target: &str) {
         ARCHIVE.trim_end_matches(".a").trim_start_matches("lib")
     );
     println!("cargo:rustc-link-lib=framework=AppKit");
+    println!("cargo:rustc-link-lib=framework=ApplicationServices");
 }
 
 fn show_sdk_path() -> String {

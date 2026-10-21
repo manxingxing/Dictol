@@ -3,6 +3,7 @@ dist
 out
 .DS_Store
 .eslintcache
+!.nvmrc
 *.log*
 vscode/
 
@@ -16,14 +17,31 @@ opendesign/
 /Dictionaries/
 /swift-dictol
 /docs
+/scripts/tests/
 /scripts/*test*.ts
 /scripts/*test*.mjs
 /scripts/*test*.cjs
-**/__pycache__
+
 # build artifact
 /benchmarks/opendict-rs/target/
 /native/mdict/target/
 /native/mdict-node/target/
 /native/mdict-node/node_modules/
 /native/mdict-node/*.node
+/native/accessibility/target/
+/native/accessibility/*.node
+/native/accessibility/windows/target/
+/native/accessibility/windows/*.node
+/native/ocr/target/
+/native/ocr/macos/target/
+/native/ocr/windows/target/
+/native/ocr/windows/*.node
+/native/screen-capture/target/
+/native/screen-capture/node_modules/
+/native/screen-capture/macos/target/
+/native/screen-capture/macos/*.node
+/native/screen-capture/macos/index.d.ts
+/native/screen-capture/windows/target/
+/native/screen-capture/windows/*.node
+/native/screen-capture/windows/index.d.ts
 /resources/system-translation/dictol-system-translation

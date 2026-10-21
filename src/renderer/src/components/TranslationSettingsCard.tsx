@@ -17,7 +17,8 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { SettingsSection } from '@/components/settings/SettingsSection'
+import { SettingsList, SettingsRow, SettingsSection } from '@/components/settings/SettingsSection'
+import { formatShortcut, shortcutFromKeyboardEvent } from '@/lib/keyboard-shortcut'
 import {
   TRANSLATION_LANGUAGES,
   TRANSLATION_LANGUAGE_NAMES,
@@ -30,6 +31,7 @@ import {
 
 type ConfigurableProviderKind = Exclude<TranslationProviderKind, 'system'>
 type BusyOperation = { id: string; kind: 'change' | 'verify' }
+type ScreenshotStatus = Awaited<ReturnType<typeof window.dictol.translation.getScreenshotStatus>>
 
 const providerNames: Record<ConfigurableProviderKind, string> = {
   google: 'Google 翻译',
@@ -41,6 +43,10 @@ const providerNames: Record<ConfigurableProviderKind, string> = {
 
 export function TranslationSettingsCard(): React.JSX.Element {
   const [config, setConfig] = useState<TranslationPublicConfig | null>(null)
+  const [screenshotStatus, setScreenshotStatus] = useState<ScreenshotStatus>(null)
+  const [screenshotError, setScreenshotError] = useState<string | null>(null)
+  const [screenshotBusy, setScreenshotBusy] = useState(false)
+  const [recordingScreenshotShortcut, setRecordingScreenshotShortcut] = useState(false)
   const [draft, setDraft] = useState<TranslationSaveProviderRequest | null>(null)
   const [error, setError] = useState('')
   const [busyOperation, setBusyOperation] = useState<BusyOperation | null>(null)
@@ -59,6 +65,31 @@ export function TranslationSettingsCard(): React.JSX.Element {
         setError(cause instanceof Error ? cause.message : '无法读取翻译服务设置。')
       })
   }, [])
+
+  useEffect(() => {
+    void window.dictol.translation
+      .getScreenshotStatus()
+      .then(setScreenshotStatus)
+      .catch((cause) => {
+        setScreenshotError(cause instanceof Error ? cause.message : '无法读取截图翻译设置。')
+      })
+  }, [])
+
+  const updateScreenshotSetting = async (
+    action: () => ReturnType<typeof window.dictol.translation.setScreenshotEnabled>
+  ): Promise<void> => {
+    setScreenshotBusy(true)
+    setScreenshotError(null)
+    try {
+      const result = await action()
+      if (result) setScreenshotStatus(result.status)
+      if (!result?.ok) setScreenshotError(result?.error ?? '无法保存截图翻译设置。')
+    } catch (cause) {
+      setScreenshotError(cause instanceof Error ? cause.message : '无法保存截图翻译设置。')
+    } finally {
+      setScreenshotBusy(false)
+    }
+  }
 
   const apply = async (
     id: string,
@@ -147,6 +178,77 @@ export function TranslationSettingsCard(): React.JSX.Element {
           ))}
         </select>
       </div>
+      {screenshotStatus?.supported && (
+        <SettingsList className="mb-3">
+          <SettingsRow
+            label="截图翻译"
+            description="按快捷键框选屏幕文字，识别后在翻译弹窗中查看译文"
+            control={
+              <Switch
+                aria-label="截图翻译"
+                checked={screenshotStatus.enabled}
+                disabled={screenshotBusy}
+                onCheckedChange={(enabled) =>
+                  void updateScreenshotSetting(() =>
+                    window.dictol.translation.setScreenshotEnabled(enabled)
+                  )
+                }
+              />
+            }
+          />
+          {screenshotStatus.enabled && (
+            <SettingsRow
+              className="pl-8"
+              label="截图翻译快捷键"
+              description={
+                recordingScreenshotShortcut
+                  ? '请按下新的组合键，按 Esc 取消'
+                  : screenshotStatus.registered
+                    ? '快捷键已启用'
+                    : '快捷键被占用，请重新设置'
+              }
+              control={
+                <div className="flex items-center gap-2">
+                  <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
+                    {recordingScreenshotShortcut
+                      ? '等待输入…'
+                      : formatShortcut(screenshotStatus.shortcut, window.dictol.platform)}
+                  </kbd>
+                  <Button
+                    disabled={screenshotBusy}
+                    onClick={() => {
+                      setScreenshotError(null)
+                      setRecordingScreenshotShortcut(true)
+                    }}
+                    onKeyDown={(event) => {
+                      if (!recordingScreenshotShortcut) return
+                      event.preventDefault()
+                      event.stopPropagation()
+                      if (event.key === 'Escape') {
+                        setRecordingScreenshotShortcut(false)
+                        return
+                      }
+                      const shortcut = shortcutFromKeyboardEvent(event)
+                      if (!shortcut) return
+                      setRecordingScreenshotShortcut(false)
+                      void updateScreenshotSetting(() =>
+                        window.dictol.translation.setScreenshotShortcut(shortcut)
+                      )
+                    }}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {recordingScreenshotShortcut ? '按下组合键' : '修改'}
+                  </Button>
+                </div>
+              }
+            />
+          )}
+          {screenshotError && (
+            <p className="px-4 py-2 text-xs text-destructive">{screenshotError}</p>
+          )}
+        </SettingsList>
+      )}
       <div className="overflow-hidden rounded-lg border border-border bg-card">
         {config?.providers.map((provider) => (
           <div
