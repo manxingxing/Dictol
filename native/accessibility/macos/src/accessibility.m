@@ -1,9 +1,38 @@
 #import <ApplicationServices/ApplicationServices.h>
 #import <Foundation/Foundation.h>
 #import <NaturalLanguage/NaturalLanguage.h>
+#include <dispatch/dispatch.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+// An AX hit test against our own window calls Electron's accessibilityHitTest
+// in this process. That callback must run on the AppKit main thread.
+static BOOL point_is_inside_own_window(double x, double y) {
+    CFArrayRef windows = CGWindowListCopyWindowInfo(
+        kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+        kCGNullWindowID);
+    if (!windows) return NO;
+    BOOL inside = NO;
+    CGPoint point = CGPointMake(x, y);
+    for (CFIndex index = 0; index < CFArrayGetCount(windows); index++) {
+        CFDictionaryRef window = (CFDictionaryRef)CFArrayGetValueAtIndex(windows, index);
+        CFNumberRef owner = (CFNumberRef)CFDictionaryGetValue(window, kCGWindowOwnerPID);
+        int pid = 0;
+        if (!owner || !CFNumberGetValue(owner, kCFNumberIntType, &pid) || pid != getpid()) continue;
+        CFDictionaryRef bounds_value = (CFDictionaryRef)CFDictionaryGetValue(window, kCGWindowBounds);
+        CGRect bounds = CGRectZero;
+        if (bounds_value && CGRectMakeWithDictionaryRepresentation(bounds_value, &bounds) &&
+            CGRectContainsPoint(bounds, point)) {
+            inside = YES;
+            break;
+        }
+    }
+    CFRelease(windows);
+    return inside;
+}
 
 static int copy_json(id value, uint8_t **output, size_t *output_length) {
     NSData *json = [NSJSONSerialization dataWithJSONObject:value options:0 error:NULL];
@@ -370,6 +399,14 @@ static NSDictionary *text_by_group_word_bounds(AXUIElementRef element, CGPoint p
 
 int dictol_read_mac_accessible_text(double x, double y, int include_context,
                                     uint8_t **output, size_t *output_length) {
+    if (!pthread_main_np() && point_is_inside_own_window(x, y)) {
+        __block int result = 0;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            result = dictol_read_mac_accessible_text(
+                x, y, include_context, output, output_length);
+        });
+        return result;
+    }
     @autoreleasepool {
         if (!output || !output_length) return 0;
         *output = NULL;

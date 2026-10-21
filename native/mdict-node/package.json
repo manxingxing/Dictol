@@ -5,13 +5,15 @@
   "main": "wrapper.js",
   "types": "wrapper.d.ts",
   "files": [
+    "wrapper.js",
+    "wrapper.d.ts",
     "index.js",
     "index.d.ts",
-    "*.node"
+    "prebuilds/**/*.node"
   ],
   "scripts": {
-    "build": "napi build --platform --release",
-    "build:debug": "napi build --platform",
+    "build": "node build.mjs",
+    "build:debug": "node build.mjs --debug",
     "test": "node --test test/*.test.mjs"
   },
   "napi": {

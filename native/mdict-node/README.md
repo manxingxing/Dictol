@@ -2,8 +2,10 @@
 
 Node-API bindings for the new `dictol-mdict` parser in `native/mdict`. The binding is intended for the Electron main process; renderer access remains behind the existing Node IPC layer.
 
+Platform binaries are stored in `prebuilds/<platform>-<arch>/`; `wrapper.js` selects the matching binary through the NAPI-RS loader.
+
 ```js
-const { Mdd, MddList, Mdx } = require('./index.js')
+const { Mdd, MddList, Mdx } = require('./wrapper.js')
 
 const dictionary = Mdx.open('/path/to/dictionary.mdx')
 console.log(dictionary.metadata)

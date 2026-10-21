@@ -72,7 +72,7 @@ fn build_macos_bridges(target: &str) {
             .arg("-Wall");
         if let Ok(deployment_target) = env::var("MACOSX_DEPLOYMENT_TARGET") {
             if !deployment_target.is_empty() {
-                compile.arg("-mmacosx-version-min").arg(&deployment_target);
+                compile.arg(format!("-mmacosx-version-min={deployment_target}"));
             }
         }
         run(compile, &format!("compiling {source}"));

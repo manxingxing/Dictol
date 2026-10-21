@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const FILTER_LISTS = [
-  { name: '主流广告平台', fileName: 'easylist.txt' },
-  { name: '中国主流广告平台', fileName: 'easylist-china.txt' }
+  { name: '主流广告平台', fileName: 'easylist/easylist.txt' },
+  { name: '中国主流广告平台', fileName: 'easylist/easylist-china.txt' }
 ] as const
 
 const REQUEST_FILTER = {

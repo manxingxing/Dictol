@@ -45,6 +45,7 @@ try {
     MACOSX_DEPLOYMENT_TARGET: '14.0'
   })
   runNpm(['run', 'system-translation:build', '--', '--arch', arch])
+  runNpm(['run', 'system-translation:stage', '--', '--arch', arch])
   runNpm(['run', 'adblock:build', '--', '--target', target.native])
   runNpm(['run', 'typecheck'])
   runBinary('electron-vite', ['build'])

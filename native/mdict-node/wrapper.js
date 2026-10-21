@@ -1,4 +1,46 @@
-const native = require('./index.js')
+const path = require('node:path')
+const fs = require('node:fs')
+
+const nativeTargets = {
+  darwin: {
+    x64: ['darwin-x64', 'darwin-x64'],
+    arm64: ['darwin-arm64', 'darwin-arm64']
+  },
+  win32: {
+    x64: ['win32-x64', 'win32-x64-msvc']
+  },
+  linux: {
+    x64: ['linux-x64-gnu', 'linux-x64-gnu'],
+    arm64: ['linux-arm64-gnu', 'linux-arm64-gnu']
+  }
+}
+
+const target = nativeTargets[process.platform]?.[process.arch]
+if (!target) {
+  throw new Error(`Unsupported mdict native target: ${process.platform}-${process.arch}`)
+}
+
+const bindingPath = path.join(
+  __dirname,
+  'prebuilds',
+  target[0],
+  `dictol-mdict-node.${target[1]}.node`
+)
+if (!fs.existsSync(bindingPath)) {
+  throw new Error(
+    `Missing mdict native prebuild for ${process.platform}-${process.arch}: ${bindingPath}`
+  )
+}
+
+const previousBindingPath = process.env.NAPI_RS_NATIVE_LIBRARY_PATH
+process.env.NAPI_RS_NATIVE_LIBRARY_PATH = bindingPath
+let native
+try {
+  native = require('./index.js')
+} finally {
+  if (previousBindingPath === undefined) delete process.env.NAPI_RS_NATIVE_LIBRARY_PATH
+  else process.env.NAPI_RS_NATIVE_LIBRARY_PATH = previousBindingPath
+}
 
 function addAsyncIterator(ScannerClass) {
   if (!ScannerClass) return

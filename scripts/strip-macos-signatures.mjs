@@ -92,12 +92,7 @@ function resolveAppBundle(appOutDir) {
 
 function pruneSqliteSimple(resourcesPath, platform, arch) {
   const driversPath = join(resourcesPath, 'sqlite-simple')
-  const targets =
-    platform === 'darwin'
-      ? arch === 'universal'
-        ? ['darwin-x64', 'darwin-arm64']
-        : [`darwin-${arch}`]
-      : [`${platform}-${arch}`]
+  const targets = [`${platform}-${arch}`]
 
   for (const target of targets) {
     if (!existsSync(join(driversPath, target))) {
@@ -144,7 +139,14 @@ function pruneAndVerifyNativeModules(appPath, arch) {
   const unpacked = join(appPath, 'Contents', 'Resources', 'app.asar.unpacked', 'node_modules')
   const otherArch = arch === 'x64' ? 'arm64' : 'x64'
   const expected = [
-    join(unpacked, '@dictol', 'mdict-native', `dictol-mdict-node.darwin-${arch}.node`),
+    join(
+      unpacked,
+      '@dictol',
+      'mdict-native',
+      'prebuilds',
+      `darwin-${arch}`,
+      `dictol-mdict-node.darwin-${arch}.node`
+    ),
     join(
       unpacked,
       '@dictol',
@@ -166,7 +168,14 @@ function pruneAndVerifyNativeModules(appPath, arch) {
     join(unpacked, 'selection-hook', 'prebuilds', `darwin-${arch}`, 'selection-hook.node')
   ]
   const opposite = [
-    join(unpacked, '@dictol', 'mdict-native', `dictol-mdict-node.darwin-${otherArch}.node`),
+    join(
+      unpacked,
+      '@dictol',
+      'mdict-native',
+      'prebuilds',
+      `darwin-${otherArch}`,
+      `dictol-mdict-node.darwin-${otherArch}.node`
+    ),
     join(
       unpacked,
       '@dictol',
@@ -211,92 +220,19 @@ function pruneAndVerifyNativeModules(appPath, arch) {
   console.log(`  • verified macOS native modules arch=${arch} count=${expected.length}`)
 }
 
-function verifyUniversalNativeModules(appPath) {
-  const unpacked = join(appPath, 'Contents', 'Resources', 'app.asar.unpacked', 'node_modules')
-  const expected = [
-    [join(unpacked, '@dictol', 'mdict-native', 'dictol-mdict-node.darwin-x64.node'), 'x86_64'],
-    [join(unpacked, '@dictol', 'mdict-native', 'dictol-mdict-node.darwin-arm64.node'), 'arm64'],
-    [
-      join(
-        unpacked,
-        '@dictol',
-        'accessibility-native',
-        'prebuilds',
-        'darwin-x64',
-        'accessibility.node'
-      ),
-      'x86_64'
-    ],
-    [
-      join(
-        unpacked,
-        '@dictol',
-        'accessibility-native',
-        'prebuilds',
-        'darwin-arm64',
-        'accessibility.node'
-      ),
-      'arm64'
-    ],
-    [
-      join(
-        unpacked,
-        '@dictol',
-        'screen-capture-native',
-        'prebuilds',
-        'darwin-x64',
-        'screen-capture.node'
-      ),
-      'x86_64'
-    ],
-    [
-      join(
-        unpacked,
-        '@dictol',
-        'screen-capture-native',
-        'prebuilds',
-        'darwin-arm64',
-        'screen-capture.node'
-      ),
-      'arm64'
-    ],
-    [join(unpacked, '@dictol', 'ocr-native', 'prebuilds', 'darwin-x64', 'ocr.node'), 'x86_64'],
-    [join(unpacked, '@dictol', 'ocr-native', 'prebuilds', 'darwin-arm64', 'ocr.node'), 'arm64'],
-    [join(unpacked, 'better-sqlite3', 'prebuilds', 'darwin-x64.node'), 'x86_64'],
-    [join(unpacked, 'better-sqlite3', 'prebuilds', 'darwin-arm64.node'), 'arm64'],
-    [join(unpacked, 'selection-hook', 'prebuilds', 'darwin-x64', 'selection-hook.node'), 'x86_64'],
-    [join(unpacked, 'selection-hook', 'prebuilds', 'darwin-arm64', 'selection-hook.node'), 'arm64']
-  ]
-
-  for (const [path, architecture] of expected) {
-    if (!existsSync(path)) throw new Error(`Missing universal macOS native module: ${path}`)
-    const description = fileArchitecture(path)
-    if (!description.includes(architecture)) {
-      throw new Error(
-        `Wrong architecture in universal macOS native module: ${path}\n` +
-          `expected=${architecture}, file=${description}`
-      )
-    }
-  }
-
-  const adblock = join(unpacked, 'adblock-rs', 'js', 'index.node')
-  if (!existsSync(adblock)) throw new Error(`Missing universal macOS native module: ${adblock}`)
-  const adblockDescription = fileArchitecture(adblock)
-  if (!adblockDescription.includes('x86_64') || !adblockDescription.includes('arm64')) {
-    throw new Error(
-      `adblock-rs must contain x86_64 and arm64 slices in a universal build: ${adblockDescription}`
-    )
-  }
-
-  console.log(`  • verified universal macOS native modules count=${expected.length + 1}`)
-}
-
 function verifyWindowsNativeModules(appOutDir, arch) {
   if (arch !== 'x64') throw new Error(`Only Windows x64 is supported, received: ${arch}`)
 
   const unpacked = join(appOutDir, 'resources', 'app.asar.unpacked', 'node_modules')
   const expected = [
-    join(unpacked, '@dictol', 'mdict-native', 'dictol-mdict-node.win32-x64-msvc.node'),
+    join(
+      unpacked,
+      '@dictol',
+      'mdict-native',
+      'prebuilds',
+      'win32-x64',
+      'dictol-mdict-node.win32-x64-msvc.node'
+    ),
     join(
       unpacked,
       '@dictol',
@@ -370,29 +306,6 @@ function verifyWindowsNativeModules(appOutDir, arch) {
       `Packaged Windows mdict binding is missing exports: ${missingExports.join(', ')}`
     )
   }
-  const ocrExports = ['recognizeMacText', 'recognizeWindowsText', 'chineseWordRange']
-  const unexpectedExports = ocrExports.filter((name) => mdictBinary.includes(Buffer.from(name)))
-  if (unexpectedExports.length > 0) {
-    throw new Error(
-      `Packaged Windows MDict binding still contains OCR exports: ${unexpectedExports.join(', ')}`
-    )
-  }
-  const screenCaptureAddonExports = [
-    'captureScreenRegion',
-    'captureWindowsDisplayAtPoint',
-    'captureWindowsScreenRegion',
-    'getWindowsDisplayBoundsAtPoint',
-    'stopWindowsScreenCaptureSessions'
-  ]
-  const unexpectedCaptureExports = screenCaptureAddonExports.filter((name) =>
-    mdictBinary.includes(Buffer.from(name))
-  )
-  if (unexpectedCaptureExports.length > 0) {
-    throw new Error(
-      `Packaged Windows mdict binding contains screen capture exports: ${unexpectedCaptureExports.join(', ')}`
-    )
-  }
-
   const accessibilityBinary = readFileSync(expected[1])
   if (!accessibilityBinary.includes(Buffer.from('readAccessibleText'))) {
     throw new Error('Packaged Windows Accessibility binding is missing readAccessibleText')
@@ -443,16 +356,10 @@ export default async function verifyAndSignNativePackages(context) {
   const appPath = resolveAppBundle(context.appOutDir)
   if (!existsSync(appPath)) throw new Error(`Packaged app does not exist: ${appPath}`)
 
-  const universal = context.arch === 4 || context.arch === 'universal'
-  const arch = universal ? 'universal' : targetDarwinArch(context)
+  const arch = targetDarwinArch(context)
   pruneSqliteSimple(join(appPath, 'Contents', 'Resources'), 'darwin', arch)
-  if (universal || process.env.DICTOL_MAC_UNIVERSAL === '1') {
-    verifySystemTranslationHelper(appPath, ['x86_64', 'arm64'])
-    verifyUniversalNativeModules(appPath)
-  } else {
-    verifySystemTranslationHelper(appPath, [arch === 'x64' ? 'x86_64' : 'arm64'])
-    pruneAndVerifyNativeModules(appPath, arch)
-  }
+  verifySystemTranslationHelper(appPath, [arch === 'x64' ? 'x86_64' : 'arm64'])
+  pruneAndVerifyNativeModules(appPath, arch)
 
   const { bundles, files } = collectCandidates(appPath)
   // Sign nested code before its parent to keep every resource seal valid.

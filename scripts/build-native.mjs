@@ -17,7 +17,12 @@ const getTarget = () => {
 }
 
 const verifyWindowsX64Binding = (directory) => {
-  const binaryPath = join(directory, 'dictol-mdict-node.win32-x64-msvc.node')
+  const binaryPath = join(
+    directory,
+    'prebuilds',
+    'win32-x64',
+    'dictol-mdict-node.win32-x64-msvc.node'
+  )
   const binary = readFileSync(binaryPath)
   const requiredExports = ['Mdx', 'Mdd', 'MddList', 'hashFile']
   const missingExports = requiredExports.filter((name) => !binary.includes(Buffer.from(name)))

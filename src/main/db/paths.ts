@@ -13,7 +13,7 @@ export function getSqliteSimpleExtensionPath(): string {
   const target = `${process.platform}-${process.arch}`
   const extensionDirectory = app.isPackaged
     ? join(process.resourcesPath, 'sqlite-simple', target)
-    : join(app.getAppPath(), 'resources', 'sqlite-simple', target)
+    : join(app.getAppPath(), 'native', 'sqlite-simple', 'prebuilds', target)
   // better-sqlite3 appends the platform library suffix internally.
   return join(extensionDirectory, process.platform === 'win32' ? 'simple' : 'libsimple')
 }
