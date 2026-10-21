@@ -11,7 +11,7 @@ import {
   SELECTION_TRANSLATION_MAX_HEIGHT,
   SELECTION_TRANSLATION_WIDTH
 } from '../shared/translation'
-import { MAIN_WINDOW_TITLEBAR_HEIGHT } from '../shared/window-chrome'
+import { getMainWindowChromeMaterial, MAIN_WINDOW_TITLEBAR_HEIGHT } from '../shared/window-chrome'
 import { DICTIONARY_SESSION_PARTITION, EMBED_BROWSER_SESSION_PARTITION } from './entry-assets'
 import { resolvePreloadPath } from './output-path'
 import { applySelectionWindowBehavior } from './selection-window-behavior'
@@ -21,8 +21,10 @@ import { configureElectronPanel } from '@dictol/mdict-native'
 
 export type SelectionSurfaceWindow = BrowserWindow | NativeSelectionPanel
 
-const getMainWindowBackgroundColor = (useDarkColors: boolean): string =>
-  process.platform === 'darwin' ? '#00000000' : useDarkColors ? '#232323' : '#faf9f7'
+const getMainWindowBackgroundColor = (
+  useDarkColors: boolean,
+  useNativeBackdrop: boolean
+): string => (useNativeBackdrop ? '#00000000' : useDarkColors ? '#232323' : '#faf9f7')
 
 const ocrHighlightPage = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
@@ -32,6 +34,10 @@ const ocrHighlightPage = `data:text/html;charset=utf-8,${encodeURIComponent(`<!d
 </style></head><body><div id="highlight"></div><div id="underline"></div></body></html>`)}`
 
 export class WindowManager {
+  private readonly chromeMaterial = getMainWindowChromeMaterial(
+    process.platform,
+    process.getSystemVersion()
+  )
   mainWindow: BrowserWindow | undefined
   dictionaryView: WebContentsViewManager | undefined
   aggregateDictionaryView: WebContentsViewManager | undefined
@@ -79,7 +85,7 @@ export class WindowManager {
       minWidth: 520,
       minHeight: 520,
       show: false,
-      backgroundColor: getMainWindowBackgroundColor(darkMode),
+      backgroundColor: getMainWindowBackgroundColor(darkMode, this.chromeMaterial !== null),
       autoHideMenuBar: true,
       ...(process.platform === 'darwin'
         ? {
@@ -91,6 +97,7 @@ export class WindowManager {
           }
         : process.platform === 'win32'
           ? {
+              ...(this.chromeMaterial === 'mica' ? { backgroundMaterial: 'mica' as const } : {}),
               titleBarStyle: 'hidden' as const,
               titleBarOverlay: {
                 color: '#00000000',
@@ -833,7 +840,9 @@ export class WindowManager {
     const useDarkColors = nativeTheme.shouldUseDarkColors
     const window = this.mainWindow
     if (window && !window.isDestroyed()) {
-      window.setBackgroundColor(getMainWindowBackgroundColor(useDarkColors))
+      window.setBackgroundColor(
+        getMainWindowBackgroundColor(useDarkColors, this.chromeMaterial !== null)
+      )
     }
 
     if (this.dictionaryView && !this.dictionaryView.isDestroyed) {

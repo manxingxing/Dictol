@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { createTtsPlayback, getSystemTtsVoices, onSystemTtsVoicesChanged } from './tts'
+import { getMainWindowChromeMaterial } from '../shared/window-chrome'
 import type { TtsConfig } from '../shared/tts'
 
 import type {
@@ -248,6 +249,10 @@ ipcRenderer.on('app:search-request', (_event, request: MainWindowSearchRequest) 
 
 const api = Object.freeze({
   platform: process.platform,
+  mainWindowChromeMaterial: getMainWindowChromeMaterial(
+    process.platform,
+    process.getSystemVersion()
+  ),
   selectionExplanation: Object.freeze({
     show: (word: string): void => ipcRenderer.send('selection-explanation:show-from-main', word)
   }),

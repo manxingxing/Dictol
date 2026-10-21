@@ -3,13 +3,13 @@ import { useLayoutEffect } from 'react'
 export function useMainWindowChrome(): void {
   useLayoutEffect(() => {
     const root = document.documentElement
-    if (window.dictol.platform === 'darwin') {
-      root.dataset.chromeVibrancy = 'on'
+    let active = true
+    if (window.dictol.mainWindowChromeMaterial) {
+      root.dataset.chromeMaterial = window.dictol.mainWindowChromeMaterial
     } else {
-      delete root.dataset.chromeVibrancy
+      delete root.dataset.chromeMaterial
     }
 
-    let active = true
     let receivedFocusEvent = false
     const unsubscribe = window.dictol.app.onMainWindowFocusChanged((isFocused) => {
       receivedFocusEvent = true
@@ -24,7 +24,7 @@ export function useMainWindowChrome(): void {
       active = false
       unsubscribe()
       delete root.dataset.windowActive
-      delete root.dataset.chromeVibrancy
+      delete root.dataset.chromeMaterial
     }
   }, [])
 }

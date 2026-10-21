@@ -54,6 +54,7 @@ declare global {
     }
     dictol: {
       platform: NodeJS.Platform
+      mainWindowChromeMaterial: 'vibrancy' | 'mica' | null
       selectionExplanation: {
         show: (word: string) => void
       }
