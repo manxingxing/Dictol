@@ -62,8 +62,21 @@ function DialogContent({
   )
 }
 
-function DialogHeader({ className, ...props }: ComponentProps<'div'>): React.JSX.Element {
-  return <div className={cn('flex flex-col gap-2 text-left', className)} {...props} />
+function DialogHeader({
+  className,
+  variant = 'default',
+  ...props
+}: ComponentProps<'div'> & { variant?: 'default' | 'section' }): React.JSX.Element {
+  return (
+    <div
+      className={cn(
+        'flex flex-col gap-1 text-left',
+        variant === 'section' && 'shrink-0 border-b border-border px-6 py-3 pr-14',
+        className
+      )}
+      {...props}
+    />
+  )
 }
 
 function DialogFooter({ className, ...props }: ComponentProps<'div'>): React.JSX.Element {

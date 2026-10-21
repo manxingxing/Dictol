@@ -630,14 +630,14 @@ export function WordCaptureSettingsCard(): React.JSX.Element {
                       <ShieldAlert className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
                     )}
                     <div>
-                      <p className="text-sm font-medium">屏幕录制</p>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="text-sm font-medium">屏幕录制</p>
+                        <span className="text-xs text-muted-foreground">
+                          {captureStatus.screenCapturePermission === 'granted' ? '已开启' : '未开启'}
+                        </span>
+                      </div>
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        辅助功能无法读取鼠标下的文字时，会截取屏幕图像并在本机 OCR 识别。
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {captureStatus.screenCapturePermission === 'granted'
-                          ? '已开启'
-                          : '开发版请允许启动它的终端或 IDE 录制屏幕；安装版请允许 Dictol。'}
+                        用于识别图片或者视频中的文字和位置
                       </p>
                       {screenCaptureSettingsError && (
                         <p className="mt-2 text-xs text-destructive" role="alert">

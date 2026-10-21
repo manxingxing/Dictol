@@ -574,7 +574,7 @@ export function DictionariesPage(): React.JSX.Element {
         >
           {importDialogStep === 'preview' && importPreview ? (
             <>
-              <DialogHeader className="border-b border-border px-6 pb-5 pt-6 pr-14">
+              <DialogHeader variant="section">
                 <DialogTitle>预览词典文件</DialogTitle>
                 <DialogDescription>
                   取消选择不属于该词典的资源；MDX 主文件必须保留。
@@ -790,7 +790,7 @@ export function DictionariesPage(): React.JSX.Element {
         }}
       >
         <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-2xl">
-          <DialogHeader className="border-b border-border px-6 pb-5 pt-6 pr-14">
+          <DialogHeader variant="section">
             <DialogTitle>扫描文件夹导入</DialogTitle>
             <DialogDescription>递归查找 MDX；每个 MDX 只使用所在目录中的资源。</DialogDescription>
           </DialogHeader>
@@ -821,16 +821,6 @@ export function DictionariesPage(): React.JSX.Element {
 
             {folderImportPreview && (
               <>
-                <label className="mt-5 flex items-center gap-2 text-sm">
-                  <input
-                    checked={copyFolderDictionaryFiles}
-                    className="size-4 accent-primary"
-                    disabled={importDictionariesFromFolder.isPending || selectingImportFolder}
-                    onChange={(event) => setCopyFolderDictionaryFiles(event.target.checked)}
-                    type="checkbox"
-                  />
-                  将词典文件复制到软件中
-                </label>
                 <div className="mt-5 overflow-hidden rounded-xl border border-border">
                   <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/30 px-3 py-2">
                     <label className="flex items-center gap-2 text-sm font-medium">
@@ -916,27 +906,41 @@ export function DictionariesPage(): React.JSX.Element {
               </p>
             )}
           </div>
-          <DialogFooter className="border-t border-border bg-muted/20 px-6 py-4">
-            <Button
-              disabled={importDictionariesFromFolder.isPending || selectingImportFolder}
-              onClick={closeFolderImportDialog}
-              type="button"
-              variant="outline"
-            >
-              取消
-            </Button>
-            <Button
-              disabled={
-                !folderImportPreview ||
-                folderImportPreview.dictionaries.length === 0 ||
-                selectedFolderDictionaryCount === 0 ||
-                importDictionariesFromFolder.isPending
-              }
-              onClick={() => void submitFolderImport().catch(() => undefined)}
-              type="button"
-            >
-              {importDictionariesFromFolder.isPending ? '正在导入…' : '导入已选词典'}
-            </Button>
+          <DialogFooter className="flex-col border-t border-border bg-muted/20 px-6 py-4 sm:items-center sm:justify-between">
+            {folderImportPreview && (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  checked={copyFolderDictionaryFiles}
+                  className="size-4 accent-primary"
+                  disabled={importDictionariesFromFolder.isPending || selectingImportFolder}
+                  onChange={(event) => setCopyFolderDictionaryFiles(event.target.checked)}
+                  type="checkbox"
+                />
+                将词典文件复制到软件中
+              </label>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button
+                disabled={importDictionariesFromFolder.isPending || selectingImportFolder}
+                onClick={closeFolderImportDialog}
+                type="button"
+                variant="outline"
+              >
+                取消
+              </Button>
+              <Button
+                disabled={
+                  !folderImportPreview ||
+                  folderImportPreview.dictionaries.length === 0 ||
+                  selectedFolderDictionaryCount === 0 ||
+                  importDictionariesFromFolder.isPending
+                }
+                onClick={() => void submitFolderImport().catch(() => undefined)}
+                type="button"
+              >
+                {importDictionariesFromFolder.isPending ? '正在导入…' : '导入已选词典'}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

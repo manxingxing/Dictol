@@ -582,7 +582,7 @@ export function DictionaryGroupsPage(): React.JSX.Element {
         open={memberEditorGroupId !== null}
       >
         <DialogContent className="flex h-[min(720px,calc(100vh-2rem))] max-h-[calc(100vh-2rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="shrink-0 border-b border-border px-6 py-5">
+          <DialogHeader variant="section">
             <DialogTitle>编辑词典成员 {memberEditorGroup?.name ?? ''}</DialogTitle>
           </DialogHeader>
 

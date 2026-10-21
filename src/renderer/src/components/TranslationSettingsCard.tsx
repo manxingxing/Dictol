@@ -164,7 +164,7 @@ export function TranslationSettingsCard(): React.JSX.Element {
   }
 
   return (
-    <SettingsSection title="翻译" description="划词弹窗按此顺序展示所有可用服务的译文。">
+    <SettingsSection title="翻译" description="调用翻译服务将所选文本翻译为目标语言">
       <div className="mb-3 flex items-center justify-between gap-4 rounded-lg border border-border bg-card px-4 py-3">
         <label className="text-sm font-medium" htmlFor="translation-target">
           默认目标语言

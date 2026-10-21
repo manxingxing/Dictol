@@ -85,7 +85,7 @@ export function AiLookupSettingsCard(): React.JSX.Element {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-3xl">
-                  <DialogHeader className="border-b border-border px-6 pb-5 pt-6 pr-14">
+                  <DialogHeader variant="section">
                     <DialogTitle>配置 AI 查词</DialogTitle>
                     <DialogDescription>
                       连接兼容 OpenAI Chat Completions 的模型服务
