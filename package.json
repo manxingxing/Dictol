@@ -41,7 +41,6 @@
     "build:linux": "node scripts/build-linux.mjs"
   },
   "dependencies": {
-    "@base-ui/react": "^1.8.0",
     "@dictol/mdict-native": "file:native/mdict-node",
     "@dictol/accessibility-native": "file:native/accessibility",
     "@dictol/screen-capture-native": "file:native/screen-capture",
@@ -68,6 +67,7 @@
   },
   "devDependencies": {
     "@assistant-ui/react": "^0.15.11",
+    "@base-ui/react": "^1.8.0",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-css": "^6.3.1",
     "@codemirror/language": "^6.12.4",
