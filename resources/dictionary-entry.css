@@ -57,18 +57,20 @@ body#dictol-aggregate[data-layout='vertical'] {
   padding: 12px;
 }
 
-@container dictol-dictionary-entry {
-  .dictol-dictionary-entry img,
-  .dictol-dictionary-entry video,
-  .dictol-dictionary-entry iframe {
-    max-width: min(90cqw, 95vw);
+@layer dictol {
+  @container dictol-dictionary-entry {
+    .dictol-dictionary-entry img,
+    .dictol-dictionary-entry video,
+    .dictol-dictionary-entry iframe {
+      max-width: min(100cqw, 100%);
+    }
   }
-}
 
-img,
-video,
-iframe {
-  max-width: calc(95vw - 40px);
+  img,
+  video,
+  iframe {
+    max-width: min(100cqw, 100%);
+  }
 }
 
 .dictol-dictionary-title {
