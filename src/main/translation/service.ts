@@ -33,7 +33,9 @@ export class TranslationService {
         return {
           ...provider,
           options: { ...provider.options },
-          hasCredentials: Boolean(credentials.apiKey || credentials.accessKeyId),
+          hasCredentials: Boolean(
+            credentials.apiKey || credentials.accessKeyId || credentials.secretKey
+          ),
           available: provider.enabled && this.isReady(provider, credentials)
         }
       })
@@ -74,7 +76,7 @@ export class TranslationService {
         Object.entries(input.credentials)
           .filter(
             ([key, value]) =>
-              ['apiKey', 'accessKeyId', 'secretAccessKey'].includes(key) &&
+              ['apiKey', 'accessKeyId', 'secretAccessKey', 'secretKey'].includes(key) &&
               typeof value === 'string' &&
               value.trim().length > 0
           )
@@ -252,6 +254,8 @@ export class TranslationService {
         return true
       case 'volcano':
         return Boolean(credentials.accessKeyId && credentials.secretAccessKey)
+      case 'baidu':
+        return Boolean(options.appId && credentials.secretKey)
       case 'google':
       case 'microsoft':
       case 'deepl':
@@ -306,6 +310,7 @@ function normalizeOptions(
     google: [],
     microsoft: ['region', 'endpoint'],
     volcano: [],
+    baidu: ['appId'],
     deepl: ['plan'],
     'openai-compatible': ['baseUrl', 'model'],
     'youdao-web': [],

@@ -22,6 +22,7 @@ export type TranslationProviderKind =
   | 'google'
   | 'microsoft'
   | 'volcano'
+  | 'baidu'
   | 'deepl'
   | 'openai-compatible'
   | 'youdao-web'

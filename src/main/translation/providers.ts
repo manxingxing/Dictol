@@ -7,6 +7,7 @@ import type {
 import { TRANSLATION_LANGUAGE_NAMES } from '../../shared/translation'
 import { translateWithSystem } from './system'
 import { translateWithVolcano } from './volcano'
+import { translateWithBaidu } from './baidu'
 import { translateWithYoudaoWeb } from './youdao-web'
 import { translateWithGoogleWeb } from './google-web'
 import { translateWithBingWeb } from './bing-web'
@@ -32,6 +33,7 @@ export const adapters: Record<TranslationProviderKind, TranslationAdapter> = {
   'bing-web': translateWithBingWeb,
   microsoft: translateWithMicrosoft,
   volcano: ({ request, credentials, signal }) => translateWithVolcano(request, credentials, signal),
+  baidu: translateWithBaidu,
   deepl: translateWithDeepL
 }
 

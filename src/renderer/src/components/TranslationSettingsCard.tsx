@@ -36,6 +36,7 @@ type ScreenshotStatus = Awaited<ReturnType<typeof window.dictol.translation.getS
 const providerNames: Record<ConfigurableProviderKind, string> = {
   google: 'Google 翻译',
   microsoft: 'Microsoft 翻译',
+  baidu: '百度翻译',
   deepl: 'DeepL 翻译',
   volcano: '火山翻译',
   'youdao-web': '有道在线翻译',
@@ -478,6 +479,21 @@ export function TranslationSettingsCard(): React.JSX.Element {
                   </select>
                 </label>
               )}
+              {draft.kind === 'baidu' && (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    请先在百度翻译开放平台开通通用文本翻译 API。
+                  </p>
+                  <label className="block space-y-1 text-sm">
+                    <span>APP ID</span>
+                    <Input
+                      onChange={(event) => updateOption('appId', event.target.value)}
+                      placeholder="百度翻译开放平台的 APP ID"
+                      value={draft.options.appId ?? ''}
+                    />
+                  </label>
+                </>
+              )}
               {draft.kind === 'openai-compatible' && (
                 <>
                   <label className="block space-y-1 text-sm">
@@ -520,6 +536,17 @@ export function TranslationSettingsCard(): React.JSX.Element {
                     />
                   </label>
                 </>
+              ) : draft.kind === 'baidu' ? (
+                <label className="block space-y-1 text-sm">
+                  <span>密钥</span>
+                  <Input
+                    autoComplete="off"
+                    onChange={(event) => updateCredential('secretKey', event.target.value)}
+                    placeholder="留空保留已保存的密钥"
+                    type="password"
+                    value={draft.credentials?.secretKey ?? ''}
+                  />
+                </label>
               ) : (
                 <label className="block space-y-1 text-sm">
                   <span>
