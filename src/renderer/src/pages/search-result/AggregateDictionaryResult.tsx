@@ -86,7 +86,7 @@ export function AggregateDictionaryResult({
             <button
               aria-label={item.dictionaryName}
               aria-selected={selectedId === item.dictionaryId}
-              className="dictionary-tab-trigger group scroll-mx-3"
+              className="dictionary-tab-trigger group inline-flex items-center justify-center scroll-mx-3"
               data-state={selectedId === item.dictionaryId ? 'active' : 'inactive'}
               key={item.dictionaryId}
               ref={selectedId === item.dictionaryId ? tabRef : undefined}
