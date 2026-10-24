@@ -23,7 +23,7 @@ export function StarButton({ word }: StarButtonProps): React.JSX.Element {
 
   return (
     <Button
-      aria-label="加入默认生词本"
+      aria-label={isStarred.data ? '取消标星' : '加入默认生词本'}
       className="search-action-button size-7 shrink-0 rounded-lg"
       disabled={toggleStar.isPending}
       onClick={handleToggleStar}

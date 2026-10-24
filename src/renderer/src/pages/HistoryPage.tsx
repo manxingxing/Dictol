@@ -27,6 +27,7 @@ import {
   type QueryHistoryItem
 } from '@/hooks/use-query-history'
 import { cn, formatTime } from '@/lib/utils'
+import { StarButton } from '@/components/StarButton'
 
 function getColumnClassName(columnId: string, header: boolean): string | undefined {
   switch (columnId) {
@@ -37,7 +38,7 @@ function getColumnClassName(columnId: string, header: boolean): string | undefin
     case 'lastQueriedAt':
       return 'w-36 text-right'
     case 'actions':
-      return 'w-28 text-right'
+      return 'w-32 text-right'
     default:
       return undefined
   }
@@ -73,8 +74,18 @@ export const HistoryPage = (): React.JSX.Element => {
       {
         accessorKey: 'term',
         header: '词条',
-        cell: ({ getValue }): React.JSX.Element => (
-          <span className="block truncate font-medium">{getValue<string>()}</span>
+        cell: ({ row }): React.JSX.Element => (
+          <button
+            className="block max-w-full truncate text-left font-semibold hover:text-primary"
+            onClick={() => {
+              void searchHistoryTerm(row.original.term).catch((error: unknown) => {
+                console.error('Failed to open query history entry', error)
+              })
+            }}
+            type="button"
+          >
+            {row.original.term}
+          </button>
         )
       },
       {
@@ -100,24 +111,25 @@ export const HistoryPage = (): React.JSX.Element => {
         id: 'actions',
         header: '操作',
         cell: ({ row }): React.JSX.Element => (
-          <Button
-            aria-label={`查询 ${row.original.term}`}
-            onClick={() => {
-              void searchHistoryTerm(row.original.term).catch((error: unknown) => {
-                console.error('Failed to open query history entry', error)
-              })
-            }}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            <Search />
-            查询
-          </Button>
+          <div className="flex items-center justify-end gap-1">
+            <StarButton word={row.original.term} />
+            <Button
+              aria-label={`查询 ${row.original.term}`}
+              onClick={() => {
+                window.dictol.selectionExplanation.show(row.original.term)
+              }}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <Search />
+              查询
+            </Button>
+          </div>
         )
       }
     ],
-    [searchHistoryTerm]
+    [navigate, searchHistoryTerm, setSearchQuery]
   )
 
   // TanStack Table returns mutable APIs that React Compiler intentionally does not memoize.
