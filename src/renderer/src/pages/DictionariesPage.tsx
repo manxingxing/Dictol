@@ -19,7 +19,8 @@ import {
   Trash2,
   Upload,
   Power,
-  BookText
+  BookText,
+  Search
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -85,6 +86,7 @@ export function DictionariesPage(): React.JSX.Element {
   const [folderImportError, setFolderImportError] = useState<string | null>(null)
   // 修改词典名称
   const [renameTarget, setRenameTarget] = useState<{ id: string; name: string } | null>(null)
+  const [dictionarySearch, setDictionarySearch] = useState('')
   const [draggedDictionaryId, setDraggedDictionaryId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{
     id: string
@@ -96,6 +98,12 @@ export function DictionariesPage(): React.JSX.Element {
   const [indexTarget, setIndexTarget] = useState<{ id: string; name: string } | null>(null)
 
   const selectedFolderDictionaryCount = selectedFolderMdxPaths.size
+  const normalizedDictionarySearch = dictionarySearch.trim().toLocaleLowerCase()
+  const visibleDictionaries = normalizedDictionarySearch
+    ? dictionaries.filter((dictionary) =>
+        dictionary.name.toLocaleLowerCase().includes(normalizedDictionarySearch)
+      )
+    : dictionaries
 
   const finishDragging = (): void => {
     setDraggedDictionaryId(null)
@@ -258,10 +266,18 @@ export function DictionariesPage(): React.JSX.Element {
   return (
     <>
       <div>
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs leading-5 text-muted-foreground">
-            拖动以调整词典顺序
-          </p>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="relative w-44 shrink-0 sm:w-52">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="按名称搜索词典"
+              className="h-8 pl-9"
+              onChange={(event) => setDictionarySearch(event.target.value)}
+              placeholder="搜索词典名称…"
+              type="search"
+              value={dictionarySearch}
+            />
+          </div>
           <div className="flex flex-wrap justify-end gap-2">
             <Button asChild className="h-8 shrink-0" size="sm" type="button" variant="outline">
               <NavLink to="/dictionaries/groups">
@@ -311,9 +327,12 @@ export function DictionariesPage(): React.JSX.Element {
           {!isLoading && !isError && dictionaries.length === 0 && (
             <p className="bg-card px-4 py-5 text-sm text-muted-foreground">暂无词典。</p>
           )}
-          {!isLoading && !isError && dictionaries.length > 0 && (
+          {!isLoading && !isError && dictionaries.length > 0 && visibleDictionaries.length === 0 && (
+            <p className="bg-card px-4 py-5 text-sm text-muted-foreground">未找到匹配的词典。</p>
+          )}
+          {!isLoading && !isError && visibleDictionaries.length > 0 && (
             <ul className="divide-y divide-border">
-              {dictionaries.map((dictionary) => {
+              {visibleDictionaries.map((dictionary) => {
                 const status = dictionaryStatus[dictionary.status]
                 const StatusIcon = status.icon
                 const isDeleting =
