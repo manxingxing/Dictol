@@ -3,10 +3,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { SettingsList, SettingsRow, SettingsSection } from '@/components/settings/SettingsSection'
 import { formatShortcut, shortcutFromKeyboardEvent } from '@/lib/keyboard-shortcut'
+import { useAppStore } from '@/stores/app-store'
 
 type KeyboardShortcutStatus = Awaited<ReturnType<typeof window.dictol.keyboard.getStatus>>
 
 export function KeyboardSettingsCard(): React.JSX.Element {
+  const dictionaryLayout = useAppStore((state) => state.dictionaryLayout)
   const [status, setStatus] = useState<KeyboardShortcutStatus>(null)
   const [recordingShortcut, setRecordingShortcut] = useState(false)
   const [savingShortcut, setSavingShortcut] = useState(false)
@@ -103,6 +105,28 @@ export function KeyboardSettingsCard(): React.JSX.Element {
                 </kbd>
               }
             />
+            {dictionaryLayout === 'single' && (
+              <>
+                <SettingsRow
+                  label="上一个词典"
+                  description="在查词结果中切换到上一个词典"
+                  control={
+                    <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
+                      {formatShortcut('CommandOrControl+Left', window.dictol.platform)}
+                    </kbd>
+                  }
+                />
+                <SettingsRow
+                  label="下一个词典"
+                  description="在查词结果中切换到下一个词典"
+                  control={
+                    <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
+                      {formatShortcut('CommandOrControl+Right', window.dictol.platform)}
+                    </kbd>
+                  }
+                />
+              </>
+            )}
           </>
         )}
       </SettingsList>
