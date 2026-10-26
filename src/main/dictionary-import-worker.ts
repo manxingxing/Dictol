@@ -11,7 +11,7 @@ import type {
   DictionaryImportWorkerRequest
 } from '../shared/dictionary-import'
 import { openDrizzleDB } from './db/drizzle'
-import { hashFile } from './file-hash'
+import { hashFile } from './lib/file-hash'
 import { DictionaryFileRepository } from './db/repository/dictionary-file-repository'
 import { DictionaryRepository } from './db/repository/dictionary-repository'
 import { dictionaryIndex } from './db/schema'

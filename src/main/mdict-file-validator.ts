@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
 
-import { hashFile } from './file-hash'
+import { hashFile } from './lib/file-hash'
 
 export type MdictFileDescriptor = {
   id: number
