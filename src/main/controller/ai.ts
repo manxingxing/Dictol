@@ -24,6 +24,7 @@ export class AiController extends BaseController {
   override mount(): void {
     ipcMain.handle('ai-lookup:get-config', this.getConfig)
     ipcMain.handle('ai-lookup:save-config', this.saveConfig)
+    ipcMain.handle('ai-lookup:test-config', this.testConfig)
     ipcMain.handle('ai-lookup:start-chat', this.startChat)
     ipcMain.on('ai-lookup:cancel', this.cancel)
   }
@@ -45,6 +46,11 @@ export class AiController extends BaseController {
       config.enabled
     )
     return config
+  }
+
+  private readonly testConfig = async (event: IpcMainInvokeEvent): Promise<void> => {
+    if (!this.acceptsMainSender(event.sender)) return
+    await this.service.testConfig()
   }
 
   private readonly startChat = (

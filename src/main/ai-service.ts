@@ -20,6 +20,7 @@ import type { OcrAiExplanation } from '../shared/ocr-explanation'
 const MAX_MESSAGES = 100
 const MAX_MESSAGE_LENGTH = 20_000
 const REQUEST_TIMEOUT_MS = 120_000
+const VERIFICATION_TIMEOUT_MS = 30_000
 
 export type AiStreamHandler = (event: AiStreamEvent) => void
 export type AiPromptTarget = 'sidebar' | 'excerpt' | 'ocr-context'
@@ -67,6 +68,46 @@ export class AiLookupService {
     return this.getPublicConfig()
   }
 
+  async testConfig(): Promise<void> {
+    const config = this.appConfig.load().aiLookup
+    if (!config.model) throw new Error('请先在设置中配置模型名称。')
+    const apiKey = this.credentials.getApiKey()
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), VERIFICATION_TIMEOUT_MS)
+    try {
+      const response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
+        },
+        body: JSON.stringify(
+          createAiCompletionBody({
+            model: config.model,
+            stream: false,
+            messages: [{ role: 'user', content: 'Reply with OK.' }]
+          })
+        ),
+        signal: controller.signal
+      })
+      if (!response.ok) {
+        const text = await response.text().catch(() => '')
+        throw new Error(formatProviderError(response.status, text))
+      }
+      const completion = (await response.json().catch(() => null)) as {
+        choices?: Array<{ message?: { content?: unknown } }>
+      } | null
+      const content = completion?.choices?.[0]?.message?.content
+      if (typeof content !== 'string' || !content.trim())
+        throw new Error('AI 服务没有返回有效内容。')
+    } catch (error) {
+      if (controller.signal.aborted) throw new Error('验证超时，请重试。')
+      throw error
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
   async *stream(
     requestId: string,
     messages: AiChatMessage[],
@@ -112,7 +153,6 @@ export class AiLookupService {
           createAiCompletionBody({
             model: config.model,
             stream: promptTarget !== 'ocr-context',
-            purpose: 'lookup',
             messages: [{ role: 'system', content: systemPrompt }, ...requestMessages]
           })
         ),

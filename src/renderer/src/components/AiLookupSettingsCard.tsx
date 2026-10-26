@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { CircleAlert } from 'lucide-react'
+import { CircleAlert, LoaderCircle } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { SettingsList, SettingsRow, SettingsSection } from '@/components/settings/SettingsSection'
@@ -26,6 +27,7 @@ type AiLookupForm = Omit<AiLookupConfig, 'hasApiKey'> & {
 export function AiLookupSettingsCard(): React.JSX.Element {
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [verifyingAiConfig, setVerifyingAiConfig] = useState(false)
   const aiConfig = useAiLookupConfig()
   const saveAiConfig = useSaveAiLookupConfig()
   const [aiForm, setAiForm] = useState<AiLookupForm>(createAiForm)
@@ -62,6 +64,20 @@ export function AiLookupSettingsCard(): React.JSX.Element {
       },
       onError: (error: Error) => setAiError(error.message)
     })
+  }
+
+  const testAiConfig = async (): Promise<void> => {
+    setVerifyingAiConfig(true)
+    try {
+      await window.dictol.aiLookup.testConfig()
+      toast.success('AI 配置验证成功。')
+    } catch (error) {
+      toast.error('AI 配置验证失败', {
+        description: error instanceof Error ? error.message : '连接失败。'
+      })
+    } finally {
+      setVerifyingAiConfig(false)
+    }
   }
 
   return (
@@ -178,6 +194,17 @@ export function AiLookupSettingsCard(): React.JSX.Element {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+              <Button
+                aria-label={verifyingAiConfig ? '正在验证 AI 配置' : '验证 AI 配置'}
+                className={verifyingAiConfig ? 'min-w-12 disabled:opacity-100' : 'min-w-12'}
+                disabled={!aiConfig.data || saveAiConfig.isPending || verifyingAiConfig}
+                onClick={() => void testAiConfig()}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {verifyingAiConfig ? <LoaderCircle className="animate-spin" /> : '验证'}
+              </Button>
               <Switch
                 aria-label="启用 AI 增强"
                 checked={aiConfig.data?.enabled ?? aiForm.enabled}

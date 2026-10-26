@@ -467,6 +467,7 @@ declare global {
           model: string
           hasApiKey: boolean
         } | null>
+        testConfig: () => Promise<void>
         startChat: (request: {
           messages: Array<{ role: 'user' | 'assistant'; content: string }>
           promptTarget?: 'sidebar'

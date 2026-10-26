@@ -159,7 +159,6 @@ async function translateWithOpenAiCompatible({
     body: JSON.stringify(
       createAiCompletionBody({
         model: config.options.model,
-        purpose: 'translation',
         stream: true,
         messages: [
           {

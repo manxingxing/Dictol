@@ -528,6 +528,7 @@ const api = Object.freeze({
       ipcRenderer.invoke('ai-lookup:get-config'),
     saveConfig: (request: AiSaveConfigRequest): Promise<AiLookupPublicConfig | null> =>
       ipcRenderer.invoke('ai-lookup:save-config', request),
+    testConfig: (): Promise<void> => ipcRenderer.invoke('ai-lookup:test-config'),
     startChat: (request: AiChatRequest): Promise<string | null> =>
       ipcRenderer.invoke('ai-lookup:start-chat', request),
     cancel: (requestId: string): void => ipcRenderer.send('ai-lookup:cancel', requestId),
