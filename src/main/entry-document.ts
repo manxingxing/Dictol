@@ -21,10 +21,10 @@ export function createEntryDocument(
     "default-src 'none'",
     "style-src 'unsafe-inline' data: blob: dictol-entry: file: http: https:",
     'img-src data: blob: dictol-entry: file: http: https:',
-    'media-src data: blob: dictol-entry: sound: audio: file: http: https:',
+    'media-src data: blob: dictol-entry: sound: snd: audio: file: http: https:',
     "script-src 'unsafe-inline' 'unsafe-eval' data: blob: dictol-entry: file: http: https:",
     'font-src data: blob: dictol-entry: file: http: https:',
-    'connect-src blob: dictol-entry: sound: audio: file: http: https: ws: wss:',
+    'connect-src blob: dictol-entry: sound: snd: audio: file: http: https: ws: wss:',
     "base-uri 'none'",
     "object-src 'none'"
   ].join('; ')

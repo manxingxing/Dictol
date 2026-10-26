@@ -31,6 +31,7 @@ import { createConcatenatedEntryDocument, rewriteDictionaryCss } from './concate
 
 const AUDIO_SCHEME = 'audio'
 const SOUND_SCHEME = 'sound'
+const SND_SCHEME = 'snd'
 const FILE_SCHEME = 'file'
 const DICTIONARY_ID_HEADER = 'x-dictol-dictionary-id'
 const STATIC_RESOURCE_CACHE_CONTROL = 'public, max-age=3600'
@@ -82,7 +83,7 @@ export function registerResourceSchemes(): void {
         supportFetchAPI: true
       }
     },
-    ...[AUDIO_SCHEME, SOUND_SCHEME].map((scheme) => ({
+    ...[AUDIO_SCHEME, SOUND_SCHEME, SND_SCHEME].map((scheme) => ({
       scheme,
       privileges: {
         secure: true,
@@ -136,6 +137,9 @@ export class DictionaryResourceProtocolHandlers {
     )
     this.dictionarySession.protocol.handle(SOUND_SCHEME, (request) =>
       this.handleNativeResourceProtocol(request, SOUND_SCHEME)
+    )
+    this.dictionarySession.protocol.handle(SND_SCHEME, (request) =>
+      this.handleNativeResourceProtocol(request, SND_SCHEME)
     )
     this.dictionarySession.protocol.handle(AUDIO_SCHEME, (request) =>
       this.handleNativeResourceProtocol(request, AUDIO_SCHEME)
@@ -263,7 +267,7 @@ export class DictionaryResourceProtocolHandlers {
 
   private async handleNativeResourceProtocol(
     request: Request,
-    scheme: 'sound' | 'audio' | 'file'
+    scheme: 'sound' | 'snd' | 'audio' | 'file'
   ): Promise<Response> {
     const methodError = validateMethod(request)
     if (methodError) return methodError
@@ -581,6 +585,7 @@ function isNativeDictionaryResourceUrl(value: string): boolean {
     const protocolName = new URL(value).protocol
     return (
       protocolName === `${SOUND_SCHEME}:` ||
+      protocolName === `${SND_SCHEME}:` ||
       protocolName === `${AUDIO_SCHEME}:` ||
       protocolName === `${FILE_SCHEME}:`
     )

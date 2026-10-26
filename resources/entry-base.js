@@ -105,7 +105,7 @@
     const resolveDictionaryAudioHref = (anchor) => {
       const rawHref = anchor?.getAttribute('href')?.trim()
       if (!rawHref) return ''
-      if (!/^(?:sound|audio|file):\/\//i.test(rawHref)) return ''
+      if (!/^(?:sound|snd|audio):\/\//i.test(rawHref)) return ''
       return dictionaryAudioPattern.test(rawHref) ? rawHref : ''
     }
 

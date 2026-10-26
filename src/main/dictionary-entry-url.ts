@@ -165,7 +165,7 @@ export function parseDictionaryIdFromReferrer(value: string): number | null {
 
 export function parseNativeDictionaryResourcePath(
   value: string,
-  expectedScheme: 'sound' | 'audio' | 'file',
+  expectedScheme: 'sound' | 'snd' | 'audio' | 'file',
   fullPath = false
 ): string | null {
   const url = parseUrl(value)
@@ -181,7 +181,7 @@ export function parseNativeDictionaryResourcePath(
 
 export function parseNativeDictionaryResourceLocation(
   value: string,
-  expectedScheme: 'sound' | 'audio' | 'file'
+  expectedScheme: 'sound' | 'snd' | 'audio' | 'file'
 ): NativeDictionaryResourceLocation | null {
   const url = parseUrl(value)
   if (!url || url.protocol !== `${expectedScheme}:` || url.username || url.password || url.port) {

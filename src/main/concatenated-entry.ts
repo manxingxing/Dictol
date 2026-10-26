@@ -135,7 +135,7 @@ function rewriteDictionaryHref(href: string, dictionaryId: number): string {
   if (/^entry:\/\//i.test(href)) return rewriteEntryHref(href, dictionaryId)
 
   // 发音按钮
-  if (/^(?:sound|audio|file):\/\//i.test(href)) {
+  if (/^(?:sound|snd|audio):\/\//i.test(href)) {
     const url = new URL(href)
     const resourcePath = url.hostname ? `/${url.hostname}${url.pathname}` : url.pathname
     return `${url.protocol}//dictionary-${dictionaryId}.dictol${resourcePath}${url.search}${url.hash}`
