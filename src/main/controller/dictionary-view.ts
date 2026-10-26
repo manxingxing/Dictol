@@ -57,7 +57,7 @@ export class DictionaryViewController extends BaseController {
     ipcMain.handle('dictionary-view:can-explain-with-ai', this.canExplainWithAi)
     ipcMain.on('dictionary-view:open-note', this.createNote)
     ipcMain.on('dictionary-view:explain-with-ai', this.explainWithAi)
-    ipcMain.on('dictionary-view:copy-text', this.copyText)
+    ipcMain.handle('dictionary-view:copy-text', this.copyText)
     ipcMain.on('dictionary-view:pointer-down', this.pointerDown)
     ipcMain.on('dictionary-view:show-find-bar', this.showFindBar)
     ipcMain.on('find-bar:find-in-page', this.findInPage)
@@ -189,16 +189,15 @@ export class DictionaryViewController extends BaseController {
     this.explainWithAiText(text)
   }
 
-  copyText = (event: IpcMainEvent, text: string): void => {
+  copyText = async (event: IpcMainInvokeEvent, text: string): Promise<void> => {
     if (
       !this.acceptsViewSender(event.sender.id) ||
       typeof text !== 'string' ||
-      !text ||
-      text.length > 100_000
+      !text
     ) {
       return
     }
-    clipboard.writeText(text)
+    await clipboard.writeText(text)
   }
 
   // 从 context menu创建文本摘抄
@@ -497,7 +496,14 @@ export class DictionaryViewController extends BaseController {
     if (!text) return
 
     const menuItems: Electron.MenuItemConstructorOptions[] = [
-      { label: '复制', click: () => clipboard.writeText(text) },
+      {
+        label: '复制',
+        click: () => {
+          void clipboard.writeText(text).catch((error: unknown) => {
+            console.error('Failed to copy dictionary text', error)
+          })
+        }
+      },
       {
         label: '查词',
         enabled: text.length <= 200,

@@ -70,7 +70,7 @@ export class SelectionExplanationController extends BaseController {
     ipcMain.on('selection-explanation:select-dictionary', this.selectExplanationDictionary)
     ipcMain.on('selection-explanation:lookup-word', this.lookupFromExplanation)
     ipcMain.on('selection-explanation:show-ai', this.showAiFromExplanation)
-    ipcMain.on('selection-explanation:copy-text', this.copyFromExplanation)
+    ipcMain.handle('selection-explanation:copy-text', this.copyFromExplanation)
     ipcMain.on('selection-explanation:create-note', this.createNote)
     ipcMain.handle('selection-explanation:is-starred', this.isWordStarred)
     ipcMain.handle('selection-explanation:toggle-star', this.toggleWordStar)
@@ -289,16 +289,14 @@ export class SelectionExplanationController extends BaseController {
     void this.showExplanation(normalizedWord, sourceDictionaryId, undefined, false)
   }
 
-  private readonly copyFromExplanation = (event: IpcMainEvent, text: string): void => {
-    if (
-      !this.acceptsExplanationViewSender(event) ||
-      typeof text !== 'string' ||
-      !text ||
-      text.length > 100_000
-    ) {
+  private readonly copyFromExplanation = async (
+    event: IpcMainInvokeEvent,
+    text: string
+  ): Promise<void> => {
+    if (!this.acceptsExplanationViewSender(event) || typeof text !== 'string' || !text) {
       return
     }
-    clipboard.writeText(text)
+    await clipboard.writeText(text)
   }
 
   private readonly createNote = (event: IpcMainEvent, text: unknown): void => {
@@ -416,7 +414,14 @@ export class SelectionExplanationController extends BaseController {
       const text = params.selectionText.trim()
       if (!text || text.length > 100_000) return
       items = [
-        { label: '复制', click: () => clipboard.writeText(text) },
+        {
+          label: '复制',
+          click: () => {
+            void clipboard.writeText(text).catch((error: unknown) => {
+              console.error('Failed to copy explanation text', error)
+            })
+          }
+        },
         {
           label: '查词',
           enabled: text.length <= MAX_SELECTION_LENGTH,
