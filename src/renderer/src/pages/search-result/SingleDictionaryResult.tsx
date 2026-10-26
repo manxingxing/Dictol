@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DictionaryTabIcon } from '@/components/DictionaryIcon'
 import { useAppStore } from '@/stores/app-store'
 import { SearchResultToolbar } from './SearchResultToolbar'
@@ -28,7 +27,7 @@ export function SingleDictionaryResult({
   if (result.term !== term || result.dictionaryId !== dictionaryId) {
     setResult({ term, dictionaryId, failed: false })
   }
-  const tabRef = useRef<HTMLButtonElement>(null)
+  const activeDictionaryRef = useRef<HTMLButtonElement>(null)
   const { contentRef, loading } = useDictionaryResultView()
   useDictionaryWordNavigation(dictionaryId)
 
@@ -41,7 +40,7 @@ export function SingleDictionaryResult({
 
   // 词典图标栏自动滚动当前词典图标处
   useLayoutEffect(() => {
-    tabRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    activeDictionaryRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }, [dictionaryId, term])
 
   useEffect(() => {
@@ -73,25 +72,24 @@ export function SingleDictionaryResult({
 
   const failed = result.failed
   return (
-    <Tabs
-      className="h-full min-h-0 gap-0 bg-background"
-      value={dictionaryId}
-      onValueChange={(id) => {
-        const next = new URLSearchParams(searchParams)
-        next.set('dictionaryId', id)
-        setSearchParams(next, { replace: true })
-      }}
-    >
+    <div className="flex h-full min-h-0 flex-col bg-background">
       <SearchResultToolbar actions={actions} loading={isFetching || loading}>
-        <TabsList className="h-full shrink-0 gap-1.5 bg-transparent p-0 px-3">
+        <div className="flex h-full shrink-0 items-center gap-1.5 px-3">
           {dictionaries.map((item) => (
-            <TabsTrigger
+            <button
               aria-label={item.dictionaryName}
-              className="dictionary-tab-trigger group scroll-mx-3"
+              aria-pressed={item.dictionaryId === dictionaryId}
+              className="dictionary-tab-trigger group inline-flex cursor-default items-center justify-center scroll-mx-3"
+              data-state={item.dictionaryId === dictionaryId ? 'active' : 'inactive'}
               key={item.dictionaryId}
-              ref={item.dictionaryId === dictionaryId ? tabRef : undefined}
-              tabIndex={0}
-              value={item.dictionaryId}
+              onClick={() => {
+                if (item.dictionaryId === dictionaryId) return
+                const next = new URLSearchParams(searchParams)
+                next.set('dictionaryId', item.dictionaryId)
+                setSearchParams(next, { replace: true })
+              }}
+              ref={item.dictionaryId === dictionaryId ? activeDictionaryRef : undefined}
+              type="button"
             >
               <DictionaryTabIcon
                 display={dictionaryDisplay}
@@ -99,14 +97,14 @@ export function SingleDictionaryResult({
                 name={item.dictionaryName}
                 showTooltip
               />
-            </TabsTrigger>
+            </button>
           ))}
-        </TabsList>
+        </div>
       </SearchResultToolbar>
       <div
         className="min-h-0 flex-1"
         ref={contentRef}
-        role="tabpanel"
+        role="region"
         aria-label={`${active.dictionaryName} 词条内容`}
       >
         {failed && (
@@ -115,6 +113,6 @@ export function SingleDictionaryResult({
           </div>
         )}
       </div>
-    </Tabs>
+    </div>
   )
 }
