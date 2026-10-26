@@ -144,15 +144,6 @@
       '<svg viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"></path><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"></path></svg>',
       () => window.dictolEntry?.openNote?.(contextMenuText, getSelectedDictionaryId())
     )
-    const setNoteEnabled = (enabled) => {
-      noteButton.style.display = enabled === true ? 'flex' : 'none'
-    }
-    const refreshNoteAvailability = () => {
-      const availability = window.dictolEntry?.canCreateNote?.()
-      if (!availability) return
-      availability.then(setNoteEnabled).catch(() => setNoteEnabled(false))
-    }
-    setNoteEnabled(false)
     const lookupButton = createMenuButton(
       '查词',
       '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>',
@@ -214,7 +205,6 @@
     contextMenuRoot.append(contextMenuStyle, contextMenu)
 
     refreshAiExplanationAvailability()
-    refreshNoteAvailability()
     window.dictolEntry?.onAiExplanationAvailabilityChanged?.(setAiExplanationEnabled)
 
     const showContextMenu = (x, y, text, centered = false, aboveY = y) => {
@@ -224,7 +214,6 @@
       readAloudButton.disabled = readAloudState === 'idle' && text.length > 200
       explainWithAiButton.disabled = text.length > maxAiExplanationTextLength
       refreshAiExplanationAvailability()
-      refreshNoteAvailability()
       if (!contextMenuHost.isConnected) document.documentElement.append(contextMenuHost)
       contextMenuHost.style.left = `${x}px`
       contextMenuHost.style.top = `${y}px`

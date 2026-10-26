@@ -68,7 +68,8 @@
     "postcss": "^8.5.25",
     "postcss-selector-parser": "^7.1.6",
     "postcss-value-parser": "^4.2.0",
-    "selection-hook": "^2.1.1"
+    "selection-hook": "^2.1.1",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@assistant-ui/react": "^0.15.11",

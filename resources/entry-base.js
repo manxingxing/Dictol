@@ -95,7 +95,7 @@
       if (signal?.aborted) stop()
     }
 
-    // sound:// 音源播放拦截
+    // 词典音源链接播放拦截
     const soundAudio = new Audio()
     // 与主进程 resource-protocol.ts getMimeType 的音频类型保持一致。
     // spx 保留仅为兜底兼容旧链接，Chromium 实际无法解码 Speex。

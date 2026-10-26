@@ -2,7 +2,6 @@ import {
   Menu,
   clipboard,
   ipcMain,
-  nativeImage,
   shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
@@ -14,13 +13,19 @@ import {
   createDictionaryAggregateUrl,
   createDictionaryEntryUrl,
   parseDictionaryAggregateUrl,
+  parseDictionaryEntryResourceUrl,
   parseDictionaryEntryUrl,
   parseDictionaryEntryNavigation
 } from '../dictionary-entry-url'
 import { resolveEntryLinkWithAnchor } from '../resolve-entry-link'
 import { resolveRendererUrl } from '../output-path'
 import { createDictionaryNoteWithImages } from '../service/dictionary-note-image'
-import { readDictionaryContextImage } from '../lib/dictionary-context-image'
+import {
+  copyContextImageToClipboard,
+  convertDictionaryContextImageToPng,
+  downloadContextImage,
+  readDictionaryContextImage
+} from '../lib/dictionary-context-image'
 import type {
   DictionaryAggregateRequest,
   DictionaryLookupRequest
@@ -50,7 +55,6 @@ export class DictionaryViewController extends BaseController {
     ipcMain.on('dictionary-view:set-bounds', this.setBounds)
     ipcMain.on('dictionary-view:lookup-word', this.lookupWord)
     ipcMain.handle('dictionary-view:can-explain-with-ai', this.canExplainWithAi)
-    ipcMain.handle('dictionary-view:can-create-note', this.canCreateNote)
     ipcMain.on('dictionary-view:open-note', this.createNote)
     ipcMain.on('dictionary-view:explain-with-ai', this.explainWithAi)
     ipcMain.on('dictionary-view:copy-text', this.copyText)
@@ -197,10 +201,6 @@ export class DictionaryViewController extends BaseController {
     clipboard.writeText(text)
   }
 
-  canCreateNote = (event: IpcMainInvokeEvent): boolean => {
-    return this.acceptsViewSender(event.sender.id) && this.getCurrentNoteContext() !== null
-  }
-
   // 从 context menu创建文本摘抄
   createNote = (event: IpcMainEvent, text: string, sourceDictionaryId?: unknown): void => {
     if (!this.acceptsViewSender(event.sender.id)) return
@@ -319,14 +319,17 @@ export class DictionaryViewController extends BaseController {
     return load
   }
 
+  // 从当前 view加载的 url -> { term, sourceDictionaryId }
   private getCurrentNoteContext(
     selectedDictionaryId?: number
   ): { term: string; sourceDictionaryId?: number } | null {
     const currentUrl = this.desiredUrl ?? this.loadedUrl
     if (!currentUrl) return null
+    // 单词典模式下 term, dictionary id 在 url上
     const entry = parseDictionaryEntryUrl(currentUrl)
     if (entry) return { term: entry.term, sourceDictionaryId: entry.dictionaryId }
 
+    // 聚合模式下，仅有term
     const aggregate = parseDictionaryAggregateUrl(currentUrl)
     if (!aggregate) return null
     return {
@@ -465,15 +468,23 @@ export class DictionaryViewController extends BaseController {
       const menuItems: Electron.MenuItemConstructorOptions[] = [
         {
           label: '复制图片',
-          click: () => void this.copyImageToClipboard(view, params)
-        }
-      ]
-      if (this.getCurrentNoteContext()) {
-        menuItems.push({
+          click: () =>
+            void copyContextImageToClipboard(view.webContents, params).catch(
+              (error: unknown) => console.error('Failed to copy dictionary image', error)
+            )
+        },
+        {
+          label: '下载图片',
+          click: () =>
+            void downloadContextImage(window, view.webContents, params).catch(
+              (error: unknown) => console.error('Failed to download dictionary image', error)
+            )
+        },
+        {
           label: '摘抄',
           click: () => void this.createImageNote(view, params)
-        })
-      }
+        }
+      ]
       Menu.buildFromTemplate(menuItems).popup({
         window,
         x: Math.round(this.lastDictBounds.x + params.x),
@@ -483,7 +494,7 @@ export class DictionaryViewController extends BaseController {
     }
 
     const text = params.selectionText.trim()
-    if (!text || text.length > 100_000) return
+    if (!text) return
 
     const menuItems: Electron.MenuItemConstructorOptions[] = [
       { label: '复制', click: () => clipboard.writeText(text) },
@@ -491,14 +502,13 @@ export class DictionaryViewController extends BaseController {
         label: '查词',
         enabled: text.length <= 200,
         click: () => this.sendLookup({ word: text })
-      }
-    ]
-    if (this.getCurrentNoteContext()) {
-      menuItems.push({
+      },
+      {
         label: '摘抄',
         click: () => void this.createNoteFromSelection(view, text)
-      })
-    }
+      }
+    ]
+
     if (this.runtime.appConfig.load().aiLookup.enabled) {
       menuItems.push({
         label: 'AI 解释',
@@ -514,35 +524,29 @@ export class DictionaryViewController extends BaseController {
     })
   }
 
-  private async copyImageToClipboard(
-    view: WebContentsViewManager,
-    params: Electron.ContextMenuParams
-  ): Promise<void> {
-    const bytes = await readDictionaryContextImage(view.webContents, params)
-    if (bytes) clipboard.writeImage(nativeImage.createFromBuffer(bytes))
-    else view.webContents.copyImageAt(params.x, params.y)
-  }
-
   private async createImageNote(
     view: WebContentsViewManager,
     params: Electron.ContextMenuParams
   ): Promise<void> {
     let term: string | null = null
     try {
-      const selectedDictionaryId = await this.getDictionaryIdAtPoint(view, params.x, params.y)
+      const selectedDictionaryId =
+        parseDictionaryEntryResourceUrl(params.srcURL)?.dictionaryId ??
+        (await this.getDictionaryIdAtPoint(view, params.x, params.y))
       const context = this.getCurrentNoteContext(selectedDictionaryId)
       if (!context) return
       term = context.term
 
-      const bytes = await readDictionaryContextImage(view.webContents, params)
-      if (!bytes) throw new Error('无法读取词典图片')
+      const image = await readDictionaryContextImage(view.webContents, params)
+      const png = image && (await convertDictionaryContextImageToPng(image))
+      if (!png) throw new Error('无法读取词典图片')
 
       await createDictionaryNoteWithImages(this.db, {
         relatedTerms: [context.term],
         sourceDictionaryId:
           context.sourceDictionaryId === undefined ? null : String(context.sourceDictionaryId),
         sourceEntryTerm: context.term,
-        imageBytes: [new Uint8Array(bytes)]
+        imageBytes: [new Uint8Array(png)]
       })
       this.notifyNoteCreated(term)
     } catch (error) {

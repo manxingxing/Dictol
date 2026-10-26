@@ -23,7 +23,7 @@ function DictionaryNoteImagePreview({
         <div className="relative h-fit w-fit">
           <img
             alt="笔记图片预览"
-            className="block max-h-[85vh] max-w-[90vw] rounded-lg object-contain"
+            className="block bg-background max-h-[85vh] max-w-[90vw] rounded-lg object-contain"
             src={`dictol-note://image/${image.storageKey}`}
           />
           <DialogClose

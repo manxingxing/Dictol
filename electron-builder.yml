@@ -6,6 +6,7 @@ protocols:
       - dictol
 directories:
   buildResources: build
+beforePack: scripts/stage-sharp-native.mjs
 files:
   - out/**
   - drizzle/**
@@ -58,6 +59,7 @@ asarUnpack:
   - node_modules/better-sqlite3/lib/**
   - node_modules/better-sqlite3/prebuilds/*.node
   - node_modules/better-sqlite3/package.json
+  - node_modules/@img/sharp-*/lib/**
 extraResources:
   - from: resources/ecdict
     to: ecdict
@@ -129,6 +131,11 @@ win:
     - '!node_modules/selection-hook/prebuilds/darwin*/**'
     - '!node_modules/selection-hook/prebuilds/linux*/**'
     - '!node_modules/selection-hook/prebuilds/win32-arm64/**'
+    - '!node_modules/@img/sharp-darwin-*/**'
+    - '!node_modules/@img/sharp-libvips-darwin-*/**'
+    - '!node_modules/@img/sharp-linux*/**'
+    - '!node_modules/@img/sharp-libvips-linux*/**'
+    - node_modules/@img/sharp-win32-x64/**
   target: ['nsis']
   signtoolOptions:
     certificateFile: build/codesign.pfx
@@ -229,6 +236,11 @@ mac:
     - '!node_modules/selection-hook/prebuilds/linux*/**'
     - '!node_modules/selection-hook/prebuilds/win32*/**'
     - node_modules/selection-hook/prebuilds/darwin-*/selection-hook.node
+    - '!node_modules/@img/sharp-win32-*/**'
+    - '!node_modules/@img/sharp-linux*/**'
+    - '!node_modules/@img/sharp-libvips-linux*/**'
+    - node_modules/@img/sharp-darwin-*/**
+    - node_modules/@img/sharp-libvips-darwin-*/**
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
 linux:

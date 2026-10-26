@@ -138,6 +138,9 @@ function verifySystemTranslationHelper(appPath, architectures) {
 function pruneAndVerifyNativeModules(appPath, arch) {
   const unpacked = join(appPath, 'Contents', 'Resources', 'app.asar.unpacked', 'node_modules')
   const otherArch = arch === 'x64' ? 'arm64' : 'x64'
+  const sharpVersion = JSON.parse(
+    readFileSync(join(import.meta.dirname, '..', 'node_modules', 'sharp', 'package.json'))
+  ).version
   const expected = [
     join(
       unpacked,
@@ -165,7 +168,14 @@ function pruneAndVerifyNativeModules(appPath, arch) {
     ),
     join(unpacked, '@dictol', 'ocr-native', 'prebuilds', `darwin-${arch}`, 'ocr.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', `darwin-${arch}.node`),
-    join(unpacked, 'selection-hook', 'prebuilds', `darwin-${arch}`, 'selection-hook.node')
+    join(unpacked, 'selection-hook', 'prebuilds', `darwin-${arch}`, 'selection-hook.node'),
+    join(
+      unpacked,
+      '@img',
+      `sharp-darwin-${arch}`,
+      'lib',
+      `sharp-darwin-${arch}-${sharpVersion}.node`
+    )
   ]
   const opposite = [
     join(
@@ -200,6 +210,19 @@ function pruneAndVerifyNativeModules(appPath, arch) {
   for (const path of opposite) {
     if (existsSync(path)) rmSync(path)
   }
+  const sharpPackagesPath = join(unpacked, '@img')
+  const keptSharpPackages = new Set([`sharp-darwin-${arch}`, `sharp-libvips-darwin-${arch}`])
+  for (const name of readdirSync(sharpPackagesPath)) {
+    if (name.startsWith('sharp-') && !keptSharpPackages.has(name)) {
+      rmSync(join(sharpPackagesPath, name), { recursive: true, force: true })
+    }
+  }
+
+  const libvipsPath = join(unpacked, '@img', `sharp-libvips-darwin-${arch}`, 'lib')
+  if (!existsSync(libvipsPath)) throw new Error(`Missing packaged sharp libvips: ${libvipsPath}`)
+  const libvipsFile = readdirSync(libvipsPath).find((name) => name.endsWith('.dylib'))
+  if (!libvipsFile) throw new Error(`Missing packaged sharp libvips dylib: ${libvipsPath}`)
+  expected.push(join(libvipsPath, libvipsFile))
 
   const adblock = join(unpacked, 'adblock-rs', 'js', 'index.node')
   expected.push(adblock)
@@ -224,6 +247,9 @@ function verifyWindowsNativeModules(appOutDir, arch) {
   if (arch !== 'x64') throw new Error(`Only Windows x64 is supported, received: ${arch}`)
 
   const unpacked = join(appOutDir, 'resources', 'app.asar.unpacked', 'node_modules')
+  const sharpVersion = JSON.parse(
+    readFileSync(join(import.meta.dirname, '..', 'node_modules', 'sharp', 'package.json'))
+  ).version
   const expected = [
     join(
       unpacked,
@@ -252,7 +278,8 @@ function verifyWindowsNativeModules(appOutDir, arch) {
     join(unpacked, '@dictol', 'ocr-native', 'prebuilds', 'win32-x64', 'ocr.node'),
     join(unpacked, 'adblock-rs', 'js', 'index.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', 'win32-x64.node'),
-    join(unpacked, 'selection-hook', 'prebuilds', 'win32-x64', 'selection-hook.node')
+    join(unpacked, 'selection-hook', 'prebuilds', 'win32-x64', 'selection-hook.node'),
+    join(unpacked, '@img', 'sharp-win32-x64', 'lib', `sharp-win32-x64-${sharpVersion}.node`)
   ]
 
   const nativePackageRoots = [
@@ -262,7 +289,8 @@ function verifyWindowsNativeModules(appOutDir, arch) {
     join(unpacked, '@dictol', 'ocr-native'),
     join(unpacked, 'adblock-rs'),
     join(unpacked, 'better-sqlite3'),
-    join(unpacked, 'selection-hook')
+    join(unpacked, 'selection-hook'),
+    join(unpacked, '@img', 'sharp-win32-x64')
   ]
 
   const expectedSet = new Set(expected)

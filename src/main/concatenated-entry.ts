@@ -2,7 +2,10 @@ import postcss from 'postcss'
 import selectorParser from 'postcss-selector-parser'
 import valueParser from 'postcss-value-parser'
 import { parse, serialize } from 'parse5'
+import { ENTRY_SCHEME } from './entry-assets'
+import { parseNativeDictionaryResourcePath } from './dictionary-entry-url'
 import {
+  RESOURCE_SOURCE_TAGS,
   addLazyLoadingToImage,
   deferAudioDownload,
   findChildNode,
@@ -127,8 +130,6 @@ function rewriteDictionaryHtml(
   }
 }
 
-const RESOURCE_SOURCE_TAGS = new Set(['audio', 'iframe', 'img', 'script', 'source', 'video'])
-
 function rewriteDictionaryHref(href: string, dictionaryId: number): string {
   // entry 词条跳转
   if (/^entry:\/\//i.test(href)) return rewriteEntryHref(href, dictionaryId)
@@ -152,7 +153,11 @@ function rewriteResourceHref(href: string, dictionaryId: number): string {
     return href
   }
 
-  if (/^file:\/\//i.test(trimmed)) return rewriteDictionaryHref(trimmed, dictionaryId)
+  // 重写 file://path 为 dictio-entry://dictionary-id.dicto/path，以便于定位资源所属的词典
+  if (/^file:\/\//i.test(trimmed)) {
+    const fullPath = parseNativeDictionaryResourcePath(trimmed, 'file', true)
+    return fullPath ? `${ENTRY_SCHEME}://dictionary-${dictionaryId}.dictol/${fullPath}` : href
+  }
 
   try {
     const url = new URL(trimmed, `dictol-entry://dictionary-${dictionaryId}.dictol/`)

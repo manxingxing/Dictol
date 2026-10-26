@@ -11,7 +11,6 @@ export type DictionaryEntryLocation = {
 
 export type DictionaryAggregateLocation = {
   term: string
-  dictionaryId?: number
 }
 
 export type DictionaryResourceLocation = {
@@ -88,6 +87,7 @@ export function parseDictionaryAssetUrl(value: string): DictionaryResourceLocati
   return dictionaryId === null || resourcePath === null ? null : { dictionaryId, resourcePath }
 }
 
+// 单词典模式下，从url解析出 term, dictionary ID
 export function parseDictionaryEntryUrl(value: string): DictionaryEntryLocation | null {
   const url = parseUrl(value)
   if (!url || url.protocol !== `${ENTRY_SCHEME}:` || url.pathname !== ENTRY_LOOKUP_PATH) {
@@ -99,7 +99,6 @@ export function parseDictionaryEntryUrl(value: string): DictionaryEntryLocation 
   if (
     dictionaryId === null ||
     terms.length !== 1 ||
-    Array.from(url.searchParams.keys()).some((key) => key !== 'term' && key !== 'preview') ||
     (url.searchParams.has('preview') &&
       (url.searchParams.getAll('preview').length !== 1 || url.searchParams.get('preview') !== '1'))
   ) {
@@ -117,21 +116,12 @@ export function parseDictionaryAggregateUrl(value: string): DictionaryAggregateL
   }
 
   const terms = url.searchParams.getAll('term')
-  const dictionaryIds = url.searchParams.getAll('dictionaryId')
-  if (
-    terms.length !== 1 ||
-    dictionaryIds.length > 1 ||
-    Array.from(url.searchParams.keys()).some((key) => key !== 'term' && key !== 'dictionaryId')
-  ) {
-    return null
-  }
+  if (terms.length !== 1) return null
 
   const term = terms[0]?.trim() ?? ''
   if (!term || term.length > 200) return null
 
-  if (dictionaryIds.length === 0) return { term }
-  const dictionaryId = parsePositiveSafeInteger(dictionaryIds[0])
-  return dictionaryId === null ? null : { term, dictionaryId }
+  return { term }
 }
 
 export function parseDictionaryEntryNavigation(targetUrl: string): DictionaryLookupRequest | null {
@@ -175,7 +165,8 @@ export function parseDictionaryIdFromReferrer(value: string): number | null {
 
 export function parseNativeDictionaryResourcePath(
   value: string,
-  expectedScheme: 'sound' | 'audio' | 'file'
+  expectedScheme: 'sound' | 'audio' | 'file',
+  fullPath = false
 ): string | null {
   const url = parseUrl(value)
   if (!url || url.protocol !== `${expectedScheme}:` || url.username || url.password || url.port) {
@@ -183,7 +174,9 @@ export function parseNativeDictionaryResourcePath(
   }
 
   const authority = url.hostname ? `/${url.hostname}` : ''
-  return decodeResourcePath(`${authority}${url.pathname}`)
+  const resourcePath = decodeResourcePath(`${authority}${url.pathname}`)
+  if (!resourcePath || !fullPath) return resourcePath
+  return `${resourcePath.split('/').map(encodeURIComponent).join('/')}${url.search}${url.hash}`
 }
 
 export function parseNativeDictionaryResourceLocation(

@@ -3,7 +3,6 @@ import {
   clipboard,
   ipcMain,
   Menu,
-  nativeImage,
   shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
@@ -15,7 +14,12 @@ import type {
   SelectionExplanationPayload
 } from '../../shared/selection-explanation'
 import type { WebContentsViewManager } from '../web-contents-view-manager'
-import { readDictionaryContextImage } from '../lib/dictionary-context-image'
+import {
+  copyContextImageToClipboard,
+  convertDictionaryContextImageToPng,
+  downloadContextImage,
+  readDictionaryContextImage
+} from '../lib/dictionary-context-image'
 import { createDictionaryNoteWithImages } from '../service/dictionary-note-image'
 import type { DictionaryNoteCreationResultEvent } from '../../shared/dictionary-note'
 import {
@@ -67,7 +71,6 @@ export class SelectionExplanationController extends BaseController {
     ipcMain.on('selection-explanation:lookup-word', this.lookupFromExplanation)
     ipcMain.on('selection-explanation:show-ai', this.showAiFromExplanation)
     ipcMain.on('selection-explanation:copy-text', this.copyFromExplanation)
-    ipcMain.handle('selection-explanation:can-create-note', this.canCreateNote)
     ipcMain.on('selection-explanation:create-note', this.createNote)
     ipcMain.handle('selection-explanation:is-starred', this.isWordStarred)
     ipcMain.handle('selection-explanation:toggle-star', this.toggleWordStar)
@@ -298,9 +301,6 @@ export class SelectionExplanationController extends BaseController {
     clipboard.writeText(text)
   }
 
-  private readonly canCreateNote = (event: IpcMainInvokeEvent): boolean =>
-    this.acceptsExplanationViewSender(event) && this.getCurrentNoteContext() !== null
-
   private readonly createNote = (event: IpcMainEvent, text: unknown): void => {
     if (!this.acceptsExplanationViewSender(event)) return
     void this.createTextNote(text)
@@ -357,13 +357,14 @@ export class SelectionExplanationController extends BaseController {
     const context = this.getCurrentNoteContext()
     if (!context) return
     try {
-      const bytes = await readDictionaryContextImage(view.webContents, params)
-      if (!bytes) throw new Error('无法读取词典图片')
+      const image = await readDictionaryContextImage(view.webContents, params)
+      const png = image && (await convertDictionaryContextImageToPng(image))
+      if (!png) throw new Error('无法读取词典图片')
       await createDictionaryNoteWithImages(this.db, {
         relatedTerms: [context.term],
         sourceDictionaryId: String(context.dictionaryId),
         sourceEntryTerm: context.term,
-        imageBytes: [new Uint8Array(bytes)]
+        imageBytes: [new Uint8Array(png)]
       })
       this.notifyNoteCreated([context.term])
       this.showEntryToast(context.url, '摘抄已保存')
@@ -389,14 +390,22 @@ export class SelectionExplanationController extends BaseController {
   private showContextMenu(view: WebContentsViewManager, params: Electron.ContextMenuParams): void {
     const window = this.currentWindow
     if (!(window instanceof BrowserWindow)) return
-    const context = this.getCurrentNoteContext()
-    if (!context) return
     let items: Electron.MenuItemConstructorOptions[]
     if (params.hasImageContents) {
       items = [
         {
-          label: '复制',
-          click: () => void this.copyImageToClipboard(view, params)
+          label: '复制图片',
+          click: () =>
+            void copyContextImageToClipboard(view.webContents, params).catch(
+              (error: unknown) => console.error('Failed to copy explanation image', error)
+            )
+        },
+        {
+          label: '下载图片',
+          click: () =>
+            void downloadContextImage(window, view.webContents, params).catch(
+              (error: unknown) => console.error('Failed to download explanation image', error)
+            )
         },
         {
           label: '摘抄',
@@ -411,8 +420,11 @@ export class SelectionExplanationController extends BaseController {
         {
           label: '查词',
           enabled: text.length <= MAX_SELECTION_LENGTH,
-          click: () =>
+          click: () => {
+            const context = this.getCurrentNoteContext()
+            if (!context) return
             void this.showExplanation(text, String(context.dictionaryId), undefined, false)
+          }
         },
         { label: '摘抄', click: () => void this.createTextNote(text) }
       ]
@@ -423,15 +435,6 @@ export class SelectionExplanationController extends BaseController {
       x: Math.round(bounds.x + params.x),
       y: Math.round(bounds.y + params.y)
     })
-  }
-
-  private async copyImageToClipboard(
-    view: WebContentsViewManager,
-    params: Electron.ContextMenuParams
-  ): Promise<void> {
-    const bytes = await readDictionaryContextImage(view.webContents, params)
-    if (bytes) clipboard.writeImage(nativeImage.createFromBuffer(bytes))
-    else view.webContents.copyImageAt(params.x, params.y)
   }
 
   private initializeExplanationWindow(): SelectionSurfaceWindow {

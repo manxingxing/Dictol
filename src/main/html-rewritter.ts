@@ -1,4 +1,7 @@
 import { parse, serialize, type DefaultTreeAdapterTypes } from 'parse5'
+import { parseNativeDictionaryResourcePath } from './dictionary-entry-url'
+
+export const RESOURCE_SOURCE_TAGS = new Set(['audio', 'iframe', 'img', 'script', 'source', 'video'])
 
 /** 单词典释义html的重写管线 */
 export function processEntryContent(html: string, dictionaryId: number): string {
@@ -9,6 +12,16 @@ export function processEntryContent(html: string, dictionaryId: number): string 
     const tagName = node.tagName.toLowerCase()
     if (tagName === 'img') addLazyLoadingToImage(node)
     if (tagName === 'audio') deferAudioDownload(node)
+
+    // 重写可替换元素的 src=file:// 链接为相对路径(自动使用当前带有 dictionary ID的hostname，以便支持 session.fetch 方式获取bytes，支持摘抄
+    // 单词典模式下，其他标签的 file:// 链接通过兜底的registerDictionaryViewProtocolHanders，即使不重写也能正常加载
+    if (RESOURCE_SOURCE_TAGS.has(tagName)) {
+      let attr = getAttr(node, 'src')
+      if (attr) {
+        const fullPath = parseNativeDictionaryResourcePath(attr.value, 'file', true)
+        if (fullPath) attr.value = fullPath
+      }
+    }
 
     if (tagName !== 'a' && tagName !== 'area') return
     const href = getAttr(node, 'href')
