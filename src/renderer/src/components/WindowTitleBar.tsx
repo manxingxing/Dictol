@@ -47,7 +47,6 @@ export function WindowTitleBar(): React.JSX.Element {
       className="app-chrome-surface drag-region flex shrink-0 items-center border-border"
       style={{ height: MAIN_WINDOW_TITLEBAR_HEIGHT }}
     >
-      <Toaster position="top-center" />
       <div
         className={`window-titlebar-content flex h-full min-w-0 items-center gap-2 px-3.5 ${
           window.dictol.platform === 'darwin' ? 'pl-24' : ''
@@ -123,6 +122,7 @@ export function WindowTitleBar(): React.JSX.Element {
           )}
         </div>
       </div>
+      <Toaster position="top-center" />
     </header>
   )
 }

@@ -6,7 +6,8 @@ contextBridge.exposeInMainWorld(
   Object.freeze({
     tts: createTtsPlayback(),
     lookupWord: (word: string): void => ipcRenderer.send('selection-explanation:lookup-word', word),
-    copyText: (text: string): void => ipcRenderer.send('selection-explanation:copy-text', text),
+    copyText: (text: string): Promise<void> =>
+      ipcRenderer.invoke('selection-explanation:copy-text', text),
     openNote: (text: string): void => ipcRenderer.send('selection-explanation:create-note', text)
   })
 )
