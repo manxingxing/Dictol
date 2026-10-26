@@ -150,7 +150,10 @@ function configureMainWindow(
   const shortcutRouter = new MainWindowShortcutRouter(runtime.windowManager, mainWindow)
   runtime.mainWindowShortcutRouter = shortcutRouter
   shortcutRouter.register(mainWindow.webContents, 'main')
-  shortcutRouter.register(dictionaryView.webContents, 'dictionary')
+  shortcutRouter.register(
+    dictionaryView.webContents,
+    runtime.dictionaryLayout === 'single' ? 'dictionary' : 'aggregate-dictionary'
+  )
   const showMainWindow = (): void => {
     if (!mainWindow.isDestroyed() && !mainWindow.isVisible()) mainWindow.show()
   }

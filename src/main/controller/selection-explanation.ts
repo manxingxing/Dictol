@@ -230,6 +230,28 @@ export class SelectionExplanationController extends BaseController {
     void this.showExplanationDictionary(match)
   }
 
+  private switchExplanationDictionary(
+    direction: 'left' | 'right',
+    dictionaryId: string,
+    url: string
+  ): void {
+    const payload = this.explanationPayload
+    if (
+      payload?.mode !== 'dictionary' ||
+      payload.state !== 'content' ||
+      url !== this.runtime.windowManager.selectionExplanationView?.getURL() ||
+      dictionaryId !== payload.activeDictionaryId ||
+      dictionaryId !== this.loadedExplanationDictionaryId
+    ) {
+      return
+    }
+    const index = this.explanationDictionaryMatches.findIndex(
+      (match) => match.dictionaryId === dictionaryId
+    )
+    const next = this.explanationDictionaryMatches[index + (direction === 'right' ? 1 : -1)]
+    if (next) void this.showExplanationDictionary(next)
+  }
+
   private readonly isWordStarred = async (
     event: IpcMainInvokeEvent,
     word: string
@@ -479,9 +501,29 @@ export class SelectionExplanationController extends BaseController {
       this.showContextMenu(view, params)
     })
     view.webContents.on('before-input-event', (event, input) => {
-      if (input.type !== 'keyDown' || input.key !== 'Escape') return
+      if (input.type !== 'keyDown') return
+      if (input.key === 'Escape') {
+        event.preventDefault()
+        this.hideExplanation()
+        return
+      }
+
+      const usesPlatformModifier =
+        process.platform === 'darwin' ? input.meta && !input.control : input.control
+      if (!usesPlatformModifier || input.alt || input.shift) return
+
+      const key = input.key.toLowerCase()
+      if (key !== 'arrowleft' && key !== 'arrowright') return
+      const url = view.webContents.getURL()
+      const entry = parseDictionaryEntryUrl(url)
+      if (this.explanationPayload?.mode !== 'dictionary' || !entry) return
+
       event.preventDefault()
-      this.hideExplanation()
+      this.switchExplanationDictionary(
+        key === 'arrowleft' ? 'left' : 'right',
+        String(entry.dictionaryId),
+        url
+      )
     })
     view.webContents.setWindowOpenHandler(({ url }) => {
       if (url.startsWith('https://') || url.startsWith('http://')) {

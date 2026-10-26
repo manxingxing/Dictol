@@ -1,10 +1,11 @@
 import { type BrowserWindow, type Event, type Input, type WebContents } from 'electron'
 
+import { parseDictionaryEntryUrl } from './dictionary-entry-url'
 import type { WindowManager } from './window-manager'
 
 type MainWindowShortcutTarget =
   'main' | 'dictionary' | 'aggregate-dictionary' | 'search-popover' | 'find-bar' | 'embed-browser'
-type ShortcutAction = 'focus-search' | 'show-find-bar'
+type ShortcutAction = 'focus-search' | 'show-find-bar' | 'previous-dictionary' | 'next-dictionary'
 
 type Registration = {
   webContents: WebContents
@@ -28,19 +29,15 @@ export class MainWindowShortcutRouter {
     if (webContents.isDestroyed() || this.registrations.has(webContents.id)) return
 
     const listener = (event: Event, input: Input): void => {
-      const action = getShortcutAction(input)
-      if (
-        !action ||
-        (allowedActions && !allowedActions.includes(action)) ||
-        this.mainWindow.isDestroyed() ||
-        this.mainWindow.webContents.isDestroyed()
-      ) {
+      if (this.mainWindow.isDestroyed() || this.mainWindow.webContents.isDestroyed()) {
         return
       }
 
-      event.preventDefault()
+      const allows = (action: ShortcutAction): boolean =>
+        !allowedActions || allowedActions.includes(action)
 
-      if (action === 'focus-search') {
+      if (allows('focus-search') && matchesPrimaryShortcut(input, 'k')) {
+        event.preventDefault()
         if (target === 'search-popover') {
           webContents.focus()
           webContents.send('search-popover:focus-input')
@@ -52,7 +49,25 @@ export class MainWindowShortcutRouter {
         return
       }
 
-      this.mainWindow.webContents.send('app:show-find-bar')
+      if (allows('show-find-bar') && matchesPrimaryShortcut(input, 'f')) {
+        event.preventDefault()
+        this.mainWindow.webContents.send('app:show-find-bar')
+        return
+      }
+
+      if (
+        target === 'dictionary' &&
+        ((allows('previous-dictionary') && matchesPrimaryShortcut(input, 'arrowleft')) ||
+          (allows('next-dictionary') && matchesPrimaryShortcut(input, 'arrowright')))
+      ) {
+        const dictionaryId = parseDictionaryEntryUrl(webContents.getURL())?.dictionaryId
+        if (dictionaryId === undefined) return
+        event.preventDefault()
+        this.mainWindow.webContents.send('dictionary-view:switch-dictionary', {
+          direction: input.key.toLowerCase() === 'arrowleft' ? 'left' : 'right',
+          dictionaryId: String(dictionaryId)
+        })
+      }
     }
     const destroyedListener = (): void => {
       this.registrations.delete(webContents.id)
@@ -72,15 +87,14 @@ export class MainWindowShortcutRouter {
   }
 }
 
-function getShortcutAction(input: Input): ShortcutAction | undefined {
-  const usesPlatformModifier =
-    process.platform === 'darwin' ? input.meta && !input.control : input.control
-  if (input.type !== 'keyDown' || !usesPlatformModifier || input.alt || input.shift) {
-    return undefined
+function matchesPrimaryShortcut(input: Input, key: string): boolean {
+  if (
+    input.type !== 'keyDown' ||
+    input.key.toLowerCase() !== key ||
+    input.alt ||
+    input.shift
+  ) {
+    return false
   }
-
-  const key = input.key.toLowerCase()
-  if (key === 'k') return 'focus-search'
-  if (key === 'f') return 'show-find-bar'
-  return undefined
+  return process.platform === 'darwin' ? input.meta && !input.control : input.control
 }

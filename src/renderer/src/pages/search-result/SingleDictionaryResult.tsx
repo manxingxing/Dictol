@@ -57,6 +57,20 @@ export function SingleDictionaryResult({
     }
   }, [anchor, dictionaryId, groupId, isPlaceholderData, term])
 
+  useEffect(
+    () =>
+      window.dictol.dictionaryView.onSwitchDictionary(({ direction, dictionaryId: sourceId }) => {
+        if (isPlaceholderData || sourceId !== dictionaryId) return
+        const index = dictionaries.findIndex((item) => item.dictionaryId === sourceId)
+        const nextDictionary = dictionaries[index + (direction === 'right' ? 1 : -1)]
+        if (!nextDictionary) return
+        const next = new URLSearchParams(searchParams)
+        next.set('dictionaryId', nextDictionary.dictionaryId)
+        setSearchParams(next, { replace: true })
+      }),
+    [dictionaries, dictionaryId, isPlaceholderData, searchParams, setSearchParams]
+  )
+
   const failed = result.failed
   return (
     <Tabs

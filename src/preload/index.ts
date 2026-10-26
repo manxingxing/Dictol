@@ -686,6 +686,16 @@ const api = Object.freeze({
       ipcRenderer.on('dictionary-view:active-dictionary-changed', listener)
       return () => ipcRenderer.removeListener('dictionary-view:active-dictionary-changed', listener)
     },
+    onSwitchDictionary: (
+      callback: (request: { direction: 'left' | 'right'; dictionaryId: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        request: { direction: 'left' | 'right'; dictionaryId: string }
+      ): void => callback(request)
+      ipcRenderer.on('dictionary-view:switch-dictionary', listener)
+      return () => ipcRenderer.removeListener('dictionary-view:switch-dictionary', listener)
+    },
     onLookupWord: (callback: (request: DictionaryLookupRequest) => void): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,

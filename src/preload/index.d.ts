@@ -565,6 +565,9 @@ declare global {
         setBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
         onLoadingChanged: (callback: (isLoading: boolean) => void) => () => void
         onActiveDictionaryChanged: (callback: (dictionaryId: string) => void) => () => void
+        onSwitchDictionary: (
+          callback: (request: { direction: 'left' | 'right'; dictionaryId: string }) => void
+        ) => () => void
         onLookupWord: (
           callback: (request: {
             word: string
