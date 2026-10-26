@@ -14,7 +14,7 @@ declare global {
       lookupInMain: () => void
       explain: () => void
       translate: () => void
-      copy: () => void
+      copy: () => Promise<void>
       captureExcerpt: () => Promise<void>
       openMenu: () => void
       activity: () => void
@@ -103,7 +103,7 @@ export function SelectionToolbarApp(): React.JSX.Element {
         <Button
           className="selection-action"
           disabled={savingExcerpt}
-          onClick={() => window.dictolSelectionToolbar.copy()}
+          onClick={() => void window.dictolSelectionToolbar.copy().catch(console.error)}
           size="sm"
           type="button"
           variant="ghost"

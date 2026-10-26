@@ -80,10 +80,12 @@ export class WindowManager {
     const darkMode = nativeTheme.shouldUseDarkColors
     // Create the browser window.
     const mainWindow = new BrowserWindow({
+      name: 'main-window',
       width: 900,
       height: 670,
       minWidth: 520,
       minHeight: 520,
+      windowStatePersistence: true,
       show: false,
       backgroundColor: getMainWindowBackgroundColor(darkMode, this.chromeMaterial !== null),
       autoHideMenuBar: true,

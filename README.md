@@ -103,7 +103,7 @@ Dictol 会按功能引导用户开启必要的系统权限：
 
 | 层       | 技术                                                                                   |
 | -------- | -------------------------------------------------------------------------------------- |
-| 桌面框架 | Electron 43 + electron-vite 5                                                          |
+| 桌面框架 | Electron 44 + electron-vite 5                                                          |
 | 前端     | React 19、TypeScript、Tailwind CSS 4、shadcn/ui、React Router、TanStack Query、Zustand |
 | 词典解析 | Rust `native/mdict`（v1/v2/v3），经 NAPI-RS 封装为 `@dictol/mdict-native`              |
 | 本地存储 | SQLite（better-sqlite3）+ Drizzle ORM                                                  |

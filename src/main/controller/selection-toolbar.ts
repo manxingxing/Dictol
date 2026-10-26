@@ -86,7 +86,7 @@ export class SelectionToolbarController extends BaseController {
     ipcMain.on('selection-toolbar:lookup-in-main', this.lookupInMain)
     ipcMain.on('selection-toolbar:explain', this.explain)
     ipcMain.on('selection-toolbar:translate', this.translate)
-    ipcMain.on('selection-toolbar:copy', this.copy)
+    ipcMain.handle('selection-toolbar:copy', this.copy)
     ipcMain.on('selection-toolbar:open-menu', this.openNativeMenu)
     ipcMain.on('selection-toolbar:activity', this.handleToolbarActivity)
     ipcMain.on('selection-toolbar:rendered', this.handleToolbarRendered)
@@ -285,11 +285,11 @@ export class SelectionToolbarController extends BaseController {
     this.openWordInMain(word)
   }
 
-  private readonly copy = (event: IpcMainEvent): void => {
+  private readonly copy = async (event: IpcMainInvokeEvent): Promise<void> => {
     if (!this.acceptsToolbarSender(event)) return
     const word = this.currentCapture?.selection.text.trim()
-    if (!word || word.length > MAX_SELECTION_LENGTH) return
-    clipboard.writeText(word)
+    if (!word) return
+    await clipboard.writeText(word)
     this.hideToolbar()
   }
 

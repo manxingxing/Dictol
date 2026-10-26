@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises'
 import { basename, extname } from 'node:path'
 import { dialog, nativeImage, type BrowserWindow, type WebContents } from 'electron'
 import sharp from 'sharp'
-import { clipboard } from 'electron'
+import { writeImageToClipboard } from './clipboard'
 
 export interface DictionaryContextImage {
   mimeType: string
@@ -24,9 +24,9 @@ export async function copyContextImageToClipboard(
   if (image.mimeType.toLowerCase() === 'image/svg+xml') {
     const png = await convertDictionaryContextImageToPng(image)
     if (!png) throw new Error('无法将 SVG 图片转换为 PNG')
-    clipboard.writeImage(nativeImage.createFromBuffer(png))
+    await writeImageToClipboard('image/png', png)
   } else {
-    clipboard.writeImage(nativeImage.createFromBuffer(image.bytes))
+    await writeImageToClipboard(image.mimeType, image.bytes)
   }
 }
 
