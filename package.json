@@ -1,6 +1,6 @@
 {
   "name": "dictol",
-  "version": "0.3.9",
+  "version": "0.4.0",
   "description": "A desktop dictionary reader for MDX and MDD dictionaries",
   "main": "./out/main/index.js",
   "author": "Alan Mann",
