@@ -52,6 +52,7 @@ export class DictionaryViewController extends BaseController {
     ipcMain.on('dictionary-view:hide', this.hide)
     ipcMain.on('dictionary-view:scroll-to-dictionary', this.scrollToDictionary)
     ipcMain.on('dictionary-view:active-dictionary', this.activeDictionaryChanged)
+    ipcMain.on('dictionary-view:switch-dictionary', this.swipeDictionary)
     ipcMain.on('dictionary-view:set-bounds', this.setBounds)
     ipcMain.on('dictionary-view:lookup-word', this.lookupWord)
     ipcMain.handle('dictionary-view:can-explain-with-ai', this.canExplainWithAi)
@@ -167,6 +168,30 @@ export class DictionaryViewController extends BaseController {
       numericDictionaryId
     )
   }
+
+  private readonly swipeDictionary = (
+    event: IpcMainEvent,
+    request: { direction: 'left' | 'right'; dictionaryId: string; url: string }
+  ): void => {
+    const view = this.runtime.windowManager.dictionaryView
+    if (
+      this.runtime.dictionaryLayout !== 'single' ||
+      !view ||
+      !view.isVisible ||
+      !view.acceptsSender(event.sender.id) ||
+      (request?.direction !== 'left' && request?.direction !== 'right') ||
+      typeof request.dictionaryId !== 'string' ||
+      request.url !== view.getURL() ||
+      String(parseDictionaryEntryUrl(view.getURL())?.dictionaryId) !== request.dictionaryId
+    ) {
+      return
+    }
+    view.sendToMainWindow('dictionary-view:switch-dictionary', {
+      direction: request.direction,
+      dictionaryId: request.dictionaryId
+    })
+  }
+
 
   setBounds = (event: IpcMainEvent, bounds: Rectangle): void => {
     if (!this.acceptsHostSender(event.sender.id) || !isRectangle(bounds)) return

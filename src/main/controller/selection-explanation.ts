@@ -68,6 +68,7 @@ export class SelectionExplanationController extends BaseController {
 
   override mount(): void {
     ipcMain.on('selection-explanation:select-dictionary', this.selectExplanationDictionary)
+    ipcMain.on('selection-explanation:swipe-dictionary', this.swipeExplanationDictionary)
     ipcMain.on('selection-explanation:lookup-word', this.lookupFromExplanation)
     ipcMain.on('selection-explanation:show-ai', this.showAiFromExplanation)
     ipcMain.handle('selection-explanation:copy-text', this.copyFromExplanation)
@@ -232,6 +233,20 @@ export class SelectionExplanationController extends BaseController {
     }
     void this.showExplanationDictionary(match)
   }
+
+  private readonly swipeExplanationDictionary = (
+    event: IpcMainEvent,
+    request: { direction: 'left' | 'right'; dictionaryId: string; url: string }
+  ): void => {
+    if (
+      !this.acceptsExplanationViewSender(event) ||
+      (request?.direction !== 'left' && request?.direction !== 'right')
+    ) {
+      return
+    }
+    this.switchExplanationDictionary(request.direction, request.dictionaryId, request.url)
+  }
+
 
   private switchExplanationDictionary(
     direction: 'left' | 'right',

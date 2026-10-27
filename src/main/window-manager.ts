@@ -13,6 +13,7 @@ import {
 } from '../shared/translation'
 import { getMainWindowChromeMaterial, MAIN_WINDOW_TITLEBAR_HEIGHT } from '../shared/window-chrome'
 import { DICTIONARY_SESSION_PARTITION, EMBED_BROWSER_SESSION_PARTITION } from './entry-assets'
+import { attachDictionarySwipePhases } from './dictionary-swipe'
 import { resolvePreloadPath } from './output-path'
 import { applySelectionWindowBehavior } from './selection-window-behavior'
 import { WebContentsViewManager } from './web-contents-view-manager'
@@ -157,6 +158,7 @@ export class WindowManager {
     }
 
     const dictionaryView = this.createDictionaryEntryView()
+    attachDictionarySwipePhases(dictionaryView, this.requireMainWindow())
     this.dictionaryView = dictionaryView
     return dictionaryView
   }
@@ -355,6 +357,7 @@ export class WindowManager {
         }
       }
     })
+    attachDictionarySwipePhases(view, window)
     const surface: SelectionSurfaceWindow = window
     if (process.platform !== 'darwin') applySelectionWindowBehavior(window)
     const updateViewBounds = (): void => {

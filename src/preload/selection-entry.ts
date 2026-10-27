@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { createTtsPlayback } from './tts'
+import { installDictionarySwipe } from './dictionary-swipe'
+
+installDictionarySwipe('selection-explanation:swipe-dictionary')
 
 contextBridge.exposeInMainWorld(
   'dictolEntry',

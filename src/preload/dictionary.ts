@@ -1,5 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { createTtsPlayback } from './tts'
+import { installDictionarySwipe } from './dictionary-swipe'
+
+installDictionarySwipe('dictionary-view:switch-dictionary')
+
 
 window.addEventListener(
   'pointerdown',
