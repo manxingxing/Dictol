@@ -43,14 +43,14 @@
     <td align="center"><strong>文本翻译</strong><br><img src="docs/screenshots/translation.png" width="260" alt="Dictol 文本翻译工作区" /></td>
   </tr>
   <tr>
+    <td align="center"><strong>截图翻译</strong><br><img src="docs/screenshots/capture-translation.gif" width="260" alt="框选屏幕区域并翻译识别出的文字" /></td>
     <td align="center"><strong>划词工具栏</strong><br><img src="docs/screenshots/selection-toolbar-with-ai.gif" width="260" alt="跨应用划词工具栏演示" /></td>
     <td align="center"><strong>划词翻译</strong><br><img src="docs/screenshots/selection-translation.gif" width="260" alt="选中文本后进行划词翻译" /></td>
-    <td align="center"><strong>摘抄与笔记</strong><br><img src="docs/screenshots/notes.png" width="260" alt="在词条侧栏记录笔记和摘抄" /></td>
   </tr>
   <tr>
+    <td align="center"><strong>摘抄与笔记</strong><br><img src="docs/screenshots/notes.png" width="260" alt="在词条侧栏记录笔记和摘抄" /></td>
     <td align="center"><strong>自定义词典样式</strong><br><img src="docs/screenshots/custom-css-editor.png" width="260" alt="编辑词典自定义 CSS" /></td>
     <td align="center"><strong>配置 AI 服务</strong><br><img src="docs/screenshots/bring-your-own-token.png" width="260" alt="配置 OpenAI-compatible 服务" /></td>
-    <td></td>
   </tr>
 </table>
 
