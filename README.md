@@ -1,103 +1,59 @@
-# Dictol
+<p align="center">
+  <img src="build/icon.png" width="128" alt="Dictol 应用图标" />
+</p>
 
-一款基于 Electron 的桌面词典应用。Dictol 将本地 MDX/MDD 词典、在线词典和可选的 AI 服务放进同一个查词工作区，并提供跨应用划词、文本翻译、生词本和查询历史等功能。
+<p align="center">
+  <a href="https://github.com/manxingxing/dictol/releases"><img src="https://img.shields.io/github/downloads/manxingxing/dictol/total?label=downloads" alt="GitHub release downloads" /></a>
+</p>
 
-词条内容由项目内 Rust 原生模块解析，并在独立的 `WebContentsView` 中呈现词典自带的 HTML、CSS、图片、音频与 JavaScript 交互。
+<h1 align="center">Dictol</h1>
+
+一款基于 Electron 的桌面词典应用。Dictol 将本地 MDX/MDD 词典、在线词典和可选的 AI 服务放进同一个查词工作区，并提供跨应用划词、文本翻译、生词本等功能。
 
 > Dictol 不随安装包分发本地词典。AI 功能同样是可选的，需要用户自行配置 OpenAI-compatible 服务。
 
 ## 功能特性
 
-### 本地词典
+- **本地词典**：导入 MDX/MDD 词典，支持扫描目录批量导入、自定义样式，单词典和聚合两种视图。
+- **在线词典**：配置在线词典并在侧边栏中浏览，支持多标签。
+- **AI 查词**：在词条侧栏或划词浮窗中获取 AI 解释。
+- **翻译**：通过可配置服务进行文本翻译和截图翻译，支持MacOS系统翻译、火山翻译、百度翻译、google、bing及LLM作为翻译引擎。
+- **跨应用取词**：划词工具栏、快捷键取词和悬停查词；支持 AI 解释与朗读。
+- **语境查词**：悬停英文单词，结合所在句子由 AI 解释词义和句意，并可保存为摘抄。
+- **生词本**：创建多个词本，支持搜索、批量管理、导入和 Excel 导出。
+- **摘抄与笔记**：保存词典例句和笔记，支持全文搜索
 
-- 导入 MDX 及同目录中的 MDD、CSS、JavaScript 等关联资源；当前主要使用 MDX 2.0 词典验证
-- 支持扫描文件夹递归发现并批量导入多部 MDX 词典，索引任务以受限并发在后台执行
-- 使用 Rust 原生模块解析词典，并呈现图片、音频、内部链接及词典自带交互
-- 同一词条支持多词典结果切换，词典顺序可拖动调整
-- 可为每部词典编写自定义 CSS，覆盖原有样式并分别适配浅色、深色模式
 
-### 搜索与在线词典
+## 应用截图
 
-- 前缀搜索、实时候选词、最近查询历史（最多保留 200 条）
-- 本地词典没有结果时，仍可继续使用在线词典或 AI 查词
-- 可配置带 `%s` 占位符的在线词典 URL，并在词条右侧直接浏览网站内容
-- 在线词典支持排序、跟随当前查询以及侧边栏宽度调节
+<table>
+  <tr>
+    <td align="center"><strong>主界面查词</strong><br><img src="docs/screenshots/main-window.png" width="260" alt="Dictol 主窗口中的词典查词界面" /></td>
+    <td align="center"><strong>多词典聚合视图</strong><br><img src="docs/screenshots/aggregate-layout.png" width="260" alt="多个词典结果聚合显示" /></td>
+    <td align="center"><strong>在线词典</strong><br><img src="docs/screenshots/online-dictionary.png" width="260" alt="在本地词典右侧浏览在线词典" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>词典分组管理</strong><br><img src="docs/screenshots/dictionary-group.png" width="260" alt="编辑词典分组成员" /></td>
+    <td align="center"><strong>扫描导入词典</strong><br><img src="docs/screenshots/scan-import.png" width="260" alt="扫描文件夹并批量导入词典" /></td>
+    <td align="center"><strong>AI 查词与对话</strong><br><img src="docs/screenshots/ai-chat.png" width="260" alt="在词典侧栏中查看 AI 解释并继续提问" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>AI 解释中文词条</strong><br><img src="docs/screenshots/ai-with-chinese.png" width="260" alt="使用 AI 解释中文词条" /></td>
+    <td align="center"><strong>语境查词</strong><br><img src="docs/screenshots/context-aware-lookup.gif" width="260" alt="结合上下文进行语境查词" /></td>
+    <td align="center"><strong>文本翻译</strong><br><img src="docs/screenshots/translation.png" width="260" alt="Dictol 文本翻译工作区" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>划词工具栏</strong><br><img src="docs/screenshots/selection-toolbar-with-ai.gif" width="260" alt="跨应用划词工具栏演示" /></td>
+    <td align="center"><strong>划词翻译</strong><br><img src="docs/screenshots/selection-translation.gif" width="260" alt="选中文本后进行划词翻译" /></td>
+    <td align="center"><strong>摘抄与笔记</strong><br><img src="docs/screenshots/notes.png" width="260" alt="在词条侧栏记录笔记和摘抄" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>自定义词典样式</strong><br><img src="docs/screenshots/custom-css-editor.png" width="260" alt="编辑词典自定义 CSS" /></td>
+    <td align="center"><strong>配置 AI 服务</strong><br><img src="docs/screenshots/bring-your-own-token.png" width="260" alt="配置 OpenAI-compatible 服务" /></td>
+    <td></td>
+  </tr>
+</table>
 
-### AI 查词与翻译
-
-- 连接 OpenAI-compatible 服务，可分别配置服务地址、模型和场景 Prompt
-- 在词条右侧进行 AI 查词和连续追问，也可以让侧边栏跟随当前查询
-- 对其他应用中选中的文本生成一次性 AI 解释
-- 独立的 AI 翻译工作区，支持选择、互换源语言和目标语言
-- AI 结果支持 Markdown、表格、代码块和 LaTeX 数学公式
-- API Key 仅交给主进程，并使用系统安全存储加密
-
-### 跨应用取词
-
-- 选择其他应用中的文本后显示浮动工具栏，可查词、AI 解释、复制或打开网页搜索
-- 解释浮窗支持在多部本地词典之间切换，并可直接收藏到默认生词本
-- 支持全局快捷键主动读取当前选区
-- 实时划词可以配置排除程序列表
-
-### 生词本
-
-- 在主窗口或解释浮窗中收藏单词，并使用星级标记
-- 创建、重命名和删除自定义生词本，支持搜索、分页和批量移动
-- 支持批量导入单词，并将全部、指定生词本或选中条目导出为 Excel
-- 使用内置本地词库补充音标、释义和翻译，不调用 AI 服务
-
-## macOS 权限
-
-Dictol 会按功能引导用户开启必要的系统权限：
-
-- **辅助功能**：用于获取其他应用中当前所选的文本
-- **输入监控**：用于感知划词结束和弹窗外点击，改善划词工具栏与解释浮窗体验；Dictol 不保存或上传键盘输入
-
-修改权限后需要退出并重新打开 Dictol。
-
-## 截图
-
-### 本地词典与 AI 查词并排显示
-
-<p align="center">
-  <img src="build/screenshots/ai-beside-dictionary.png" width="90%" alt="本地词典与 AI 查词侧边栏" />
-</p>
-
-### 在线词典
-
-<p align="center">
-  <img src="build/screenshots/online-dictionary.png" width="90%" alt="在本地词典右侧浏览在线词典" />
-</p>
-
-### 划词工具栏与多词典解释浮窗
-
-<p align="center">
-  <img src="build/screenshots/selection-toolbar.gif" width="80%" alt="跨应用划词工具栏与词典解释浮窗" />
-</p>
-
-### 选中文本后使用 AI 解释
-
-<p align="center">
-  <img src="build/screenshots/ai-search-popover.gif" width="80%" alt="在其他应用中选择文本并显示 AI 解释" />
-</p>
-
-### AI 翻译
-
-<p align="center">
-  <img src="build/screenshots/ai-translation.png" width="80%" alt="AI 文本翻译工作区" />
-</p>
-
-### 配置 AI 服务
-
-<p align="center">
-  <img src="build/screenshots/bring-your-own-token.png" width="75%" alt="配置 OpenAI-compatible 服务" />
-</p>
-
-### 自定义词典 CSS
-
-<p align="center">
-  <img src="build/screenshots/custom-css-screenshot.png" width="75%" alt="为本地词典编写自定义 CSS" />
-</p>
 
 ## 技术栈
 
@@ -112,42 +68,37 @@ Dictol 会按功能引导用户开启必要的系统权限：
 ## 开发
 
 ```bash
-nvm use            # Node 24+（.nvmrc 使用 26.7.0）
+nvm use            # Node 24+
 npm install
 npm run dev        # 启动开发模式（使用已构建的 .node 文件）
-```
-
-macOS 悬停取词优先读取辅助功能文本，失败时使用 Apple Vision OCR；Windows 优先读取 UI Automation 文本，失败时使用 Windows 原生 OCR。
-
-## 常用命令
-
-```bash
 npm run typecheck       # TypeScript 类型检查（node + web）
 npm run lint            # ESLint
 npm run build           # 原生构建 + 类型检查 + electron-vite 构建
 npm run build:mac       # 打包 macOS
 npm run build:win       # 打包 Windows
-npm run build:linux     # 打包 Linux
-npm run native:test     # Rust Node-API 测试
-npm run db:generate     # Drizzle 迁移生成
 ```
 
-### 分步打包
+## 未来开发计划
 
-macOS / Windows 安装包可以分成 native 依赖和 Electron 两步构建。Node 版本使用 `.nvmrc`：
+- [ ] 整合 TTS 服务商
+- [ ] 改善 OCR 识别效果
+- [ ] 整合 OCR 服务商
+- [ ] 管理 AI 服务商与 Prompt
+- [ ] 提供局域网 Web 服务共享
+- [ ] 支持 Hunspell
+- [ ] 添加生词卡（包含笔记和摘抄例句）
+- [ ] 改善搜索候选词性能
+- [ ] 适配词典深色模式
 
-```bash
-nvm use
+## 捐赠
 
-# 只在 native 代码或目标平台二进制需要更新时运行对应命令
-npm run build:native:mac:x64
-npm run build:native:mac:arm64
-npm run build:native:win:x64
+如果 Dictol 对你有帮助，欢迎通过支付宝支持项目。
 
-# 使用已准备好的 native 依赖构建 Electron 安装包
-npm run build:electron -- --platform mac --arch x64
-npm run build:electron -- --platform mac --arch arm64
-npm run build:electron -- --platform win --arch x64
-```
-
-Electron 阶段不会重新编译 `.node` 文件。macOS 系统翻译 helper 会由 native 阶段按架构生成到 `native/system-translation/prebuilds/`，Electron 阶段选择目标版本并暂存到 `resources/system-translation/` 后打包。上游提供的 SQLite `simple` 扩展按平台/架构保存在 `native/sqlite-simple/prebuilds/`，Electron 会将其作为额外资源复制到应用的 `sqlite-simple/` 目录。electron-builder 配置会按目标平台筛选 native 模块、SQLite 扩展和系统辅助程序；`afterPack` 会检查最终安装包中的架构及必需导出。Windows native 构建与安装包签名需要本机配置 `WIN_CSC_PASSWORD` 和 `build/codesign.pfx`（或通过 `WIN_CSC_FILE` 指定证书）。
+<table>
+  <tr>
+    <th align="center">Alipay</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/alipay.png" width="240" alt="支付宝收款二维码" /></td>
+  </tr>
+</table>
