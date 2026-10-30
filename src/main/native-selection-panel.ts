@@ -48,8 +48,8 @@ export class NativeSelectionPanel extends EventEmitter {
       host.getNativeWindowHandle(),
       options.resizable,
       options.movable,
-      (event) => {
-        if (!isNativePanelEvent(event)) return
+      (error: Error | null, event: string) => {
+        if (error || !isNativePanelEvent(event)) return
         if (event === 'move' || event === 'resize-end') this.syncHostFrame()
         this.emit(event)
       }
