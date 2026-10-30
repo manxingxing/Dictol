@@ -33,7 +33,7 @@ body:has(#selection:not([hidden])) {
 #selection {
   position: absolute;
   box-sizing: border-box;
-  border: 2px solid #a38bfa;
+  border: 2px solid #c4c9d0;
   background: rgb(255 255 255 / 8%);
   box-shadow: 0 0 0 9999px rgb(12 18 25 / 20%);
   pointer-events: none;

@@ -167,7 +167,7 @@ export function SelectionTranslationWorkbench({
       >
         <div className="flex items-center gap-1.5 text-xs font-semibold">
           <Languages className="size-3.5" />
-          划词翻译
+          翻译
         </div>
         <div className="flex items-center gap-1">
           <Button
