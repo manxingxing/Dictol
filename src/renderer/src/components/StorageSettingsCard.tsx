@@ -64,37 +64,33 @@ function CacheSettingsRow({
   directory
 }: CacheSettingsRowProps): React.JSX.Element {
   return (
-    <SettingsRow
-      label={label}
-      description={description}
-      control={
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <span className="text-sm font-medium tabular-nums">{sizeLabel}</span>
-          {directory && (
-            <Button
-              aria-label="打开缓存文件夹"
-              disabled={directory.isOpening}
-              onClick={directory.open}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {directory.isOpening ? <LoaderCircle className="animate-spin" /> : <FolderOpen />}
-            </Button>
-          )}
+    <SettingsRow label={label} description={description}>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <span className="text-sm font-medium tabular-nums">{sizeLabel}</span>
+        {directory && (
           <Button
-            disabled={!canClear || isClearing}
-            onClick={onClear}
+            aria-label="打开缓存文件夹"
+            disabled={directory.isOpening}
+            onClick={directory.open}
             size="sm"
             type="button"
             variant="outline"
           >
-            <Trash2 />
-            清除缓存
+            {directory.isOpening ? <LoaderCircle className="animate-spin" /> : <FolderOpen />}
           </Button>
-        </div>
-      }
-    />
+        )}
+        <Button
+          disabled={!canClear || isClearing}
+          onClick={onClear}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <Trash2 />
+          清除缓存
+        </Button>
+      </div>
+    </SettingsRow>
   )
 }
 

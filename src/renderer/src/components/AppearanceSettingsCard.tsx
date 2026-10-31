@@ -98,107 +98,100 @@ export function AppearanceSettingsCard(): React.JSX.Element {
         <SettingsRow
           label="主题"
           description="选择浅色、深色或自动跟随系统"
-          control={
-            <div aria-label="主题" className="flex flex-wrap gap-2" role="group">
-              {themeModeOptions.map((option) => {
-                const selected = themeMode === option.value
-                return (
-                  <Button
-                    aria-pressed={selected}
-                    className={cn(
-                      'h-auto min-w-30 justify-start gap-2 p-2 text-left',
-                      selected &&
-                        'border-primary/45 bg-primary/8 text-foreground ring-1 ring-primary/20 hover:bg-primary/10'
-                    )}
-                    key={option.value}
-                    disabled={isLoadingThemeMode || isSavingThemeMode}
-                    onClick={() => void handleThemeModeChange(option.value)}
-                    type="button"
-                    variant="outline"
-                  >
-                    <AppearanceFramePreview themeMode={option.value} chromeTone={chromeTone} />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">{option.label}</span>
-                    </span>
-                  </Button>
-                )
-              })}
-            </div>
-          }
           className="items-start flex-wrap sm:flex-nowrap"
           controlClassName="w-full sm:w-auto"
-        />
+        >
+          <div aria-label="主题" className="flex flex-wrap gap-2" role="group">
+            {themeModeOptions.map((option) => {
+              const selected = themeMode === option.value
+              return (
+                <Button
+                  aria-pressed={selected}
+                  className={cn(
+                    'h-auto min-w-30 justify-start gap-2 p-2 text-left',
+                    selected &&
+                      'border-primary/45 bg-primary/8 text-foreground ring-1 ring-primary/20 hover:bg-primary/10'
+                  )}
+                  key={option.value}
+                  disabled={isLoadingThemeMode || isSavingThemeMode}
+                  onClick={() => void handleThemeModeChange(option.value)}
+                  type="button"
+                  variant="outline"
+                >
+                  <AppearanceFramePreview themeMode={option.value} chromeTone={chromeTone} />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{option.label}</span>
+                  </span>
+                </Button>
+              )
+            })}
+          </div>
+        </SettingsRow>
         <SettingsRow
           label="色调"
           description="选择中性或苔绿配色"
-          control={
-            <div aria-label="色调" className="flex flex-wrap gap-2" role="group">
-              {chromeToneOptions.map((option) => {
-                const selected = chromeTone === option.value
-                return (
-                  <Button
-                    aria-pressed={selected}
-                    className={cn(
-                      'h-auto min-w-30 justify-start gap-2 p-2 text-left',
-                      selected &&
-                        'border-primary/45 bg-primary/8 text-foreground ring-1 ring-primary/20 hover:bg-primary/10'
-                    )}
-                    key={option.value}
-                    onClick={() => setChromeTone(option.value)}
-                    type="button"
-                    variant="outline"
-                  >
-                    <AppearanceFramePreview chromeTone={option.value} />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">{option.label}</span>
-                    </span>
-                  </Button>
-                )
-              })}
-            </div>
-          }
           className="items-start flex-wrap sm:flex-nowrap"
           controlClassName="w-full sm:w-auto"
-        />
+        >
+          <div aria-label="色调" className="flex flex-wrap gap-2" role="group">
+            {chromeToneOptions.map((option) => {
+              const selected = chromeTone === option.value
+              return (
+                <Button
+                  aria-pressed={selected}
+                  className={cn(
+                    'h-auto min-w-30 justify-start gap-2 p-2 text-left',
+                    selected &&
+                      'border-primary/45 bg-primary/8 text-foreground ring-1 ring-primary/20 hover:bg-primary/10'
+                  )}
+                  key={option.value}
+                  onClick={() => setChromeTone(option.value)}
+                  type="button"
+                  variant="outline"
+                >
+                  <AppearanceFramePreview chromeTone={option.value} />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{option.label}</span>
+                  </span>
+                </Button>
+              )
+            })}
+          </div>
+        </SettingsRow>
         <SettingsRow
           label="查词页面布局"
           description="一页展示一个词典解释，或者在一页聚合多个词典解释"
-          control={
-            <select
-              aria-label="查词页面布局"
-              className="h-9 min-w-44 rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring"
-              disabled={!dictionaryLayout || isSavingDictionaryLayout}
-              onChange={(event) => void handleDictionaryLayoutChange(event)}
-              value={dictionaryLayout}
-            >
-              {dictionaryLayoutOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          }
           className="items-start"
-        />
-        <SettingsRow
-          label="词典显示"
-          description="选择查词释义区上方的词典导航显示方式"
-          control={
-            <select
-              aria-label="词典显示"
-              className="h-9 min-w-44 rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring"
-              disabled={!dictionaryDisplay || isSavingDictionaryDisplay}
-              onChange={(event) => void handleDictionaryDisplayChange(event)}
-              value={dictionaryDisplay ?? ''}
-            >
-              {dictionaryDisplayOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          }
-        />
+        >
+          <select
+            aria-label="查词页面布局"
+            className="h-9 min-w-44 rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring"
+            disabled={!dictionaryLayout || isSavingDictionaryLayout}
+            onChange={(event) => void handleDictionaryLayoutChange(event)}
+            value={dictionaryLayout}
+          >
+            {dictionaryLayoutOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </SettingsRow>
+        <SettingsRow label="词典显示" description="选择查词释义区上方的词典导航显示方式">
+          <select
+            aria-label="词典显示"
+            className="h-9 min-w-44 rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring"
+            disabled={!dictionaryDisplay || isSavingDictionaryDisplay}
+            onChange={(event) => void handleDictionaryDisplayChange(event)}
+            value={dictionaryDisplay ?? ''}
+          >
+            {dictionaryDisplayOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </SettingsRow>
       </SettingsList>
     </SettingsSection>
   )

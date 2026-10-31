@@ -12,7 +12,7 @@ type SettingsSectionProps = {
 type SettingsRowProps = {
   label: string
   description?: string
-  control: ReactNode
+  children: ReactNode
   className?: string
   controlClassName?: string
 }
@@ -53,7 +53,7 @@ export function SettingsList({
 export function SettingsRow({
   label,
   description,
-  control,
+  children,
   className,
   controlClassName
 }: SettingsRowProps): React.JSX.Element {
@@ -70,7 +70,7 @@ export function SettingsRow({
           <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
         )}
       </div>
-      <div className={cn('shrink-0', controlClassName)}>{control}</div>
+      <div className={cn('shrink-0', controlClassName)}>{children}</div>
     </div>
   )
 }

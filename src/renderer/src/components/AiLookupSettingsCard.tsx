@@ -86,135 +86,132 @@ export function AiLookupSettingsCard(): React.JSX.Element {
         <SettingsRow
           label="启用 AI 增强"
           description="开启后可在词条解释区打开聊天侧栏，也可从划词工具栏获取单次解释"
-          control={
-            <div className="flex shrink-0 items-center gap-2">
-              <Dialog
-                onOpenChange={(open) => {
-                  setAiDialogOpen(open)
-                  if (open) setAiError(null)
-                }}
-                open={aiDialogOpen}
-              >
-                <DialogTrigger asChild>
-                  <Button size="sm" type="button" variant="outline">
-                    配置
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-3xl">
-                  <DialogHeader variant="section">
-                    <DialogTitle>配置 AI 查词</DialogTitle>
-                    <DialogDescription>
-                      连接兼容 OpenAI Chat Completions 的模型服务
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="min-h-0 overflow-y-auto px-6 py-4">
-                    <div className="mb-5 flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-medium">模型服务</p>
-                      </div>
-                      <span className="shrink-0 rounded-full border border-primary/20 bg-primary/[0.06] px-2.5 py-1 text-xs font-medium text-primary">
-                        OpenAI-compatible
-                      </span>
+        >
+          <div className="flex shrink-0 items-center gap-2">
+            <Dialog
+              onOpenChange={(open) => {
+                setAiDialogOpen(open)
+                if (open) setAiError(null)
+              }}
+              open={aiDialogOpen}
+            >
+              <DialogTrigger asChild>
+                <Button size="sm" type="button" variant="outline">
+                  配置
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-3xl">
+                <DialogHeader variant="section">
+                  <DialogTitle>配置 AI 查词</DialogTitle>
+                  <DialogDescription>连接兼容 OpenAI Chat Completions 的模型服务</DialogDescription>
+                </DialogHeader>
+                <div className="min-h-0 overflow-y-auto px-6 py-4">
+                  <div className="mb-5 flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium">模型服务</p>
                     </div>
-
-                    <div className="grid gap-4 sm:grid-cols-[minmax(0,1.45fr)_minmax(11rem,0.75fr)]">
-                      <label className="block space-y-1.5 text-sm">
-                        <span className="font-medium">服务地址</span>
-                        <Input
-                          onChange={(event) =>
-                            setAiForm((current) => ({
-                              ...current,
-                              baseUrl: event.target.value
-                            }))
-                          }
-                          placeholder="https://api.openai.com/v1"
-                          type="url"
-                          value={aiForm.baseUrl}
-                        />
-                      </label>
-                      <label className="block space-y-1.5 text-sm">
-                        <span className="font-medium">模型</span>
-                        <Input
-                          onChange={(event) =>
-                            setAiForm((current) => ({
-                              ...current,
-                              model: event.target.value
-                            }))
-                          }
-                          placeholder="例如 gpt-4o-mini"
-                          value={aiForm.model}
-                        />
-                      </label>
-                      <label className="block space-y-1.5 text-sm sm:col-span-2">
-                        <span className="font-medium">API Key</span>
-                        <Input
-                          autoComplete="off"
-                          onChange={(event) =>
-                            setAiForm((current) => ({
-                              ...current,
-                              apiKey: event.target.value
-                            }))
-                          }
-                          placeholder={
-                            aiConfig.data?.hasApiKey ? '已配置，留空以保留' : '输入 API Key'
-                          }
-                          type="password"
-                          value={aiForm.apiKey}
-                        />
-                        <span className="block text-xs leading-5 text-muted-foreground">
-                          API Key 仅保存在主进程，并使用系统安全存储加密。
-                        </span>
-                      </label>
-                    </div>
-
-                    {aiError && (
-                      <FieldError className="mt-4 flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs leading-5">
-                        <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
-                        <span>{aiError}</span>
-                      </FieldError>
-                    )}
+                    <span className="shrink-0 rounded-full border border-primary/20 bg-primary/[0.06] px-2.5 py-1 text-xs font-medium text-primary">
+                      OpenAI-compatible
+                    </span>
                   </div>
-                  <DialogFooter className="border-t border-border bg-muted/20 px-6 py-4 sm:items-center justify-end">
-                    <Button
-                      onClick={() => setAiDialogOpen(false)}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                    >
-                      取消
-                    </Button>
-                    <Button
-                      disabled={saveAiConfig.isPending}
-                      onClick={saveAiForm}
-                      type="button"
-                      size="sm"
-                    >
-                      {saveAiConfig.isPending ? '保存中…' : '保存配置'}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-              <Button
-                aria-label={verifyingAiConfig ? '正在验证 AI 配置' : '验证 AI 配置'}
-                className={verifyingAiConfig ? 'min-w-12 disabled:opacity-100' : 'min-w-12'}
-                disabled={!aiConfig.data || saveAiConfig.isPending || verifyingAiConfig}
-                onClick={() => void testAiConfig()}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                {verifyingAiConfig ? <LoaderCircle className="animate-spin" /> : '验证'}
-              </Button>
-              <Switch
-                aria-label="启用 AI 增强"
-                checked={aiConfig.data?.enabled ?? aiForm.enabled}
-                disabled={aiConfig.isLoading || saveAiConfig.isPending}
-                id="ai-lookup-enabled"
-                onCheckedChange={updateAiConfig}
-              />
-            </div>
-          }
-        />
+
+                  <div className="grid gap-4 sm:grid-cols-[minmax(0,1.45fr)_minmax(11rem,0.75fr)]">
+                    <label className="block space-y-1.5 text-sm">
+                      <span className="font-medium">服务地址</span>
+                      <Input
+                        onChange={(event) =>
+                          setAiForm((current) => ({
+                            ...current,
+                            baseUrl: event.target.value
+                          }))
+                        }
+                        placeholder="https://api.openai.com/v1"
+                        type="url"
+                        value={aiForm.baseUrl}
+                      />
+                    </label>
+                    <label className="block space-y-1.5 text-sm">
+                      <span className="font-medium">模型</span>
+                      <Input
+                        onChange={(event) =>
+                          setAiForm((current) => ({
+                            ...current,
+                            model: event.target.value
+                          }))
+                        }
+                        placeholder="例如 gpt-4o-mini"
+                        value={aiForm.model}
+                      />
+                    </label>
+                    <label className="block space-y-1.5 text-sm sm:col-span-2">
+                      <span className="font-medium">API Key</span>
+                      <Input
+                        autoComplete="off"
+                        onChange={(event) =>
+                          setAiForm((current) => ({
+                            ...current,
+                            apiKey: event.target.value
+                          }))
+                        }
+                        placeholder={
+                          aiConfig.data?.hasApiKey ? '已配置，留空以保留' : '输入 API Key'
+                        }
+                        type="password"
+                        value={aiForm.apiKey}
+                      />
+                      <span className="block text-xs leading-5 text-muted-foreground">
+                        API Key 仅保存在主进程，并使用系统安全存储加密。
+                      </span>
+                    </label>
+                  </div>
+
+                  {aiError && (
+                    <FieldError className="mt-4 flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs leading-5">
+                      <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
+                      <span>{aiError}</span>
+                    </FieldError>
+                  )}
+                </div>
+                <DialogFooter className="border-t border-border bg-muted/20 px-6 py-4 sm:items-center justify-end">
+                  <Button
+                    onClick={() => setAiDialogOpen(false)}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    disabled={saveAiConfig.isPending}
+                    onClick={saveAiForm}
+                    type="button"
+                    size="sm"
+                  >
+                    {saveAiConfig.isPending ? '保存中…' : '保存配置'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <Button
+              aria-label={verifyingAiConfig ? '正在验证 AI 配置' : '验证 AI 配置'}
+              className={verifyingAiConfig ? 'min-w-12 disabled:opacity-100' : 'min-w-12'}
+              disabled={!aiConfig.data || saveAiConfig.isPending || verifyingAiConfig}
+              onClick={() => void testAiConfig()}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {verifyingAiConfig ? <LoaderCircle className="animate-spin" /> : '验证'}
+            </Button>
+            <Switch
+              aria-label="启用 AI 增强"
+              checked={aiConfig.data?.enabled ?? aiForm.enabled}
+              disabled={aiConfig.isLoading || saveAiConfig.isPending}
+              id="ai-lookup-enabled"
+              onCheckedChange={updateAiConfig}
+            />
+          </div>
+        </SettingsRow>
       </SettingsList>
       {aiError && !aiDialogOpen && (
         <p className="mt-3 text-xs text-destructive" role="alert">
