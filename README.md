@@ -28,29 +28,54 @@
 
 <table>
   <tr>
-    <td align="center"><strong>主界面查词</strong><br><img src="docs/screenshots/main-window.png" width="260" alt="Dictol 主窗口中的词典查词界面" /></td>
-    <td align="center"><strong>多词典聚合视图</strong><br><img src="docs/screenshots/aggregate-layout.png" width="260" alt="多个词典结果聚合显示" /></td>
-    <td align="center"><strong>在线词典</strong><br><img src="docs/screenshots/online-dictionary.png" width="260" alt="在本地词典右侧浏览在线词典" /></td>
+    <th align="center">主界面查词</th>
+    <th align="center">多词典聚合视图</th>
+    <th align="center">在线词典</th>
   </tr>
   <tr>
-    <td align="center"><strong>多栏词条布局</strong><br><img src="docs/screenshots/multiple-column-layout.png" width="260 alt="同时并排查看多个词典的词条内容" /></td>
-    <td align="center"><strong>词典分组管理</strong><br><img src="docs/screenshots/dictionary-group.png" width="260" alt="编辑词典分组成员" /></td>
-    <td align="center"><strong>扫描导入词典</strong><br><img src="docs/screenshots/scan-import.png" width="260" alt="扫描文件夹并批量导入词典" /></td>
+    <td align="center"><img src="docs/screenshots/main-window.png" width="260" alt="Dictol 主窗口中的词典查词界面" /></td>
+    <td align="center"><img src="docs/screenshots/aggregate-layout.png" width="260" alt="多个词典结果聚合显示" /></td>
+    <td align="center"><img src="docs/screenshots/online-dictionary.png" width="260" alt="在本地词典右侧浏览在线词典" /></td>
   </tr>
   <tr>
-    <td align="center"><strong>AI 查词与对话</strong><br><img src="docs/screenshots/ai-chat.png" width="260" alt="在词典侧栏中查看 AI 解释并继续提问" /></td>
-    <td align="center"><strong>AI 解释中文词条</strong><br><img src="docs/screenshots/ai-with-chinese.png" width="260" alt="使用 AI 解释中文词条" /></td>
-    <td align="center"><strong>文本翻译</strong><br><img src="docs/screenshots/translation.png" width="260" alt="Dictol 文本翻译工作区" /></td>
+    <th align="center">多栏词条布局</th>
+    <th align="center">词典分组管理</th>
+    <th align="center">扫描导入词典</th>
   </tr>
   <tr>
-    <td align="center"><strong>语境查词</strong><br><img src="docs/screenshots/context-aware-lookup.gif" width="260" alt="结合上下文进行语境查词" /></td>
-    <td align="center"><strong>截图翻译</strong><br><img src="docs/screenshots/capture-translation.gif" width="260" alt="框选屏幕区域并翻译识别出的文字" /></td>
-    <td align="center"><strong>划词工具栏</strong><br><img src="docs/screenshots/selection-toolbar-with-ai.gif" width="260" alt="跨应用划词工具栏演示" /></td>
+    <td align="center"><img src="docs/screenshots/multiple-column-layout.png" width="260" alt="同时并排查看多个词典的词条内容" /></td>
+    <td align="center"><img src="docs/screenshots/dictionary-group.png" width="260" alt="编辑词典分组成员" /></td>
+    <td align="center"><img src="docs/screenshots/scan-import.png" width="260" alt="扫描文件夹并批量导入词典" /></td>
   </tr>
   <tr>
-    <td align="center"><strong>划词翻译</strong><br><img src="docs/screenshots/selection-translation.gif" width="260" alt="选中文本后进行划词翻译" /></td>
-    <td align="center"><strong>摘抄与笔记</strong><br><img src="docs/screenshots/notes.png" width="260" alt="在词条侧栏记录笔记和摘抄" /></td>
-    <td align="center"><strong>自定义词典样式</strong><br><img src="docs/screenshots/custom-css-editor.png" width="260" alt="编辑词典自定义 CSS" /></td>
+    <th align="center">AI 查词与对话</th>
+    <th align="center">AI 解释中文词条</th>
+    <th align="center">文本翻译</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/ai-chat.png" width="260" alt="在词典侧栏中查看 AI 解释并继续提问" /></td>
+    <td align="center"><img src="docs/screenshots/ai-with-chinese.png" width="260" alt="使用 AI 解释中文词条" /></td>
+    <td align="center"><img src="docs/screenshots/translation.png" width="260" alt="Dictol 文本翻译工作区" /></td>
+  </tr>
+  <tr>
+    <th align="center">语境查词</th>
+    <th align="center">截图翻译</th>
+    <th align="center">划词工具栏</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/context-aware-lookup.gif" width="260" alt="结合上下文进行语境查词" /></td>
+    <td align="center"><img src="docs/screenshots/capture-translation.gif" width="260" alt="框选屏幕区域并翻译识别出的文字" /></td>
+    <td align="center"><img src="docs/screenshots/selection-toolbar-with-ai.gif" width="260" alt="跨应用划词工具栏演示" /></td>
+  </tr>
+  <tr>
+    <th align="center">划词翻译</th>
+    <th align="center">摘抄与笔记</th>
+    <th align="center">自定义词典样式</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/selection-translation.gif" width="260" alt="选中文本后进行划词翻译" /></td>
+    <td align="center"><img src="docs/screenshots/notes.png" width="260" alt="在词条侧栏记录笔记和摘抄" /></td>
+    <td align="center"><img src="docs/screenshots/custom-css-editor.png" width="260" alt="编辑词典自定义 CSS" /></td>
   </tr>
 </table>
 
