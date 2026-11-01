@@ -130,8 +130,7 @@ export class WindowManager {
           : [{ role: 'copy' }]
       )
       menu.popup({
-        window: mainWindow,
-        ...(params.frame ? { frame: params.frame } : {})
+        window: mainWindow
       })
     })
 
