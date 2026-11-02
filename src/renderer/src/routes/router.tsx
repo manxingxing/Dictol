@@ -3,6 +3,14 @@ import { createHashRouter, Navigate } from 'react-router-dom'
 import { AppErrorFallback } from '@/components/AppErrorBoundary'
 import { AppLayout } from '@/layouts/AppLayout'
 import { OnlineDictionariesList } from '@/components/OnlineDictionariesList'
+import { AboutSettingsCard } from '@/components/AboutSettingsCard'
+import { AiLookupSettingsCard } from '@/components/AiLookupSettingsCard'
+import { AppearanceSettingsCard } from '@/components/AppearanceSettingsCard'
+import { KeyboardSettingsCard } from '@/components/KeyboardSettingsCard'
+import { StorageSettingsCard } from '@/components/StorageSettingsCard'
+import { TranslationSettingsCard } from '@/components/TranslationSettingsCard'
+import { TtsSettingsCard } from '@/components/TtsSettingsCard'
+import { WordCaptureSettingsCard } from '@/components/WordCaptureSettingsCard'
 import { DictionariesPage } from '@/pages/DictionariesPage'
 import { DictionaryManagementLayout } from '@/pages/DictionaryManagementLayout'
 import { DictionaryGroupsPage } from '@/pages/DictionaryGroupsPage'
@@ -55,7 +63,28 @@ export const router = createHashRouter([
           { path: ':wordbookId', element: <WordbookWords /> }
         ]
       },
-      { path: 'settings', element: <SettingsPage /> },
+      {
+        path: 'settings',
+        element: <SettingsPage />,
+        children: [
+          { index: true, element: <Navigate to="appearance" replace /> },
+          { path: 'appearance', element: <AppearanceSettingsCard /> },
+          { path: 'capture', element: <WordCaptureSettingsCard /> },
+          { path: 'translation', element: <TranslationSettingsCard /> },
+          { path: 'ai', element: <AiLookupSettingsCard /> },
+          { path: 'tts', element: <TtsSettingsCard /> },
+          { path: 'keyboard', element: <KeyboardSettingsCard /> },
+          {
+            path: 'about',
+            element: (
+              <>
+                <AboutSettingsCard />
+                <StorageSettingsCard />
+              </>
+            )
+          }
+        ]
+      },
       { path: 'translation', element: <TranslationPage /> }
     ]
   }

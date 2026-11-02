@@ -37,7 +37,7 @@ export function AppLayout(): React.JSX.Element {
     return window.dictol.wordCapture.onEvent((event) => {
       if (event.type === 'permission-required') {
         toast.warning('需要开启辅助功能权限，才能读取其他软件中选中的文字。')
-        void navigate('/settings')
+        void navigate('/settings/capture')
         return
       }
       if (event.type === 'empty') {
@@ -51,7 +51,9 @@ export function AppLayout(): React.JSX.Element {
   // deeplink, 'open in main window from explanation window', 'goto word from dictionary browser'
   useEffect(() => {
     return window.dictol.app.onSearchRequest((request) => {
-      console.log(`received search request ${request.term} in dictionary(#${request.dictionaryId}) from ${request.source}`)
+      console.log(
+        `received search request ${request.term} in dictionary(#${request.dictionaryId}) from ${request.source}`
+      )
       if (!request.term) return
 
       setSearchQuery(request.term)
