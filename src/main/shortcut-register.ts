@@ -8,6 +8,7 @@ export class ShortcutRegister {
   private readonly registrations = new Map<string, string>()
 
   register(command: string, shortcut: string, handler: ShortcutHandler): boolean {
+    // 注销原来的快捷键
     this.unregister(command)
 
     if (!shortcut) {
@@ -44,11 +45,29 @@ export class ShortcutRegister {
     this.registrations.delete(command)
   }
 
+  unregisterAccelerator(accelerator: string): void {
+    for (const [command, registeredAccelerator] of this.registrations.entries()) {
+      if (registeredAccelerator === accelerator) {
+        globalShortcut.unregister(accelerator)
+        this.registrations.delete(command)
+        return
+      }
+    }
+  }
+
   unregisterAll(): void {
     for (const command of [...this.registrations.keys()]) this.unregister(command)
   }
 
   isRegistered(command: string): boolean {
-    return this.registrations.has(command)
+    return this.registrations.has(command) && globalShortcut.isRegistered(this.registrations.get(command)!)
+  }
+
+  suspendAllShortCuts(): void {
+    globalShortcut.setSuspended(true)
+  }
+
+  resumeAllShortCuts(): void {
+    globalShortcut.setSuspended(false)
   }
 }

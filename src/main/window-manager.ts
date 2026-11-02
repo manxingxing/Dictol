@@ -29,7 +29,7 @@ const getMainWindowBackgroundColor = (
 const ocrHighlightPage = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
 *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:transparent}
-#highlight{position:fixed;inset:0;border-bottom:2px solid rgba(187,126,0,.95);background:rgba(255,193,7,.42)}
+#highlight{position:fixed;inset:0;border-radius:6px;border-bottom:2px solid rgba(187,126,0,.95);background:rgba(255,193,7,.42)}
 #underline{position:fixed;display:none;height:2px;background:rgba(187,126,0,.95);transform-origin:left center}
 </style></head><body><div id="highlight"></div><div id="underline"></div></body></html>`)}`
 
@@ -408,6 +408,7 @@ export class WindowManager {
         ...windowBounds,
         show: false,
         frame: false,
+        roundedCorners: false,
         type: process.platform === 'darwin' ? 'panel' : undefined,
         transparent: true,
         backgroundColor: '#00000000',
@@ -504,6 +505,7 @@ export class WindowManager {
           return true;
         })()`
       )
+      if (!(await painting)) throw new Error('OCR highlight element is missing')
       if (
         this.ocrHighlightWindow === window &&
         !window.isDestroyed() &&
@@ -523,7 +525,6 @@ export class WindowManager {
           }
         }
       }
-      if (!(await painting)) throw new Error('OCR highlight element is missing')
     } catch (error) {
       console.error('Failed to paint OCR highlight', error)
       if (

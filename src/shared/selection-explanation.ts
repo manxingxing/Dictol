@@ -26,4 +26,4 @@ export type SelectionExplanationPayload = {
   ocrContext?: string
   ocrExplanation?: OcrAiExplanation
 }
-import type { OcrAiExplanation } from './ocr-explanation'
+import type { OcrAiExplanation } from './ocr'

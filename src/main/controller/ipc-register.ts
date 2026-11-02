@@ -45,7 +45,7 @@ export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
     new SearchPopoverController(appRuntime),
     selectionExplanationController,
     translationController,
-    new ScreenshotTranslationController(appRuntime, translationController),
+    new ScreenshotTranslationController(appRuntime),
     new SelectionToolbarController(
       appRuntime,
       selectionExplanationController,

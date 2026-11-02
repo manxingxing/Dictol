@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { Button } from '@/components/ui/button'
 import { SettingsList, SettingsRow, SettingsSection } from '@/components/settings/SettingsSection'
-import { formatShortcut, shortcutFromKeyboardEvent } from '@/lib/keyboard-shortcut'
+import { ShortcutSettingControl } from '@/components/settings/ShortcutSettingControl'
+import { formatShortcut } from '@/lib/keyboard-shortcut'
 import { useAppStore } from '@/stores/app-store'
 
 type KeyboardShortcutStatus = Awaited<ReturnType<typeof window.dictol.keyboard.getStatus>>
@@ -10,10 +10,9 @@ type KeyboardShortcutStatus = Awaited<ReturnType<typeof window.dictol.keyboard.g
 export function KeyboardSettingsCard(): React.JSX.Element {
   const dictionaryLayout = useAppStore((state) => state.dictionaryLayout)
   const [status, setStatus] = useState<KeyboardShortcutStatus>(null)
-  const [recordingShortcut, setRecordingShortcut] = useState(false)
-  const [savingShortcut, setSavingShortcut] = useState(false)
   const [shortcutError, setShortcutError] = useState<string | null>(null)
 
+  // 唤起 Dictol 的快捷键设置
   const refreshStatus = useCallback(() => {
     void window.dictol.keyboard.getStatus().then(setStatus)
   }, [])
@@ -23,6 +22,22 @@ export function KeyboardSettingsCard(): React.JSX.Element {
     window.addEventListener('focus', refreshStatus)
     return () => window.removeEventListener('focus', refreshStatus)
   }, [refreshStatus])
+
+  // 更新唤起 Dictol 的快捷键设置
+  const updateShortcut = async (shortcut: string): Promise<void> => {
+    setShortcutError(null)
+    try {
+      const result = await window.dictol.keyboard.setMainWindowShortcut(shortcut)
+      if (!result) {
+        setShortcutError('无法更新快捷键设置。')
+        return
+      }
+      setStatus(result.status)
+      setShortcutError(result.error ?? null)
+    } catch (error) {
+      setShortcutError(error instanceof Error ? error.message : '无法更新快捷键设置。')
+    }
+  }
 
   return (
     <SettingsSection title="键盘">
@@ -34,88 +49,47 @@ export function KeyboardSettingsCard(): React.JSX.Element {
             <SettingsRow
               label="唤起 Dictol"
               description={
-                recordingShortcut
-                  ? '请直接按下新的组合键，按 Esc 取消'
+                !status.shortcut
+                  ? '未设置快捷键'
                   : status.registered
                     ? '快捷键已启用'
                     : '快捷键被其他应用占用，请重新设置'
               }
             >
-              <div className="flex items-center gap-2">
-                <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
-                  {recordingShortcut
-                    ? '等待输入…'
-                    : formatShortcut(status.shortcut, window.dictol.platform)}
-                </kbd>
-                <Button
-                  disabled={savingShortcut}
-                  onClick={() => {
-                    setShortcutError(null)
-                    setRecordingShortcut(true)
-                  }}
-                  onKeyDown={(event) => {
-                    if (!recordingShortcut) return
-                    event.preventDefault()
-                    event.stopPropagation()
-                    if (event.key === 'Escape') {
-                      setRecordingShortcut(false)
-                      setShortcutError(null)
-                      return
-                    }
-
-                    const shortcut = shortcutFromKeyboardEvent(event)
-                    if (!shortcut) return
-                    setRecordingShortcut(false)
-                    setSavingShortcut(true)
-                    void window.dictol.keyboard
-                      .setMainWindowShortcut(shortcut)
-                      .then((result) => {
-                        if (!result) {
-                          setShortcutError('无法更新快捷键设置。')
-                          return
-                        }
-                        setStatus(result.status)
-                        setShortcutError(result.error ?? null)
-                      })
-                      .finally(() => setSavingShortcut(false))
-                  }}
-                  size="sm"
-                  variant="outline"
-                >
-                  {recordingShortcut ? '按下组合键' : '修改'}
-                </Button>
-              </div>
+              <ShortcutSettingControl
+                allowClear
+                command="showMainWindow"
+                currentShortcut={status.shortcut}
+                onClear={() => updateShortcut('')}
+                onUpdate={updateShortcut}
+              />
             </SettingsRow>
-            <SettingsRow
-              label="搜索词条"
-              description="聚焦查词搜索框"
-            >
+            {shortcutError && (
+              <p
+                className="border-b border-border bg-card px-4 py-2 text-xs text-destructive last:border-b-0"
+                role="alert"
+              >
+                {shortcutError}
+              </p>
+            )}
+            <SettingsRow label="搜索词条" description="聚焦查词搜索框">
               <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
                 {formatShortcut('CommandOrControl+K', window.dictol.platform)}
               </kbd>
             </SettingsRow>
-            <SettingsRow
-              label="查找当前词条内容"
-              description="在当前词条内容中查找文字"
-            >
+            <SettingsRow label="页面内查找" description="在当前词条内容中查找">
               <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
                 {formatShortcut('CommandOrControl+F', window.dictol.platform)}
               </kbd>
             </SettingsRow>
             {dictionaryLayout === 'single' && (
               <>
-                <SettingsRow
-                  label="上一个词典"
-                  description="在查词结果中切换到上一个词典"
-                >
+                <SettingsRow label="上一个词典" description="在查词结果中切换到上一个词典">
                   <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
                     {formatShortcut('CommandOrControl+Left', window.dictol.platform)}
                   </kbd>
                 </SettingsRow>
-                <SettingsRow
-                  label="下一个词典"
-                  description="在查词结果中切换到下一个词典"
-                >
+                <SettingsRow label="下一个词典" description="在查词结果中切换到下一个词典">
                   <kbd className="min-w-24 rounded-md border border-border bg-muted px-3 py-1.5 text-center text-sm font-medium">
                     {formatShortcut('CommandOrControl+Right', window.dictol.platform)}
                   </kbd>
@@ -125,11 +99,6 @@ export function KeyboardSettingsCard(): React.JSX.Element {
           </>
         )}
       </SettingsList>
-      {shortcutError && (
-        <p className="mt-3 text-xs text-destructive" role="alert">
-          {shortcutError}
-        </p>
-      )}
     </SettingsSection>
   )
 }

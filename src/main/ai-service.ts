@@ -15,7 +15,7 @@ import {
   prepareLookupMessages
 } from './language-task-prompts'
 import { createAiCompletionBody } from './ai-model-adapter'
-import type { OcrAiExplanation } from '../shared/ocr-explanation'
+import type { OcrAiExplanation } from '../shared/ocr'
 
 const MAX_MESSAGES = 100
 const MAX_MESSAGE_LENGTH = 20_000

@@ -90,7 +90,6 @@ function startPrimaryInstance(initialDeepLink: DeepLinkIntent | null): void {
         registerIPCHandlers(runtime)
         runtime.setMainWindowInitializer((mainWindow) => configureMainWindow(runtime, mainWindow))
         configureMainWindow(runtime, requireMainWindow(runtime))
-        runtime.trayManager.setMainWindowFactory(() => runtime.getOrCreateMainWindow())
         if (pendingWindowActivation) showAndFocusMainWindow()
         flushDeepLinks()
       } catch (error: unknown) {

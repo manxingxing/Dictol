@@ -736,18 +736,6 @@ export function DictionariesPage(): React.JSX.Element {
                 </div>
               </div>
               {importPreview && (
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    checked={copyDictionaryFiles}
-                    className="size-4 accent-primary"
-                    disabled={importDictionary.isPending || selectingImportFile}
-                    onChange={(event) => setCopyDictionaryFiles(event.target.checked)}
-                    type="checkbox"
-                  />
-                  将词典文件复制到软件中
-                </label>
-              )}
-              {importPreview && (
                 <div className="flex min-w-0 items-center gap-3 overflow-hidden rounded-xl border border-primary/20 bg-primary/[0.035] p-3">
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <Files className="size-4" />
@@ -783,18 +771,32 @@ export function DictionariesPage(): React.JSX.Element {
                   导入失败：{importDictionary.error.message}
                 </p>
               )}
-              <DialogFooter>
-                <Button
-                  disabled={importDictionary.isPending || selectingImportFile}
-                  onClick={closeImportDialog}
-                  type="button"
-                  variant="outline"
-                >
-                  取消
-                </Button>
-                <Button disabled={!importPreview || importDictionary.isPending} type="submit">
-                  {importDictionary.isPending ? '正在导入…' : '导入'}
-                </Button>
+              <DialogFooter className="flex-row items-center">
+                {importPreview && (
+                  <label className="flex min-w-0 items-center gap-2 text-sm">
+                    <input
+                      checked={copyDictionaryFiles}
+                      className="size-4 shrink-0 accent-primary"
+                      disabled={importDictionary.isPending || selectingImportFile}
+                      onChange={(event) => setCopyDictionaryFiles(event.target.checked)}
+                      type="checkbox"
+                    />
+                    将词典文件复制到软件中
+                  </label>
+                )}
+                <div className="ml-auto flex shrink-0 gap-2">
+                  <Button
+                    disabled={importDictionary.isPending || selectingImportFile}
+                    onClick={closeImportDialog}
+                    type="button"
+                    variant="outline"
+                  >
+                    取消
+                  </Button>
+                  <Button disabled={!importPreview || importDictionary.isPending} type="submit">
+                    {importDictionary.isPending ? '正在导入…' : '导入'}
+                  </Button>
+                </div>
               </DialogFooter>
             </form>
           )}
@@ -938,7 +940,7 @@ export function DictionariesPage(): React.JSX.Element {
                 将词典文件复制到软件中
               </label>
             )}
-            <div className="flex justify-end gap-2">
+            <div className="ml-auto flex shrink-0 gap-2">
               <Button
                 disabled={importDictionariesFromFolder.isPending || selectingImportFolder}
                 onClick={closeFolderImportDialog}

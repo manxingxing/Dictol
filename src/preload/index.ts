@@ -40,16 +40,16 @@ import type {
 } from '../shared/dictionary-note'
 import type { TouchBarPage, TouchBarState } from '../shared/touch-bar'
 import type {
+  ScreenshotTranslationSettingResult,
+  ScreenshotTranslationStatus,
+  SelectionTranslationShortcutResult,
+  SelectionTranslationShortcutStatus,
   TranslationEvent,
   TranslationLanguage,
   TranslationPublicConfig,
   TranslationRequest,
   TranslationSaveProviderRequest
 } from '../shared/translation'
-import type {
-  ScreenshotTranslationSettingResult,
-  ScreenshotTranslationStatus
-} from '../shared/screenshot-translation'
 
 type ReadyDictionary = {
   id: string
@@ -499,6 +499,10 @@ const api = Object.freeze({
   keyboard: Object.freeze({
     getStatus: (): Promise<{ shortcut: string; registered: boolean } | null> =>
       ipcRenderer.invoke('keyboard:status'),
+    beginShortcutCapture: (token: string, command: string): Promise<boolean> =>
+      ipcRenderer.invoke('keyboard:begin-shortcut-capture', token, command),
+    endShortcutCapture: (token: string): Promise<boolean> =>
+      ipcRenderer.invoke('keyboard:end-shortcut-capture', token),
     setMainWindowShortcut: (
       shortcut: string
     ): Promise<{
@@ -540,10 +544,12 @@ const api = Object.freeze({
     }
   }),
   translation: Object.freeze({
+    getSelectionShortcutStatus: (): Promise<SelectionTranslationShortcutStatus | null> =>
+      ipcRenderer.invoke('translation:selection-shortcut-status'),
+    setSelectionShortcut: (shortcut: string): Promise<SelectionTranslationShortcutResult | null> =>
+      ipcRenderer.invoke('translation:set-selection-shortcut', shortcut),
     getScreenshotStatus: (): Promise<ScreenshotTranslationStatus | null> =>
       ipcRenderer.invoke('screenshot-translation:status'),
-    setScreenshotEnabled: (enabled: boolean): Promise<ScreenshotTranslationSettingResult | null> =>
-      ipcRenderer.invoke('screenshot-translation:set-enabled', enabled),
     setScreenshotShortcut: (shortcut: string): Promise<ScreenshotTranslationSettingResult | null> =>
       ipcRenderer.invoke('screenshot-translation:set-shortcut', shortcut),
     getConfig: (): Promise<TranslationPublicConfig | null> =>

@@ -1,15 +1,16 @@
-import { app, Menu, nativeImage, Tray, type BrowserWindow } from 'electron'
+import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
 
 import trayIconPath from '../../resources/tray-icon.png?asset'
+import type { AppRuntime } from './app-runtime'
+import { OCR_SUPPORTED } from '../shared/ocr'
 
 /** Keeps Dictol available after its main window has been hidden. */
 export class TrayManager {
   private tray: Tray | undefined
-  private mainWindow: BrowserWindow | undefined
-  private createMainWindow: (() => BrowserWindow | undefined) | undefined
 
-  initialize(mainWindow: BrowserWindow): void {
-    this.mainWindow = mainWindow
+  constructor(private readonly runtime: AppRuntime) {}
+
+  initialize(): void {
     if (this.tray && !this.tray.isDestroyed()) return
 
     try {
@@ -20,45 +21,42 @@ export class TrayManager {
 
       this.tray = new Tray(icon)
       this.tray.setToolTip('Dictol')
-      const contextMenu = Menu.buildFromTemplate([
-        { label: '显示 Dictol', click: this.showMainWindow },
-        { type: 'separator' },
-        { label: '退出 Dictol', click: () => app.quit() }
-      ])
-      this.tray.on('right-click', () => {
-        this.tray?.popUpContextMenu(contextMenu);
-      })
-      this.tray.on('click', this.showMainWindow)
+      const showContextMenu = (): void => this.tray?.popUpContextMenu(this.buildContextMenu())
+      this.tray.on('click', showContextMenu)
+      this.tray.on('right-click', showContextMenu)
     } catch (error) {
       console.warn('Failed to create system tray', error)
     }
   }
 
-  setMainWindowFactory(factory: () => BrowserWindow | undefined): void {
-    this.createMainWindow = factory
-  }
-
   dispose(): void {
     if (this.tray && !this.tray.isDestroyed()) this.tray.destroy()
     this.tray = undefined
-    this.mainWindow = undefined
-    this.createMainWindow = undefined
+  }
+
+  private buildContextMenu(): Menu {
+    const items: MenuItemConstructorOptions[] = [
+      { label: '显示 Dictol', click: this.showMainWindow },
+      { type: 'separator' }
+    ]
+    if (OCR_SUPPORTED) {
+      const shortcut = this.runtime.appConfig.load().shortcuts.screenshotTranslation
+      items.push({
+        label: '截图翻译',
+        accelerator: shortcut || undefined,
+        registerAccelerator: false,
+        click: () => void this.runtime.actions.screenshotTranslation.toggleSelector()
+      })
+      items.push({ type: 'separator' })
+    }
+    items.push({ label: '退出 Dictol', click: () => app.quit() })
+    return Menu.buildFromTemplate(items)
   }
 
   private readonly showMainWindow = (): void => {
-    const mainWindow = this.getMainWindow()
-    if (!mainWindow || mainWindow.isDestroyed()) return
-
+    const mainWindow = this.runtime.getOrCreateMainWindow()
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.show()
     mainWindow.focus()
-  }
-
-  private getMainWindow(): BrowserWindow | undefined {
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) return this.mainWindow
-
-    const mainWindow = this.createMainWindow?.()
-    if (mainWindow && !mainWindow.isDestroyed()) this.mainWindow = mainWindow
-    return mainWindow
   }
 }

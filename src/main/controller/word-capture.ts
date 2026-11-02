@@ -14,9 +14,9 @@ import {
 import {
   LOOKUP_WORD_ON_SHORTCUT,
   OCR_AI_SHORTCUT,
-  OCR_DICTIONARY_SHORTCUT,
-  OCR_SUPPORTED
-} from '../app-runtime'
+  OCR_DICTIONARY_SHORTCUT
+} from '../../shared/shortcuts'
+import { OCR_SUPPORTED } from '../../shared/ocr'
 import type { AppConfig } from '../app-config'
 import { BaseController } from './base-controller'
 
@@ -112,14 +112,15 @@ export class WordCaptureController extends BaseController {
 
   setShortcut = (event: IpcMainInvokeEvent, shortcut: string): WordCaptureShortcutResult | null => {
     if (!this.acceptsSender(event.sender)) return null
-    if (typeof shortcut !== 'string' || !shortcut.trim() || shortcut.length > 64) {
+    if (typeof shortcut !== 'string' || shortcut.length > 64) {
       return {
         ok: false,
         status: this.createStatus(),
         error: '无效的快捷键。'
       }
     }
-    if (!this.isSupported()) {
+    const normalized = shortcut.trim()
+    if (normalized && !this.isSupported()) {
       return {
         ok: false,
         status: this.createStatus(),
@@ -132,30 +133,36 @@ export class WordCaptureController extends BaseController {
       ...previousConfig,
       shortcuts: {
         ...previousConfig.shortcuts,
-        lookupWordOnShortcut: shortcut.trim()
+        lookupWordOnShortcut: normalized
       }
     }
 
     try {
       this.runtime.appConfig.save(nextConfig)
-      this.runtime.restartInputServices()
+      this.runtime.restartLookupWordShortcut()
 
-      if (
-        nextConfig.featureFlags.lookupWordOnShortcut &&
-        !this.runtime.shortcutRegister.isRegistered(LOOKUP_WORD_ON_SHORTCUT)
-      ) {
+      if (normalized && !this.runtime.shortcutRegister.isRegistered(LOOKUP_WORD_ON_SHORTCUT)) {
         throw new Error('快捷键不可用')
       }
 
       return { ok: true, status: this.createStatus() }
     } catch (error) {
       console.error('Failed to update word capture shortcut', { shortcut, error })
-      this.restoreConfig(previousConfig)
+      this.restoreShortcutConfig(previousConfig)
       return {
         ok: false,
         status: this.createStatus(),
         error: '这个快捷键无效或已被系统、其他应用占用。'
       }
+    }
+  }
+
+  private restoreShortcutConfig(config: AppConfig): void {
+    try {
+      this.runtime.appConfig.save(config)
+      this.runtime.restartLookupWordShortcut()
+    } catch (error) {
+      console.error('Failed to restore word capture shortcut', error)
     }
   }
 
@@ -314,14 +321,14 @@ export class WordCaptureController extends BaseController {
         ...previous,
         shortcuts: { ...previous.shortcuts, [key]: shortcut.trim() }
       })
-      this.runtime.restartOcrShortcuts()
-      if (previous.featureFlags.ocrLookup && !this.areOcrShortcutsRegistered()) {
+      this.runtime.restartOcrShortcut(mode)
+      if (previous.featureFlags.ocrLookup && !this.runtime.shortcutRegister.isRegistered(key)) {
         throw new Error('OCR 快捷键不可用')
       }
       return { ok: true, status: this.createStatus() }
     } catch (error) {
       console.error('Failed to update OCR shortcut', error)
-      this.restoreOcrConfig(previous)
+      this.restoreOcrConfig(previous, mode)
       return { ok: false, status: this.createStatus(), error: '这个快捷键无效或已被占用。' }
     }
   }
@@ -333,10 +340,11 @@ export class WordCaptureController extends BaseController {
     )
   }
 
-  private restoreOcrConfig(config: AppConfig): void {
+  private restoreOcrConfig(config: AppConfig, mode?: 'dictionary' | 'ai'): void {
     try {
       this.runtime.appConfig.save(config)
-      this.runtime.restartOcrShortcuts()
+      if (mode) this.runtime.restartOcrShortcut(mode)
+      else this.runtime.restartOcrShortcuts()
     } catch (error) {
       console.error('Failed to restore OCR configuration', error)
     }

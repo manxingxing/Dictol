@@ -20,13 +20,12 @@ export type AppConfig = {
   dictionaryLayout: DictionaryLayout
   dictionaryDisplay: DictionaryDisplay
   featureFlags: {
-    lookupWordOnShortcut: boolean
     lookupWordOnSelection: boolean
     ocrLookup: boolean
-    screenshotTranslation: boolean
   }
   shortcuts: {
     lookupWordOnShortcut: string
+    translateSelection: string
     showMainWindow: string
     ocrDictionary: string
     ocrAi: string
@@ -52,17 +51,16 @@ const DEFAULT_CONFIG: AppConfig = {
   dictionaryLayout: 'single',
   dictionaryDisplay: 'icon',
   featureFlags: {
-    lookupWordOnShortcut: true,
     lookupWordOnSelection: false,
-    ocrLookup: false,
-    screenshotTranslation: process.platform === 'darwin'
+    ocrLookup: false
   },
   shortcuts: {
     lookupWordOnShortcut: 'Alt+D',
+    translateSelection: 'Alt+Shift+T',
     showMainWindow: 'CommandOrControl+Alt+D',
     ocrDictionary: 'Alt+S',
     ocrAi: 'Alt+T',
-    screenshotTranslation: 'Alt+R'
+    screenshotTranslation: process.platform === 'darwin' ? 'Alt+R' : ''
   },
   selection: {
     dictionaryGroupId: undefined,
@@ -169,13 +167,12 @@ function parseConfig(value: unknown): AppConfig {
     dictionaryLayout?: unknown
     dictionaryDisplay?: unknown
     featureFlags?: {
-      lookupWordOnShortcut?: unknown
       lookupWordOnSelection?: unknown
       ocrLookup?: unknown
-      screenshotTranslation?: unknown
     }
     shortcuts?: {
       lookupWordOnShortcut?: unknown
+      translateSelection?: unknown
       showMainWindow?: unknown
       ocrDictionary?: unknown
       ocrAi?: unknown
@@ -205,10 +202,6 @@ function parseConfig(value: unknown): AppConfig {
         ? candidate.dictionaryDisplay
         : DEFAULT_CONFIG.dictionaryDisplay,
     featureFlags: {
-      lookupWordOnShortcut:
-        typeof candidate.featureFlags?.lookupWordOnShortcut === 'boolean'
-          ? candidate.featureFlags.lookupWordOnShortcut
-          : DEFAULT_CONFIG.featureFlags.lookupWordOnShortcut,
       lookupWordOnSelection:
         typeof candidate.featureFlags?.lookupWordOnSelection === 'boolean'
           ? candidate.featureFlags.lookupWordOnSelection
@@ -216,22 +209,20 @@ function parseConfig(value: unknown): AppConfig {
       ocrLookup:
         typeof candidate.featureFlags?.ocrLookup === 'boolean'
           ? candidate.featureFlags.ocrLookup
-          : DEFAULT_CONFIG.featureFlags.ocrLookup,
-      screenshotTranslation:
-        typeof candidate.featureFlags?.screenshotTranslation === 'boolean'
-          ? candidate.featureFlags.screenshotTranslation
-          : DEFAULT_CONFIG.featureFlags.screenshotTranslation
+          : DEFAULT_CONFIG.featureFlags.ocrLookup
     },
     shortcuts: {
       lookupWordOnShortcut:
-        typeof candidate.shortcuts?.lookupWordOnShortcut === 'string' &&
-        candidate.shortcuts.lookupWordOnShortcut.trim()
-          ? candidate.shortcuts.lookupWordOnShortcut.trim()
+        typeof candidate.shortcuts?.lookupWordOnShortcut === 'string'
+          ? candidate.shortcuts.lookupWordOnShortcut.trim().slice(0, 64)
           : DEFAULT_CONFIG.shortcuts.lookupWordOnShortcut,
+      translateSelection:
+        typeof candidate.shortcuts?.translateSelection === 'string'
+          ? candidate.shortcuts.translateSelection.trim().slice(0, 64)
+          : DEFAULT_CONFIG.shortcuts.translateSelection,
       showMainWindow:
-        typeof candidate.shortcuts?.showMainWindow === 'string' &&
-        candidate.shortcuts.showMainWindow.trim()
-          ? candidate.shortcuts.showMainWindow.trim()
+        typeof candidate.shortcuts?.showMainWindow === 'string'
+          ? candidate.shortcuts.showMainWindow.trim().slice(0, 64)
           : DEFAULT_CONFIG.shortcuts.showMainWindow,
       ocrDictionary: normalizeConfigString(
         candidate.shortcuts?.ocrDictionary,
@@ -239,11 +230,10 @@ function parseConfig(value: unknown): AppConfig {
         64
       ),
       ocrAi: normalizeConfigString(candidate.shortcuts?.ocrAi, DEFAULT_CONFIG.shortcuts.ocrAi, 64),
-      screenshotTranslation: normalizeConfigString(
-        candidate.shortcuts?.screenshotTranslation,
-        DEFAULT_CONFIG.shortcuts.screenshotTranslation,
-        64
-      )
+      screenshotTranslation:
+        typeof candidate.shortcuts?.screenshotTranslation === 'string'
+          ? candidate.shortcuts.screenshotTranslation.trim().slice(0, 64)
+          : DEFAULT_CONFIG.shortcuts.screenshotTranslation
     },
     selection: {
       dictionaryGroupId: normalizeDictionaryGroupId(candidate.selection?.dictionaryGroupId),

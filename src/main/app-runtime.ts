@@ -3,6 +3,8 @@ import type { BrowserWindow } from 'electron'
 import { stopWindowsScreenCaptureSessions } from '@dictol/screen-capture-native'
 
 import { AppConfigStore, type AppConfig } from './app-config'
+import { TranslationActions } from './action/translation'
+import { ScreenshotTranslationAction } from './action/screenshot-translation'
 import { AiLookupService } from './ai-service'
 import { TranslationService } from './translation/service'
 import { BuiltInLexiconService } from './built-in-lexicon-service'
@@ -24,14 +26,17 @@ import { MainWindowShortcutRouter } from './main-window-shortcut-router'
 import { AdBlockService } from './ad-block-service'
 import { DictionaryIndexManager } from './dictionary-index-manager'
 import { DictionarySearchScope } from './dictionary-search-scope'
+import { OCR_SUPPORTED } from '../shared/ocr'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
+import {
+  LOOKUP_WORD_ON_SHORTCUT,
+  OCR_AI_SHORTCUT,
+  OCR_DICTIONARY_SHORTCUT,
+  SCREENSHOT_TRANSLATION_SHORTCUT,
+  SHOW_MAIN_WINDOW_SHORTCUT,
+  TRANSLATE_SELECTION_SHORTCUT
+} from '../shared/shortcuts'
 
-export const LOOKUP_WORD_ON_SHORTCUT = 'lookupWordOnShortcut'
-export const SHOW_MAIN_WINDOW_SHORTCUT = 'showMainWindow'
-export const OCR_DICTIONARY_SHORTCUT = 'ocrDictionary'
-export const OCR_AI_SHORTCUT = 'ocrAi'
-export const SCREENSHOT_TRANSLATION_SHORTCUT = 'screenshotTranslation'
-export const OCR_SUPPORTED = process.platform === 'darwin' || process.platform === 'win32'
 export type OcrLookupMode = 'dictionary' | 'ai'
 
 type MainWindowInitializer = (mainWindow: BrowserWindow) => void
@@ -53,14 +58,17 @@ export class AppRuntime {
   translationService: TranslationService = new TranslationService(this.appConfig)
   selectionHookService: SelectionHookService = new SelectionHookService()
   shortcutRegister: ShortcutRegister = new ShortcutRegister()
-  trayManager: TrayManager = new TrayManager()
+  readonly actions = {
+    translation: new TranslationActions(this),
+    screenshotTranslation: new ScreenshotTranslationAction(this)
+  }
+  trayManager: TrayManager = new TrayManager(this)
   mainWindowShortcutRouter: MainWindowShortcutRouter | undefined
   adBlockService: AdBlockService = new AdBlockService()
   dictionaryLayout: DictionaryLayout = 'single'
   dictionarySearchScope: DictionarySearchScope = new DictionarySearchScope()
   selectionDictionaryGroupId: number | undefined
   ocrShortcutHandler: ((mode: OcrLookupMode) => Promise<void>) | undefined
-  screenshotTranslationHandler: (() => Promise<void>) | undefined
 
   get isInitialized(): boolean {
     return this.initialized
@@ -122,8 +130,8 @@ export class AppRuntime {
   }
 
   initWindowManager(): void {
-    const mainWindow = this.ensureMainWindow()
-    this.trayManager.initialize(mainWindow)
+    this.ensureMainWindow()
+    this.trayManager.initialize()
   }
 
   ensureMainWindow(): BrowserWindow {
@@ -180,8 +188,12 @@ export class AppRuntime {
   }
 
   private initSelectionHook(config: AppConfig): void {
-    const { lookupWordOnSelection, lookupWordOnShortcut } = config.featureFlags
-    if (!lookupWordOnSelection && !lookupWordOnShortcut) {
+    // 划词翻译，划词取词, 划词工具栏三个功能依赖 selection hook，若都未启用，则停止 selection hook
+    if (
+      !config.featureFlags.lookupWordOnSelection &&
+      !config.shortcuts.lookupWordOnShortcut &&
+      !config.shortcuts.translateSelection
+    ) {
       this.selectionHookService.stop()
       return
     }
@@ -193,8 +205,9 @@ export class AppRuntime {
       return
     }
 
+    // 仅划词工具栏功能依赖 passiveMode=false，其他功能均可在 passiveMode=true 下工作
     const status = this.selectionHookService.start({
-      passiveMode: !lookupWordOnSelection,
+      passiveMode: !config.featureFlags.lookupWordOnSelection,
       excludedPrograms: config.selection.excludedPrograms
     })
 
@@ -206,27 +219,31 @@ export class AppRuntime {
   private registerGlobalShortCuts(config: AppConfig): void {
     this.registerMainWindowShortcut(config.shortcuts.showMainWindow)
 
-    // 快捷键取词
-    if (config.featureFlags.lookupWordOnShortcut) {
-      this.registerLookupWordShortCut(config.shortcuts)
-    }
+    this.registerLookupWordShortCut(config.shortcuts)
+    this.registerSelectionTranslationShortcut(config)
     if (OCR_SUPPORTED) this.registerOcrShortcuts(config)
     if (OCR_SUPPORTED) this.registerScreenshotTranslationShortcut(config)
   }
 
   private registerOcrShortcuts(config: AppConfig): void {
-    if (!OCR_SUPPORTED) return
-    this.shortcutRegister.unregister(OCR_DICTIONARY_SHORTCUT)
-    this.shortcutRegister.unregister(OCR_AI_SHORTCUT)
-    if (!config.featureFlags.ocrLookup || !this.ocrShortcutHandler) {
+    this.registerOcrShortcut(config, 'dictionary')
+    this.registerOcrShortcut(config, 'ai')
+  }
+
+  private registerOcrShortcut(config: AppConfig, mode: OcrLookupMode): void {
+    const command = mode === 'dictionary' ? OCR_DICTIONARY_SHORTCUT : OCR_AI_SHORTCUT
+    this.shortcutRegister.unregister(command)
+    if (!OCR_SUPPORTED || !config.featureFlags.ocrLookup || !this.ocrShortcutHandler) {
       return
     }
-    this.shortcutRegister.register(OCR_DICTIONARY_SHORTCUT, config.shortcuts.ocrDictionary, {
-      handleShortcut: () => this.ocrShortcutHandler?.('dictionary')
+    this.shortcutRegister.register(command, config.shortcuts[command], {
+      handleShortcut: () => this.ocrShortcutHandler?.(mode)
     })
-    this.shortcutRegister.register(OCR_AI_SHORTCUT, config.shortcuts.ocrAi, {
-      handleShortcut: () => this.ocrShortcutHandler?.('ai')
-    })
+  }
+
+  restartOcrShortcut(mode: OcrLookupMode): void {
+    if (!OCR_SUPPORTED) return
+    this.registerOcrShortcut(this.appConfig.load(), mode)
   }
 
   restartOcrShortcuts(): void {
@@ -243,16 +260,11 @@ export class AppRuntime {
 
   private registerScreenshotTranslationShortcut(config: AppConfig): void {
     this.shortcutRegister.unregister(SCREENSHOT_TRANSLATION_SHORTCUT)
-    if (
-      !OCR_SUPPORTED ||
-      !config.featureFlags.screenshotTranslation ||
-      !this.screenshotTranslationHandler
-    )
-      return
+    if (!OCR_SUPPORTED || !config.shortcuts.screenshotTranslation) return
     this.shortcutRegister.register(
       SCREENSHOT_TRANSLATION_SHORTCUT,
       config.shortcuts.screenshotTranslation,
-      { handleShortcut: () => this.screenshotTranslationHandler?.() }
+      { handleShortcut: () => this.actions.screenshotTranslation.toggleSelector() }
     )
   }
 
@@ -263,6 +275,7 @@ export class AppRuntime {
   }
 
   private registerMainWindowShortcut(shortcut: string): void {
+    if (!shortcut) return
     this.shortcutRegister.register(SHOW_MAIN_WINDOW_SHORTCUT, shortcut, {
       handleShortcut: () => this.activateMainWindow()
     })
@@ -282,8 +295,33 @@ export class AppRuntime {
     }
   }
 
+  restartLookupWordShortcut(): void {
+    this.shortcutRegister.unregister(LOOKUP_WORD_ON_SHORTCUT)
+    const config = this.appConfig.load()
+    this.initSelectionHook(config)
+    this.registerLookupWordShortCut(config.shortcuts)
+  }
+
+  restartSelectionTranslationShortcut(): boolean {
+    const config = this.appConfig.load()
+    this.initSelectionHook(config)
+    return this.registerSelectionTranslationShortcut(config)
+  }
+
+  private registerSelectionTranslationShortcut(config: AppConfig): boolean {
+    this.shortcutRegister.unregister(TRANSLATE_SELECTION_SHORTCUT)
+    if (!config.shortcuts.translateSelection || !this.selectionHookService.getStatus().running)
+      return false
+    return this.shortcutRegister.register(
+      TRANSLATE_SELECTION_SHORTCUT,
+      config.shortcuts.translateSelection,
+      { handleShortcut: () => this.actions.translation.translateCurrentSelection() }
+    )
+  }
+
   restartInputServices(): void {
     this.shortcutRegister.unregister(LOOKUP_WORD_ON_SHORTCUT)
+    this.shortcutRegister.unregister(TRANSLATE_SELECTION_SHORTCUT)
     this.shortcutRegister.unregister(OCR_DICTIONARY_SHORTCUT)
     this.shortcutRegister.unregister(OCR_AI_SHORTCUT)
     this.shortcutRegister.unregister(SCREENSHOT_TRANSLATION_SHORTCUT)
@@ -301,7 +339,7 @@ export class AppRuntime {
     this.mainWindowShortcutRouter = undefined
     this.selectionHookService.dispose()
     this.ocrShortcutHandler = undefined
-    this.screenshotTranslationHandler = undefined
+    this.actions.screenshotTranslation.dispose()
     this.trayManager.dispose()
     this.adBlockService.dispose()
     this.windowManager.dispose()

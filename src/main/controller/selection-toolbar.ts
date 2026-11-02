@@ -96,7 +96,6 @@ export class SelectionToolbarController extends BaseController {
     ipcMain.on('selection-explanation:open-in-main', this.openExplanationInMain)
     ipcMain.on('selection-explanation:loading-ready', this.explanationLoadingReady)
     ipcMain.on('selection-translation:close', this.closeTranslation)
-    ipcMain.on('selection-translation:desired-height', this.resizeTranslation)
     ipcMain.handle('selection-toolbar:capture-excerpt', this.captureExcerpt)
     if (process.platform === 'darwin' || process.platform === 'win32') {
       this.runtime.ocrShortcutHandler = this.handleOcrShortcut
@@ -198,16 +197,6 @@ export class SelectionToolbarController extends BaseController {
 
   private readonly closeTranslation = (event: IpcMainEvent): void => {
     if (this.acceptsTranslationSender(event)) this.translation.hide()
-  }
-
-  private readonly resizeTranslation = (
-    event: IpcMainEvent,
-    version: number,
-    desiredHeight: number
-  ): void => {
-    if (this.acceptsTranslationSender(event)) {
-      this.translation.resizeSelectionWindow(version, desiredHeight)
-    }
   }
 
   private readonly handleSelection: SelectionListener = (capture): void => {

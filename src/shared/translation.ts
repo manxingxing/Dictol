@@ -17,6 +17,30 @@ export const SELECTION_TRANSLATION_WIDTH = 520
 export const SELECTION_TRANSLATION_INITIAL_HEIGHT = 264
 export const SELECTION_TRANSLATION_MAX_HEIGHT = 760
 
+export type SelectionTranslationShortcutStatus = {
+  supported: boolean
+  registered: boolean
+  shortcut: string
+}
+
+export type SelectionTranslationShortcutResult = {
+  ok: boolean
+  status: SelectionTranslationShortcutStatus
+  error?: string
+}
+
+export type ScreenshotTranslationStatus = {
+  supported: boolean
+  shortcut: string
+  registered: boolean
+}
+
+export type ScreenshotTranslationSettingResult = {
+  ok: boolean
+  status: ScreenshotTranslationStatus
+  error?: string
+}
+
 export type TranslationProviderKind =
   | 'system'
   | 'google'

@@ -16,7 +16,6 @@ opendesign/
 # Local dictionary samples
 /Dictionaries/
 /swift-dictol
-/docs
 /scripts/tests/
 /scripts/*test*.ts
 /scripts/*test*.mjs

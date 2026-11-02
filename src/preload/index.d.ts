@@ -1,8 +1,4 @@
 import type { WordCaptureStatus, WordCaptureShortcutResult } from '../main/controller/word-capture'
-import type {
-  ScreenshotTranslationSettingResult,
-  ScreenshotTranslationStatus
-} from '../shared/screenshot-translation'
 import type { ToastPayload } from '../shared/notification'
 import type { TtsConfig, TtsPlayback, TtsVoice } from '../shared/tts'
 import type { MainWindowSearchRequest } from '../shared/search-request'
@@ -18,6 +14,10 @@ import type {
 } from '../shared/custom-css-editor'
 import type { TouchBarPage, TouchBarState } from '../shared/touch-bar'
 import type {
+  ScreenshotTranslationSettingResult,
+  ScreenshotTranslationStatus,
+  SelectionTranslationShortcutResult,
+  SelectionTranslationShortcutStatus,
   TranslationEvent,
   TranslationLanguage,
   TranslationPublicConfig,
@@ -431,6 +431,8 @@ declare global {
       }
       keyboard: {
         getStatus: () => Promise<{ shortcut: string; registered: boolean } | null>
+        beginShortcutCapture: (token: string, command: string) => Promise<boolean>
+        endShortcutCapture: (token: string) => Promise<boolean>
         setMainWindowShortcut: (shortcut: string) => Promise<{
           ok: boolean
           status: { shortcut: string; registered: boolean }
@@ -486,10 +488,11 @@ declare global {
         ) => () => void
       }
       translation: {
+        getSelectionShortcutStatus: () => Promise<SelectionTranslationShortcutStatus | null>
+        setSelectionShortcut: (
+          shortcut: string
+        ) => Promise<SelectionTranslationShortcutResult | null>
         getScreenshotStatus: () => Promise<ScreenshotTranslationStatus | null>
-        setScreenshotEnabled: (
-          enabled: boolean
-        ) => Promise<ScreenshotTranslationSettingResult | null>
         setScreenshotShortcut: (
           shortcut: string
         ) => Promise<ScreenshotTranslationSettingResult | null>

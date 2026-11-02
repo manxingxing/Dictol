@@ -1,0 +1,6 @@
+export const SHOW_MAIN_WINDOW_SHORTCUT = 'showMainWindow'
+export const LOOKUP_WORD_ON_SHORTCUT = 'lookupWordOnShortcut'
+export const OCR_DICTIONARY_SHORTCUT = 'ocrDictionary'
+export const OCR_AI_SHORTCUT = 'ocrAi'
+export const TRANSLATE_SELECTION_SHORTCUT = 'translateSelection'
+export const SCREENSHOT_TRANSLATION_SHORTCUT = 'screenshotTranslation'
