@@ -45,7 +45,7 @@ import {
 
 type WordCaptureStatus = Awaited<ReturnType<typeof window.dictol.wordCapture.getStatus>>
 
-export function WordCaptureSettingsCard(): React.JSX.Element {
+export function WordCaptureSettingsPage(): React.JSX.Element {
   const [captureStatus, setCaptureStatus] = useState<WordCaptureStatus>(null)
   const [savingOcr, setSavingOcr] = useState(false)
   const [ocrError, setOcrError] = useState<string | null>(null)

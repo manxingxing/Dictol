@@ -69,7 +69,62 @@ const systemEngine: TtsEngine = {
   }
 }
 
-const engines: Record<TtsConfig['engine'], TtsEngine> = { system: systemEngine }
+const onlineEngine: TtsEngine = {
+  speak(text, _config, onStateChange) {
+    const requestId = crypto.randomUUID()
+    let canceled = false
+    let audio: HTMLAudioElement | undefined
+    let objectUrl: string | undefined
+    const cleanup = (): void => {
+      if (audio) {
+        audio.onplay = null
+        audio.onended = null
+        audio.onerror = null
+        audio.pause()
+        audio.removeAttribute('src')
+        audio.load()
+      }
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+    void ipcRenderer
+      .invoke('tts:synthesize', requestId, text)
+      .then((bytes: Uint8Array) => {
+        if (canceled) return
+        objectUrl = URL.createObjectURL(new Blob([Uint8Array.from(bytes)], { type: 'audio/mpeg' }))
+        audio = new Audio(objectUrl)
+        audio.onplay = () => onStateChange('playing')
+        audio.onended = () => {
+          cleanup()
+          onStateChange('completed')
+        }
+        audio.onerror = () => {
+          cleanup()
+          onStateChange('error', '无法播放语音服务返回的音频。')
+        }
+        void audio.play().catch((error: unknown) => {
+          if (canceled) return
+          cleanup()
+          onStateChange('error', error instanceof Error ? error.message : '无法播放音频。')
+        })
+      })
+      .catch((error: unknown) => {
+        if (!canceled) onStateChange('error', error instanceof Error ? error.message : '朗读失败。')
+      })
+    return () => {
+      canceled = true
+      ipcRenderer.send('tts:abort', requestId)
+      cleanup()
+    }
+  }
+}
+
+const engines: Record<TtsConfig['engine'], TtsEngine> = {
+  system: systemEngine,
+  'openai-compatible': onlineEngine,
+  elevenlabs: onlineEngine,
+  'azure-speech': onlineEngine,
+  'fish-audio': onlineEngine
+}
 
 export function createTtsPlayback(): TtsPlayback {
   let active: { cancel: () => void } | null = null

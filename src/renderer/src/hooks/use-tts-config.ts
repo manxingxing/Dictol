@@ -7,10 +7,16 @@ import {
   type UseQueryResult
 } from '@tanstack/react-query'
 
-import type { TtsConfig, TtsVoice } from '../../../shared/tts'
+import type {
+  TtsConfig,
+  TtsCredentialsStatus,
+  TtsSaveSettingsRequest,
+  TtsVoice
+} from '../../../shared/tts'
 
 const ttsConfigQueryKey = ['tts', 'config'] as const
 const systemTtsVoicesQueryKey = ['tts', 'system-voices'] as const
+const credentialsQueryKey = ['tts', 'credentials'] as const
 
 export function useTtsConfig(): UseQueryResult<TtsConfig, Error> {
   return useQuery({
@@ -52,5 +58,43 @@ export function useSaveTtsVoice(): UseMutationResult<TtsConfig, Error, string | 
       return saved
     },
     onSuccess: (config) => queryClient.setQueryData(ttsConfigQueryKey, config)
+  })
+}
+
+export function useTtsCredentialsStatus(): UseQueryResult<TtsCredentialsStatus, Error> {
+  return useQuery({
+    queryKey: credentialsQueryKey,
+    queryFn: async () => {
+      const result = await window.dictol.tts.getCredentialsStatus()
+      if (!result) throw new Error('无法读取语音服务凭据状态。')
+      return result
+    }
+  })
+}
+
+export function useSaveTtsConfig(): UseMutationResult<TtsConfig, Error, TtsConfig> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (config) => {
+      const result = await window.dictol.tts.saveConfig(config)
+      if (!result) throw new Error('保存朗读设置失败。')
+      return result
+    },
+    onSuccess: (config) => queryClient.setQueryData(ttsConfigQueryKey, config)
+  })
+}
+
+export function useSaveTtsSettings(): UseMutationResult<TtsConfig, Error, TtsSaveSettingsRequest> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (request) => {
+      const result = await window.dictol.tts.saveSettings(request)
+      if (!result) throw new Error('保存朗读设置失败。')
+      return result
+    },
+    onSuccess: (config) => {
+      queryClient.setQueryData(ttsConfigQueryKey, config)
+      void queryClient.invalidateQueries({ queryKey: credentialsQueryKey })
+    }
   })
 }

@@ -49,7 +49,7 @@
     window.dictolShowToast = showShadowToast
 
     /**
-     * 使用应用配置的系统音色朗读。保留旧版 voice 参数供词典脚本兼容。
+     * 使用应用配置的语音服务朗读。保留旧版 voice 参数供词典脚本兼容。
      * @param {string} text
      * @param {string} [_voice]
      * @param {object} [options]

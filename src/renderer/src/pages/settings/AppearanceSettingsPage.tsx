@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button'
 import { SettingsList, SettingsRow, SettingsSection } from '@/components/settings/SettingsSection'
 import { cn } from '@/lib/utils'
 import { type ChromeTone, useAppStore } from '@/stores/app-store'
-import type { DictionaryLayout } from '../../../shared/dictionary-layout'
-import type { DictionaryDisplay } from '../../../shared/dictionary-display'
-import type { ThemeMode } from '../../../shared/theme-mode'
+import type { DictionaryLayout } from '../../../../shared/dictionary-layout'
+import type { DictionaryDisplay } from '../../../../shared/dictionary-display'
+import type { ThemeMode } from '../../../../shared/theme-mode'
 
-export function AppearanceSettingsCard(): React.JSX.Element {
+export function AppearanceSettingsPage(): React.JSX.Element {
   const [themeMode, setThemeMode] = useState<ThemeMode>('auto')
   const [isLoadingThemeMode, setIsLoadingThemeMode] = useState(true)
   const [isSavingThemeMode, setIsSavingThemeMode] = useState(false)

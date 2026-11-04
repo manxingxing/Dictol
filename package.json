@@ -1,6 +1,6 @@
 {
   "name": "dictol",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A desktop dictionary reader for MDX and MDD dictionaries",
   "main": "./out/main/index.js",
   "author": "Alan Mann",
@@ -63,6 +63,7 @@
     "cmdk": "^1.1.1",
     "drizzle-orm": "^0.45.2",
     "exceljs": "4.4.0",
+    "openai": "^7.47.0",
     "parse5": "^7.3.0",
     "postcss": "^8.5.25",
     "postcss-selector-parser": "^7.1.6",

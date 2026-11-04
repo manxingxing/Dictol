@@ -29,7 +29,7 @@ import { formatShortcut } from '@/lib/keyboard-shortcut'
 import {
   SCREENSHOT_TRANSLATION_SHORTCUT,
   TRANSLATE_SELECTION_SHORTCUT
-} from '../../../shared/shortcuts'
+} from '../../../../shared/shortcuts'
 import {
   TRANSLATION_LANGUAGES,
   TRANSLATION_LANGUAGE_NAMES,
@@ -38,7 +38,7 @@ import {
   type TranslationPublicConfig,
   type TranslationPublicProvider,
   type TranslationSaveProviderRequest
-} from '../../../shared/translation'
+} from '../../../../shared/translation'
 
 type ConfigurableProviderKind = Exclude<TranslationProviderKind, 'system'>
 type BusyOperation = { id: string; kind: 'change' | 'verify' }
@@ -55,7 +55,7 @@ const providerNames: Record<ConfigurableProviderKind, string> = {
 }
 const webProviderKinds: TranslationProviderKind[] = ['youdao-web', 'google-web', 'bing-web']
 
-export function TranslationSettingsCard(): React.JSX.Element {
+export function TranslationSettingsPage(): React.JSX.Element {
   const [config, setConfig] = useState<TranslationPublicConfig | null>(null)
   const screenshotStatusQuery = useScreenshotTranslationStatus()
   const screenshotStatus = screenshotStatusQuery.data

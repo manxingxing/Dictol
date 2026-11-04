@@ -74,7 +74,11 @@ const DEFAULT_CONFIG: AppConfig = {
   },
   tts: {
     engine: 'system',
-    systemVoiceUri: null
+    systemVoiceUri: null,
+    openai: { baseUrl: 'https://api.openai.com/v1', model: 'tts-1', voice: 'alloy' },
+    elevenlabs: { model: 'eleven_multilingual_v2', voiceId: '' },
+    azure: { region: '', voice: 'en-US-JennyNeural' },
+    fish: { model: 's2.1-pro-free', voiceId: '' }
   },
   translation: {
     targetLanguage: 'zh',
@@ -185,7 +189,14 @@ function parseConfig(value: unknown): AppConfig {
       baseUrl?: unknown
       model?: unknown
     }
-    tts?: { engine?: unknown; systemVoiceUri?: unknown }
+    tts?: {
+      engine?: unknown
+      systemVoiceUri?: unknown
+      openai?: { baseUrl?: unknown; model?: unknown; voice?: unknown }
+      elevenlabs?: { model?: unknown; voiceId?: unknown }
+      azure?: { region?: unknown; voice?: unknown }
+      fish?: { model?: unknown; voiceId?: unknown }
+    }
     translation?: { targetLanguage?: unknown; providers?: unknown }
   }
 
@@ -253,12 +264,57 @@ function parseConfig(value: unknown): AppConfig {
       model: normalizeConfigString(candidate.aiLookup?.model, DEFAULT_CONFIG.aiLookup.model, 200)
     },
     tts: {
-      engine: 'system',
+      engine:
+        (typeof candidate.tts?.engine === 'string') &&
+        ['openai-compatible', 'elevenlabs', 'azure-speech', 'fish-audio'].includes(candidate.tts.engine)
+          ? (candidate.tts.engine as TtsConfig['engine'])
+          : 'system',
       systemVoiceUri:
         typeof candidate.tts?.systemVoiceUri === 'string' &&
         candidate.tts.systemVoiceUri.length <= 500
           ? candidate.tts.systemVoiceUri
-          : null
+          : null,
+      openai: {
+        baseUrl: normalizeConfigString(
+          candidate.tts?.openai?.baseUrl,
+          DEFAULT_CONFIG.tts.openai.baseUrl,
+          500
+        ),
+        model: normalizeConfigString(
+          candidate.tts?.openai?.model,
+          DEFAULT_CONFIG.tts.openai.model,
+          200
+        ),
+        voice: normalizeConfigString(
+          candidate.tts?.openai?.voice,
+          DEFAULT_CONFIG.tts.openai.voice,
+          200
+        )
+      },
+      elevenlabs: {
+        model: normalizeConfigString(
+          candidate.tts?.elevenlabs?.model,
+          DEFAULT_CONFIG.tts.elevenlabs.model,
+          200
+        ),
+        voiceId: normalizeConfigString(candidate.tts?.elevenlabs?.voiceId, '', 200)
+      },
+      azure: {
+        region: normalizeConfigString(candidate.tts?.azure?.region, '', 100),
+        voice: normalizeConfigString(
+          candidate.tts?.azure?.voice,
+          DEFAULT_CONFIG.tts.azure.voice,
+          200
+        )
+      },
+      fish: {
+        model: normalizeConfigString(
+          candidate.tts?.fish?.model,
+          DEFAULT_CONFIG.tts.fish.model,
+          200
+        ),
+        voiceId: normalizeConfigString(candidate.tts?.fish?.voiceId, '', 200)
+      }
     },
     translation: {
       targetLanguage: TRANSLATION_LANGUAGES.includes(
@@ -286,7 +342,13 @@ function cloneConfig(config: AppConfig): AppConfig {
     aiLookup: {
       ...config.aiLookup
     },
-    tts: { ...config.tts },
+    tts: {
+      ...config.tts,
+      openai: { ...config.tts.openai },
+      elevenlabs: { ...config.tts.elevenlabs },
+      azure: { ...config.tts.azure },
+      fish: { ...config.tts.fish }
+    },
     translation: {
       targetLanguage: config.translation.targetLanguage,
       providers: config.translation.providers.map((provider) => ({

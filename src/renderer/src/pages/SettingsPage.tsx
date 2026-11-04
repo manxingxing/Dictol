@@ -15,6 +15,8 @@ const settingsNavigation = [
 
 export function SettingsPage(): React.JSX.Element {
   const { pathname } = useLocation()
+  const currentPage =
+    settingsNavigation.find(({ path }) => pathname === `/settings/${path}`) ?? settingsNavigation[0]
 
   return (
     <section className="flex h-full min-h-0 bg-background">
@@ -45,7 +47,7 @@ export function SettingsPage(): React.JSX.Element {
       >
         <div className="mx-auto max-w-3xl">
           <p className="mb-2 text-sm font-medium text-primary">设置</p>
-          <h1 className="text-xl font-semibold tracking-tight">应用设置</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{currentPage.label}</h1>
           <div className="mt-8">
             <Outlet />
           </div>

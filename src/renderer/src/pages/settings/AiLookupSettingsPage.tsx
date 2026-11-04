@@ -24,7 +24,7 @@ type AiLookupForm = Omit<AiLookupConfig, 'hasApiKey'> & {
   apiKey: string
 }
 
-export function AiLookupSettingsCard(): React.JSX.Element {
+export function AiLookupSettingsPage(): React.JSX.Element {
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
   const [verifyingAiConfig, setVerifyingAiConfig] = useState(false)

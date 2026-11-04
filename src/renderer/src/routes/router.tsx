@@ -3,14 +3,6 @@ import { createHashRouter, Navigate } from 'react-router-dom'
 import { AppErrorFallback } from '@/components/AppErrorBoundary'
 import { AppLayout } from '@/layouts/AppLayout'
 import { OnlineDictionariesList } from '@/components/OnlineDictionariesList'
-import { AboutSettingsCard } from '@/components/AboutSettingsCard'
-import { AiLookupSettingsCard } from '@/components/AiLookupSettingsCard'
-import { AppearanceSettingsCard } from '@/components/AppearanceSettingsCard'
-import { KeyboardSettingsCard } from '@/components/KeyboardSettingsCard'
-import { StorageSettingsCard } from '@/components/StorageSettingsCard'
-import { TranslationSettingsCard } from '@/components/TranslationSettingsCard'
-import { TtsSettingsCard } from '@/components/TtsSettingsCard'
-import { WordCaptureSettingsCard } from '@/components/WordCaptureSettingsCard'
 import { DictionariesPage } from '@/pages/DictionariesPage'
 import { DictionaryManagementLayout } from '@/pages/DictionaryManagementLayout'
 import { DictionaryGroupsPage } from '@/pages/DictionaryGroupsPage'
@@ -22,6 +14,13 @@ import { SettingsPage } from '@/pages/SettingsPage'
 import { TranslationPage } from '@/pages/TranslationPage'
 import { WordbooksPage } from '@/pages/WordbooksPage'
 import { WordbookWords } from '@/pages/WordbookWords'
+import { AboutPage } from '@/pages/settings/AboutPage'
+import { AiLookupSettingsPage } from '@/pages/settings/AiLookupSettingsPage'
+import { AppearanceSettingsPage } from '@/pages/settings/AppearanceSettingsPage'
+import { KeyboardSettingsPage } from '@/pages/settings/KeyboardSettingsPage'
+import { TranslationSettingsPage } from '@/pages/settings/TranslationSettingsPage'
+import { TtsSettingsPage } from '@/pages/settings/TtsSettingsPage'
+import { WordCaptureSettingsPage } from '@/pages/settings/WordCaptureSettingsPage'
 
 export const router = createHashRouter([
   {
@@ -68,21 +67,13 @@ export const router = createHashRouter([
         element: <SettingsPage />,
         children: [
           { index: true, element: <Navigate to="appearance" replace /> },
-          { path: 'appearance', element: <AppearanceSettingsCard /> },
-          { path: 'capture', element: <WordCaptureSettingsCard /> },
-          { path: 'translation', element: <TranslationSettingsCard /> },
-          { path: 'ai', element: <AiLookupSettingsCard /> },
-          { path: 'tts', element: <TtsSettingsCard /> },
-          { path: 'keyboard', element: <KeyboardSettingsCard /> },
-          {
-            path: 'about',
-            element: (
-              <>
-                <AboutSettingsCard />
-                <StorageSettingsCard />
-              </>
-            )
-          }
+          { path: 'appearance', element: <AppearanceSettingsPage /> },
+          { path: 'capture', element: <WordCaptureSettingsPage /> },
+          { path: 'translation', element: <TranslationSettingsPage /> },
+          { path: 'ai', element: <AiLookupSettingsPage /> },
+          { path: 'tts', element: <TtsSettingsPage /> },
+          { path: 'keyboard', element: <KeyboardSettingsPage /> },
+          { path: 'about', element: <AboutPage /> }
         ]
       },
       { path: 'translation', element: <TranslationPage /> }

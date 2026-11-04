@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { createTtsPlayback, getSystemTtsVoices, onSystemTtsVoicesChanged } from './tts'
 import { getMainWindowChromeMaterial } from '../shared/window-chrome'
-import type { TtsConfig } from '../shared/tts'
+import type { TtsConfig, TtsCredentialsStatus, TtsSaveSettingsRequest } from '../shared/tts'
 
 import type {
   AiChatRequest,
@@ -524,6 +524,10 @@ const api = Object.freeze({
     getConfig: (): Promise<TtsConfig | null> => ipcRenderer.invoke('tts:get-config'),
     saveConfig: (config: TtsConfig): Promise<TtsConfig | null> =>
       ipcRenderer.invoke('tts:save-config', config),
+    saveSettings: (request: TtsSaveSettingsRequest): Promise<TtsConfig | null> =>
+      ipcRenderer.invoke('tts:save-settings', request),
+    getCredentialsStatus: (): Promise<TtsCredentialsStatus | null> =>
+      ipcRenderer.invoke('tts:get-credentials-status'),
     getVoices: getSystemTtsVoices,
     onVoicesChanged: onSystemTtsVoicesChanged
   }),

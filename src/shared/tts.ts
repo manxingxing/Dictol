@@ -1,8 +1,20 @@
-export type TtsEngineId = 'system'
+export type TtsEngineId =
+  'system' | 'openai-compatible' | 'elevenlabs' | 'azure-speech' | 'fish-audio'
+export type OnlineTtsEngineId = Exclude<TtsEngineId, 'system'>
 
 export type TtsConfig = {
   engine: TtsEngineId
   systemVoiceUri: string | null
+  openai: { baseUrl: string; model: string; voice: string }
+  elevenlabs: { model: string; voiceId: string }
+  azure: { region: string; voice: string }
+  fish: { model: string; voiceId: string }
+}
+
+export type TtsCredentialsStatus = Record<OnlineTtsEngineId, boolean>
+export type TtsSaveSettingsRequest = {
+  config: TtsConfig
+  apiKey?: { provider: OnlineTtsEngineId; value: string }
 }
 
 export type TtsVoice = {

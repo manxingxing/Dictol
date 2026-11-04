@@ -1,6 +1,12 @@
 import type { WordCaptureStatus, WordCaptureShortcutResult } from '../main/controller/word-capture'
 import type { ToastPayload } from '../shared/notification'
-import type { TtsConfig, TtsPlayback, TtsVoice } from '../shared/tts'
+import type {
+  TtsConfig,
+  TtsCredentialsStatus,
+  TtsPlayback,
+  TtsSaveSettingsRequest,
+  TtsVoice
+} from '../shared/tts'
 import type { MainWindowSearchRequest } from '../shared/search-request'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
@@ -445,6 +451,8 @@ declare global {
       tts: TtsPlayback & {
         getConfig: () => Promise<TtsConfig | null>
         saveConfig: (config: TtsConfig) => Promise<TtsConfig | null>
+        saveSettings: (request: TtsSaveSettingsRequest) => Promise<TtsConfig | null>
+        getCredentialsStatus: () => Promise<TtsCredentialsStatus | null>
         getVoices: () => TtsVoice[]
         onVoicesChanged: (callback: () => void) => () => void
       }

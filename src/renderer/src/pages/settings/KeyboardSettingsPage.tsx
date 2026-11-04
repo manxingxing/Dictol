@@ -7,7 +7,7 @@ import { useAppStore } from '@/stores/app-store'
 
 type KeyboardShortcutStatus = Awaited<ReturnType<typeof window.dictol.keyboard.getStatus>>
 
-export function KeyboardSettingsCard(): React.JSX.Element {
+export function KeyboardSettingsPage(): React.JSX.Element {
   const dictionaryLayout = useAppStore((state) => state.dictionaryLayout)
   const [status, setStatus] = useState<KeyboardShortcutStatus>(null)
   const [shortcutError, setShortcutError] = useState<string | null>(null)
