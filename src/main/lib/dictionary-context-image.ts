@@ -20,10 +20,10 @@ export async function copyContextImageToClipboard(
     return
   }
 
-  // svg 目前无法写入到剪贴板，先转成 png
-  if (image.mimeType.toLowerCase() === 'image/svg+xml') {
+  // SVG 和 WebP 先转成 PNG，再写入剪贴板。
+  if (['image/svg+xml', 'image/webp'].includes(image.mimeType.toLowerCase())) {
     const png = await convertDictionaryContextImageToPng(image)
-    if (!png) throw new Error('无法将 SVG 图片转换为 PNG')
+    if (!png) throw new Error('无法将图片转换为 PNG')
     clipboard.writeImage(nativeImage.createFromBuffer(png))
   } else {
     clipboard.writeImage(nativeImage.createFromBuffer(image.bytes))
@@ -161,7 +161,7 @@ export async function convertDictionaryContextImageToPng({
   bytes
 }: DictionaryContextImage): Promise<Buffer | null> {
   try {
-    if (mimeType.toLowerCase() === 'image/svg+xml') {
+    if (['image/svg+xml', 'image/webp'].includes(mimeType.toLowerCase())) {
       return await sharp(bytes, { limitInputPixels: 30_000_000 }).png().toBuffer()
     }
 
