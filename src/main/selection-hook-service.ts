@@ -207,9 +207,7 @@ function validateConfig(config: SelectionHookConfig): SelectionHookConfig {
   if (typeof config.passiveMode !== 'boolean') throw new Error('passiveMode 必须是 boolean')
   if (
     !Array.isArray(config.excludedPrograms) ||
-    config.excludedPrograms.some(
-      (program) => typeof program !== 'string' || !program.trim() || program.length > 200
-    )
+    config.excludedPrograms.some((program) => typeof program !== 'string' || !program.trim())
   ) {
     throw new Error('excludedPrograms 必须是有效的程序名称数组')
   }

@@ -74,9 +74,9 @@ const DEFAULT_CONFIG: AppConfig = {
   tts: {
     engine: 'system',
     systemVoiceUri: null,
-    openai: { baseUrl: 'https://api.openai.com/v1', model: 'tts-1', voice: 'alloy' },
-    elevenlabs: { model: 'eleven_multilingual_v2', voiceId: '' },
-    azure: { region: '', voice: 'en-US-JennyNeural' },
+    openai: { baseUrl: '', model: '', voice: '' },
+    elevenlabs: { model: 'eleven_multilingual_v2', voiceId: 'EXAVITQu4vr4xnSDxMaL' },
+    azure: { region: '', voice: 'en-US-AndrewNeural' },
     fish: { model: 's2.1-pro-free', voiceId: '' }
   },
   translation: {
@@ -226,25 +226,24 @@ function parseConfig(value: unknown): AppConfig {
     shortcuts: {
       lookupWordOnShortcut:
         typeof candidate.shortcuts?.lookupWordOnShortcut === 'string'
-          ? candidate.shortcuts.lookupWordOnShortcut.trim().slice(0, 64)
+          ? candidate.shortcuts.lookupWordOnShortcut.trim()
           : DEFAULT_CONFIG.shortcuts.lookupWordOnShortcut,
       translateSelection:
         typeof candidate.shortcuts?.translateSelection === 'string'
-          ? candidate.shortcuts.translateSelection.trim().slice(0, 64)
+          ? candidate.shortcuts.translateSelection.trim()
           : DEFAULT_CONFIG.shortcuts.translateSelection,
       showMainWindow:
         typeof candidate.shortcuts?.showMainWindow === 'string'
-          ? candidate.shortcuts.showMainWindow.trim().slice(0, 64)
+          ? candidate.shortcuts.showMainWindow.trim()
           : DEFAULT_CONFIG.shortcuts.showMainWindow,
       ocrDictionary: normalizeConfigString(
         candidate.shortcuts?.ocrDictionary,
-        DEFAULT_CONFIG.shortcuts.ocrDictionary,
-        64
+        DEFAULT_CONFIG.shortcuts.ocrDictionary
       ),
-      ocrAi: normalizeConfigString(candidate.shortcuts?.ocrAi, DEFAULT_CONFIG.shortcuts.ocrAi, 64),
+      ocrAi: normalizeConfigString(candidate.shortcuts?.ocrAi, DEFAULT_CONFIG.shortcuts.ocrAi),
       screenshotTranslation:
         typeof candidate.shortcuts?.screenshotTranslation === 'string'
-          ? candidate.shortcuts.screenshotTranslation.trim().slice(0, 64)
+          ? candidate.shortcuts.screenshotTranslation.trim()
           : DEFAULT_CONFIG.shortcuts.screenshotTranslation
     },
     selection: {
@@ -274,50 +273,29 @@ function parseConfig(value: unknown): AppConfig {
           ? (candidate.tts.engine as TtsConfig['engine'])
           : 'system',
       systemVoiceUri:
-        typeof candidate.tts?.systemVoiceUri === 'string' &&
-        candidate.tts.systemVoiceUri.length <= 500
-          ? candidate.tts.systemVoiceUri
-          : null,
+        typeof candidate.tts?.systemVoiceUri === 'string' ? candidate.tts.systemVoiceUri : null,
       openai: {
-        baseUrl: normalizeConfigString(
-          candidate.tts?.openai?.baseUrl,
-          DEFAULT_CONFIG.tts.openai.baseUrl,
-          500
-        ),
-        model: normalizeConfigString(
-          candidate.tts?.openai?.model,
-          DEFAULT_CONFIG.tts.openai.model,
-          200
-        ),
-        voice: normalizeConfigString(
-          candidate.tts?.openai?.voice,
-          DEFAULT_CONFIG.tts.openai.voice,
-          200
-        )
+        baseUrl: normalizeConfigString(candidate.tts?.openai?.baseUrl, ''),
+        model: normalizeConfigString(candidate.tts?.openai?.model, ''),
+        voice: normalizeConfigString(candidate.tts?.openai?.voice, '')
       },
       elevenlabs: {
         model: normalizeConfigString(
           candidate.tts?.elevenlabs?.model,
-          DEFAULT_CONFIG.tts.elevenlabs.model,
-          200
+          DEFAULT_CONFIG.tts.elevenlabs.model
         ),
-        voiceId: normalizeConfigString(candidate.tts?.elevenlabs?.voiceId, '', 200)
-      },
-      azure: {
-        region: normalizeConfigString(candidate.tts?.azure?.region, '', 100),
-        voice: normalizeConfigString(
-          candidate.tts?.azure?.voice,
-          DEFAULT_CONFIG.tts.azure.voice,
-          200
+        voiceId: normalizeConfigString(
+          candidate.tts?.elevenlabs?.voiceId,
+          DEFAULT_CONFIG.tts.elevenlabs.voiceId
         )
       },
+      azure: {
+        region: normalizeConfigString(candidate.tts?.azure?.region, ''),
+        voice: normalizeConfigString(candidate.tts?.azure?.voice, DEFAULT_CONFIG.tts.azure.voice)
+      },
       fish: {
-        model: normalizeConfigString(
-          candidate.tts?.fish?.model,
-          DEFAULT_CONFIG.tts.fish.model,
-          200
-        ),
-        voiceId: normalizeConfigString(candidate.tts?.fish?.voiceId, '', 200)
+        model: normalizeConfigString(candidate.tts?.fish?.model, DEFAULT_CONFIG.tts.fish.model),
+        voiceId: normalizeConfigString(candidate.tts?.fish?.voiceId, '')
       }
     },
     translation: {
@@ -379,11 +357,6 @@ function normalizeTranslationProviders(value: unknown): TranslationProviderConfi
     'google-web',
     'bing-web'
   ]
-  const renamedWebProviders: Partial<Record<TranslationProviderKind, [string, string]>> = {
-    'youdao-web': ['有道-网页版', '有道在线翻译'],
-    'google-web': ['Google 翻译 - 网页版', 'Google 在线翻译'],
-    'bing-web': ['Bing 翻译 - 网页版', 'Bing 在线翻译']
-  }
   for (const item of value) {
     if (!item || typeof item !== 'object') continue
     const provider = item as Record<string, unknown>
@@ -420,11 +393,10 @@ function normalizeTranslationProviders(value: unknown): TranslationProviderConfi
     const kind = provider.kind as TranslationProviderKind
     const name =
       typeof provider.name === 'string' && provider.name.trim() ? provider.name.trim() : kind
-    const renamed = renamedWebProviders[kind]
     providers.push({
       id: provider.id,
       kind,
-      name: kind === 'system' ? '系统翻译' : renamed && name === renamed[0] ? renamed[1] : name,
+      name: kind === 'system' ? '系统翻译' : name,
       enabled: provider.enabled === true,
       options: provider.kind === 'system' ? {} : options
     })
@@ -461,7 +433,6 @@ function normalizeExcludedPrograms(value: unknown): string[] {
     if (seen.has(key)) continue
     seen.add(key)
     programs.push(program)
-    if (programs.length >= 200) break
   }
   return programs
 }
@@ -474,5 +445,5 @@ function normalizeDictionaryGroupId(value: unknown): number | undefined {
 function normalizeProgramName(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const program = value.trim()
-  return program && program.length <= 200 ? program : null
+  return program ? program : null
 }
