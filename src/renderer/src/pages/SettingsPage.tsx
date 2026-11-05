@@ -42,7 +42,7 @@ export function SettingsPage(): React.JSX.Element {
       </aside>
 
       <div
-        className="min-h-0 min-w-0 flex-1 overflow-y-auto rounded-tl-lg border-l border-border bg-background px-2 py-8 md:px-6 lg:px-12 lg:py-9"
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto border-l border-border bg-background px-2 py-8 md:px-6 lg:px-12 lg:py-9"
         key={pathname}
       >
         <div className="mx-auto max-w-3xl">
