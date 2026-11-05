@@ -1,5 +1,5 @@
 import { recognizeMacText, recognizeWindowsText } from '@dictol/ocr-native'
-import { BrowserWindow, Notification, screen, type Rectangle } from 'electron'
+import { app, BrowserWindow, Notification, screen, type Rectangle } from 'electron'
 import { TRANSLATION_MAX_TEXT_LENGTH } from '../../shared/translation'
 import type { AppRuntime } from '../app-runtime'
 import { createCursorAnchor } from '../lib/selection-position'
@@ -10,15 +10,16 @@ import { resolvePreloadPath, resolveRendererUrl } from '../output-path'
 /** Owns the screenshot selector, OCR work, and translation handoff. */
 export class ScreenshotTranslationAction {
   private overlays = new Map<number, { window: BrowserWindow; displayId: number }>()
-  private progressWindow: BrowserWindow | undefined
+  private statusWindow: BrowserWindow | undefined
+  private statusWindowReady: Promise<boolean> | undefined
+  private statusMessagePending = false
   private busy = false
 
   constructor(private readonly runtime: AppRuntime) {}
 
   dispose(): void {
     this.closeOverlays()
-    if (this.progressWindow && !this.progressWindow.isDestroyed()) this.progressWindow.destroy()
-    this.progressWindow = undefined
+    this.closeStatusWindow()
   }
 
   async toggleSelector(): Promise<void> {
@@ -27,6 +28,7 @@ export class ScreenshotTranslationAction {
       return
     }
     if (this.busy) return
+    this.closeStatusWindow()
     const pointer = screen.getCursorScreenPoint()
     const activeDisplay = screen.getDisplayNearestPoint(pointer)
     const displays = screen.getAllDisplays()
@@ -66,6 +68,10 @@ export class ScreenshotTranslationAction {
         })
       )
       if (!this.overlays.size) return
+      if (process.platform === 'darwin' && app.isHidden()) {
+        const mainWindow = this.runtime.mainWindow
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide()
+      }
       for (const { window } of this.overlays.values()) {
         if (!window.isDestroyed()) window.show()
       }
@@ -149,7 +155,8 @@ export class ScreenshotTranslationAction {
           ? repairMergedEnglishWords(recognizedText, (word) => lexicon.lookup(word)?.frq ?? null)
           : recognizedText
       ).slice(0, TRANSLATION_MAX_TEXT_LENGTH)
-      if (!text) throw new Error('选区内没有识别到文字。')
+      if (!text) throw new Error('没有识别到文字')
+      this.closeStatusWindow()
       this.runtime.actions.translation.showSelection(text, {
         ...createCursorAnchor(),
         centerX: region.x + region.width / 2,
@@ -158,18 +165,58 @@ export class ScreenshotTranslationAction {
         gap: 8
       })
     } catch (error) {
-      this.notifyError(error)
-    } finally {
-      if (this.progressWindow && !this.progressWindow.isDestroyed()) this.progressWindow.destroy()
-      this.progressWindow = undefined
+      this.notifyError(error, region)
     }
   }
 
   private showProgress(region: Rectangle): void {
+    this.closeStatusWindow()
+    this.statusWindow = this.createStatusWindow(region)
+  }
+
+  private showStatusMessage(region: Rectangle, message: string): void {
+    this.statusMessagePending = true
+    let window = this.statusWindow
+    if (!window || window.isDestroyed()) {
+      window = this.createStatusWindow(region)
+      this.statusWindow = window
+    }
+    if (window.isVisible()) window.hide()
+    window.setBounds(this.statusBounds(region, message))
+    const feedbackWindow = window
+    void this.statusWindowReady?.then(async (loaded) => {
+      if (!loaded || feedbackWindow.isDestroyed() || this.statusWindow !== feedbackWindow) return
+      try {
+        await feedbackWindow.webContents.executeJavaScript(
+          `document.body.dataset.state = 'error'; document.getElementById('message').textContent = ${JSON.stringify(message)}`
+        )
+        if (!feedbackWindow.isDestroyed()) feedbackWindow.showInactive()
+        setTimeout(() => {
+          if (this.statusWindow === feedbackWindow) this.closeStatusWindow()
+        }, 1000)
+      } catch (error) {
+        console.warn('[ScreenshotTranslation] Failed to update status window', error)
+        if (this.statusWindow === feedbackWindow) this.closeStatusWindow()
+      }
+    })
+  }
+
+  private closeStatusWindow(): void {
+    if (this.statusWindow && !this.statusWindow.isDestroyed()) this.statusWindow.destroy()
+    this.statusWindow = undefined
+    this.statusWindowReady = undefined
+    this.statusMessagePending = false
+  }
+
+  private statusBounds(region: Rectangle, message?: string): Rectangle {
     const workArea = screen.getDisplayMatching(region).workArea
-    const width = 190
-    const height = 44
-    const window = new BrowserWindow({
+    const messageLength = message?.length ?? 0
+    const needsMoreSpace = messageLength > 10
+    const width = needsMoreSpace ? Math.min(360, workArea.width) : 190
+    const height = needsMoreSpace
+      ? Math.min(150, Math.max(64, 28 + Math.ceil(messageLength / 25) * 18))
+      : 44
+    return {
       x: Math.round(
         Math.max(
           workArea.x,
@@ -183,7 +230,13 @@ export class ScreenshotTranslationAction {
         )
       ),
       width,
-      height,
+      height
+    }
+  }
+
+  private createStatusWindow(region: Rectangle): BrowserWindow {
+    const window = new BrowserWindow({
+      ...this.statusBounds(region),
       show: false,
       frame: false,
       transparent: true,
@@ -194,7 +247,6 @@ export class ScreenshotTranslationAction {
       ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
       webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }
     })
-    this.progressWindow = window
     window.setAlwaysOnTop(true, 'floating')
     if (process.platform === 'darwin') {
       window.setVisibleOnAllWorkspaces(true, {
@@ -202,20 +254,28 @@ export class ScreenshotTranslationAction {
         skipTransformProcessType: true
       })
     }
-    void window
+    this.statusWindowReady = window
       .loadURL(resolveRendererUrl('screenshot-progress.html'))
       .then(() => {
-        if (!window.isDestroyed()) window.showInactive()
+        if (!window.isDestroyed() && this.statusWindow === window && !this.statusMessagePending)
+          window.showInactive()
+        return true
       })
       .catch((error) => {
         if (!window.isDestroyed())
-          console.warn('[ScreenshotTranslation] Progress window failed', error)
+          console.warn('[ScreenshotTranslation] Status window failed', error)
+        return false
       })
+    return window
   }
 
-  private notifyError(error: unknown): void {
+  private notifyError(error: unknown, region?: Rectangle): void {
     const message = error instanceof Error ? error.message : '截图翻译失败。'
     console.error('[ScreenshotTranslation]', message, error)
+    if (region) {
+      this.showStatusMessage(region, message)
+      return
+    }
     const mainWindow = this.runtime.mainWindow
     if (mainWindow && !mainWindow.webContents.isDestroyed() && mainWindow.isVisible())
       mainWindow.webContents.send('notification:toast', { type: 'error', message })

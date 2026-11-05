@@ -19,9 +19,12 @@
       .pill {
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 10px;
         margin: 3px;
         padding: 10px 14px;
+        box-sizing: border-box;
+        min-height: calc(100vh - 6px);
         border-radius: 9px;
         background: rgb(34 36 43 / 92%);
         box-shadow: 0 3px 12px rgb(0 0 0 / 20%);
@@ -33,6 +36,14 @@
         border-top-color: white;
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
+        flex: none;
+      }
+      body[data-state='error'] .spinner {
+        display: none;
+      }
+      #message {
+        text-align: center;
+        overflow-wrap: anywhere;
       }
       @keyframes spin {
         to {
@@ -42,6 +53,6 @@
     </style>
   </head>
   <body>
-    <div class="pill"><span class="spinner"></span>正在识别选区文字…</div>
+    <div class="pill"><span class="spinner"></span><span id="message">正在识别选区文字…</span></div>
   </body>
 </html>
