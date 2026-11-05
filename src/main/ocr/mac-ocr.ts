@@ -26,7 +26,7 @@ export async function captureTextUnderCursor(
     ? cropOcrDisplay(snapshot, pointer, aiCaptureSize)
     : await captureOcrImage(display, pointer, dictionaryCaptureSize)
   if (snapshot) onCaptureReady?.()
-  const result = await recognizeMacText(captured.buffer, ocrLanguages, true)
+  const result = await recognizeMacText(captured.buffer, ocrLanguages, true, true)
   let hit = selectOcrTextHit(
     result.observations,
     captured.pointer,
@@ -34,7 +34,7 @@ export async function captureTextUnderCursor(
     chineseWordRange
   )
   if (!hit) {
-    const fallbackResult = await recognizeMacText(captured.buffer, japaneseOcrLanguages, true)
+    const fallbackResult = await recognizeMacText(captured.buffer, japaneseOcrLanguages, true, true)
     const fallbackHit = selectOcrTextHit(
       fallbackResult.observations,
       captured.pointer,
@@ -59,7 +59,7 @@ export async function captureTextUnderCursor(
         )))
   ) {
     const expandedCapture = cropOcrDisplay(snapshot, pointer, expandedAiCaptureSize)
-    const expandedResult = await recognizeMacText(expandedCapture.buffer, ocrLanguages, true)
+    const expandedResult = await recognizeMacText(expandedCapture.buffer, ocrLanguages, true, true)
     const expandedHit = selectOcrTextHit(
       expandedResult.observations,
       expandedCapture.pointer,
