@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Check,
   CheckCircle2,
@@ -19,7 +20,6 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { SettingsList, SettingsRow, SettingsSection } from '@/components/settings/SettingsSection'
-import { ShortcutSettingControl } from '@/components/settings/ShortcutSettingControl'
 import {
   Dialog,
   DialogContent,
@@ -38,15 +38,14 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useDictionaryGroups } from '@/hooks/use-dictionary-groups'
-import {
-  useUpdateOcrShortcut,
-  useUpdateWordCaptureShortcut
-} from '@/hooks/use-word-capture-shortcuts'
+import { useWordCaptureStatus, wordCaptureStatusQueryKey } from '@/hooks/use-word-capture-shortcuts'
 
 type WordCaptureStatus = Awaited<ReturnType<typeof window.dictol.wordCapture.getStatus>>
 
 export function WordCaptureSettingsPage(): React.JSX.Element {
-  const [captureStatus, setCaptureStatus] = useState<WordCaptureStatus>(null)
+  const queryClient = useQueryClient()
+  const captureStatusQuery = useWordCaptureStatus()
+  const captureStatus = captureStatusQuery.data
   const [savingOcr, setSavingOcr] = useState(false)
   const [ocrError, setOcrError] = useState<string | null>(null)
   const [screenCaptureSettingsError, setScreenCaptureSettingsError] = useState<string | null>(null)
@@ -61,49 +60,27 @@ export function WordCaptureSettingsPage(): React.JSX.Element {
   const [inputMonitoringSettingsError, setInputMonitoringSettingsError] = useState<string | null>(
     null
   )
-  const updateShortcutMutation = useUpdateWordCaptureShortcut(setCaptureStatus)
-  const updateOcrShortcutMutation = useUpdateOcrShortcut(setCaptureStatus)
-  const shortcutError =
-    updateShortcutMutation.error?.message ??
-    (updateShortcutMutation.data?.ok === false
-      ? (updateShortcutMutation.data.error ?? '无法更新快捷键设置。')
-      : null)
-  const ocrShortcutError =
-    updateOcrShortcutMutation.error?.message ??
-    (updateOcrShortcutMutation.data?.ok === false
-      ? (updateOcrShortcutMutation.data.error ?? '无法更新悬停取词快捷键。')
-      : null)
-  const displayedOcrError = ocrError ?? ocrShortcutError
 
-  const refreshCaptureStatus = useCallback(() => {
-    void window.dictol.wordCapture.getStatus().then(setCaptureStatus)
-  }, [])
+  const setCaptureStatus = (status: WordCaptureStatus): void => {
+    if (status) queryClient.setQueryData(wordCaptureStatusQueryKey, status)
+  }
   const { data: dictionaryGroups = [] } = useDictionaryGroups()
   const selectedSelectionGroup = dictionaryGroups.find(
     (group) => group.id === captureStatus?.selectionDictionaryGroupId
   )
-
-  useEffect(() => {
-    refreshCaptureStatus()
-    window.addEventListener('focus', refreshCaptureStatus)
-    return () => window.removeEventListener('focus', refreshCaptureStatus)
-  }, [refreshCaptureStatus])
-
-  const updateShortcut = async (shortcut: string): Promise<void> => {
-    await updateShortcutMutation.mutateAsync(shortcut)
-  }
-
-  const updateOcrShortcut = async (mode: 'dictionary' | 'ai', shortcut: string): Promise<void> => {
-    setOcrError(null)
-    await updateOcrShortcutMutation.mutateAsync({ mode, shortcut })
-  }
 
   return (
     <SettingsSection
       title="取词"
       description="在其他软件中选择文字，使用快捷键或划词工具栏获取词条解释"
     >
-      {!captureStatus ? (
+      {!captureStatus && captureStatusQuery.isError ? (
+        <SettingsList>
+          <div className="px-4 py-5 text-sm text-destructive" role="alert">
+            {captureStatusQuery.error.message}
+          </div>
+        </SettingsList>
+      ) : !captureStatus ? (
         <SettingsList>
           <div className="px-4 py-5 text-sm text-muted-foreground">正在检查取词状态…</div>
         </SettingsList>
@@ -122,11 +99,7 @@ export function WordCaptureSettingsPage(): React.JSX.Element {
             </div>
           )}
           <SettingsList>
-            <SettingsRow
-              label="取词组"
-              description="查词弹窗使用的词典组"
-              className="items-start"
-            >
+            <SettingsRow label="取词组" description="查词弹窗使用的词典组" className="items-start">
               <Popover open={selectionGroupPickerOpen} onOpenChange={setSelectionGroupPickerOpen}>
                 <PopoverTrigger asChild>
                   <Button
@@ -215,32 +188,6 @@ export function WordCaptureSettingsPage(): React.JSX.Element {
                 </PopoverContent>
               </Popover>
             </SettingsRow>
-            <SettingsRow
-              label="划词取词"
-              description={
-                !captureStatus.shortcut
-                  ? '未设置快捷键'
-                  : captureStatus.registered
-                    ? '在弹窗中查看所选单词的词典解释'
-                    : '快捷键被其他应用占用，请重新设置'
-              }
-            >
-              <ShortcutSettingControl
-                allowClear
-                command="lookupWordOnShortcut"
-                currentShortcut={captureStatus.shortcut}
-                onClear={() => updateShortcut('')}
-                onUpdate={updateShortcut}
-              />
-            </SettingsRow>
-            {shortcutError && (
-              <p
-                className="border-b border-border bg-card px-4 py-3 text-xs text-destructive"
-                role="alert"
-              >
-                {shortcutError}
-              </p>
-            )}
             {selectionGroupError && (
               <p
                 className="border-b border-border bg-card px-4 py-3 text-xs text-destructive"
@@ -412,7 +359,6 @@ export function WordCaptureSettingsPage(): React.JSX.Element {
                       id="ocr-lookup-enabled"
                       onCheckedChange={(enabled) => {
                         setOcrError(null)
-                        updateOcrShortcutMutation.reset()
                         setSavingOcr(true)
                         void window.dictol.wordCapture
                           .setOcrEnabled(enabled)
@@ -429,44 +375,12 @@ export function WordCaptureSettingsPage(): React.JSX.Element {
                     />
                   </Field>
                 </div>
-                {captureStatus.ocrEnabled && (
-                  <>
-                    <SettingsRow
-                      className="pl-8"
-                      label="悬停查词"
-                      description={
-                        captureStatus.ocrDictionaryRegistered
-                          ? '在弹窗中查看词典解释'
-                          : '快捷键被占用，请重新设置'
-                      }
-                    >
-                      <ShortcutSettingControl
-                        command="ocrDictionary"
-                        currentShortcut={captureStatus.ocrDictionaryShortcut}
-                        onUpdate={(shortcut) => updateOcrShortcut('dictionary', shortcut)}
-                      />
-                    </SettingsRow>
-                    <SettingsRow
-                      className="pl-8"
-                      label="AI 语境查词"
-                      description={
-                        captureStatus.ocrAiRegistered ? '调用大模型解释单词在语境中的含义' : '快捷键被占用，请重新设置'
-                      }
-                    >
-                      <ShortcutSettingControl
-                        command="ocrAi"
-                        currentShortcut={captureStatus.ocrAiShortcut}
-                        onUpdate={(shortcut) => updateOcrShortcut('ai', shortcut)}
-                      />
-                    </SettingsRow>
-                  </>
-                )}
-                {displayedOcrError && (
+                {ocrError && (
                   <p
                     className="border-b border-border bg-card px-4 py-3 text-xs text-destructive"
                     role="alert"
                   >
-                    {displayedOcrError}
+                    {ocrError}
                   </p>
                 )}
               </>

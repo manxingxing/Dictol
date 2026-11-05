@@ -18,18 +18,6 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { SettingsList, SettingsRow, SettingsSection } from '@/components/settings/SettingsSection'
-import { ShortcutSettingControl } from '@/components/settings/ShortcutSettingControl'
-import {
-  useSelectionTranslationShortcutStatus,
-  useScreenshotTranslationStatus,
-  useUpdateScreenshotShortcut,
-  useUpdateSelectionTranslationShortcut
-} from '@/hooks/use-translation-shortcuts'
-import { formatShortcut } from '@/lib/keyboard-shortcut'
-import {
-  SCREENSHOT_TRANSLATION_SHORTCUT,
-  TRANSLATE_SELECTION_SHORTCUT
-} from '../../../../shared/shortcuts'
 import {
   TRANSLATION_LANGUAGES,
   TRANSLATION_LANGUAGE_NAMES,
@@ -57,14 +45,6 @@ const webProviderKinds: TranslationProviderKind[] = ['youdao-web', 'google-web',
 
 export function TranslationSettingsPage(): React.JSX.Element {
   const [config, setConfig] = useState<TranslationPublicConfig | null>(null)
-  const screenshotStatusQuery = useScreenshotTranslationStatus()
-  const screenshotStatus = screenshotStatusQuery.data
-  const selectionShortcutStatusQuery = useSelectionTranslationShortcutStatus()
-  const selectionShortcutStatus = selectionShortcutStatusQuery.data
-  const updateSelectionShortcutMutation = useUpdateSelectionTranslationShortcut()
-  const updateScreenshotShortcutMutation = useUpdateScreenshotShortcut()
-  const resetSelectionShortcutMutation = updateSelectionShortcutMutation.reset
-  const resetScreenshotShortcutMutation = updateScreenshotShortcutMutation.reset
   const [draft, setDraft] = useState<TranslationSaveProviderRequest | null>(null)
   const [error, setError] = useState('')
   const [busyOperation, setBusyOperation] = useState<BusyOperation | null>(null)
@@ -74,30 +54,6 @@ export function TranslationSettingsPage(): React.JSX.Element {
     position: 'before' | 'after'
   } | null>(null)
   const verifyingProviderId = busyOperation?.kind === 'verify' ? busyOperation.id : null
-  const screenshotStatusMessage =
-    updateScreenshotShortcutMutation.error?.message ??
-    (updateScreenshotShortcutMutation.data?.ok === false
-      ? (updateScreenshotShortcutMutation.data.error ?? '无法保存截图翻译设置。')
-      : null) ??
-    screenshotStatusQuery.error?.message ??
-    (screenshotStatus?.supported && screenshotStatus.shortcut && !screenshotStatus.registered
-      ? `截图翻译快捷键 ${formatShortcut(screenshotStatus.shortcut, window.dictol.platform)} 注册失败，可能已被系统或其他应用占用。请更换快捷键。`
-      : null)
-  const selectionShortcutMessage =
-    updateSelectionShortcutMutation.error?.message ??
-    (updateSelectionShortcutMutation.data?.ok === false
-      ? (updateSelectionShortcutMutation.data.error ?? '无法保存选区翻译快捷键设置。')
-      : null) ??
-    selectionShortcutStatusQuery.error?.message
-
-  useEffect(() => {
-    if (screenshotStatusQuery.dataUpdatedAt) resetScreenshotShortcutMutation()
-  }, [screenshotStatusQuery.dataUpdatedAt, resetScreenshotShortcutMutation])
-
-  useEffect(() => {
-    if (selectionShortcutStatusQuery.dataUpdatedAt) resetSelectionShortcutMutation()
-  }, [selectionShortcutStatusQuery.dataUpdatedAt, resetSelectionShortcutMutation])
-
   useEffect(() => {
     void window.dictol.translation
       .getConfig()
@@ -106,14 +62,6 @@ export function TranslationSettingsPage(): React.JSX.Element {
         setError(cause instanceof Error ? cause.message : '无法读取翻译服务设置。')
       })
   }, [])
-
-  const updateSelectionShortcut = async (shortcut: string): Promise<void> => {
-    await updateSelectionShortcutMutation.mutateAsync(shortcut)
-  }
-
-  const updateScreenshotShortcut = async (shortcut: string): Promise<void> => {
-    await updateScreenshotShortcutMutation.mutateAsync(shortcut)
-  }
 
   const apply = async (
     id: string,
@@ -208,62 +156,6 @@ export function TranslationSettingsPage(): React.JSX.Element {
             ))}
           </select>
         </SettingsRow>
-        {selectionShortcutStatus?.supported && (
-          <SettingsRow
-            label="划词翻译"
-            description={
-              !selectionShortcutStatus.shortcut
-                ? '未设置快捷键'
-                : selectionShortcutStatus.registered
-                  ? '在翻译弹窗里查看所选文本的译文'
-                  : '快捷键未启用，请重新设置'
-            }
-          >
-            <ShortcutSettingControl
-              allowClear
-              command={TRANSLATE_SELECTION_SHORTCUT}
-              currentShortcut={selectionShortcutStatus.shortcut}
-              onClear={() => updateSelectionShortcut('')}
-              onUpdate={updateSelectionShortcut}
-            />
-          </SettingsRow>
-        )}
-        {selectionShortcutMessage && (
-          <p
-            className="border-b border-border bg-card px-4 py-2 text-xs text-destructive last:border-b-0"
-            role="alert"
-          >
-            {selectionShortcutMessage}
-          </p>
-        )}
-        {screenshotStatus?.supported && (
-          <SettingsRow
-            label="截图翻译"
-            description={
-              !screenshotStatus.shortcut
-                ? '未设置快捷键'
-                : screenshotStatus.registered
-                  ? '识别截图中的文本，在翻译弹窗里查看译文'
-                  : '按快捷键框选屏幕文字，识别后查看译文'
-            }
-          >
-            <ShortcutSettingControl
-              allowClear
-              command={SCREENSHOT_TRANSLATION_SHORTCUT}
-              currentShortcut={screenshotStatus.shortcut}
-              onClear={() => updateScreenshotShortcut('')}
-              onUpdate={updateScreenshotShortcut}
-            />
-          </SettingsRow>
-        )}
-        {screenshotStatusMessage && (
-          <p
-            className="border-b border-border bg-card px-4 py-2 text-xs text-destructive last:border-b-0"
-            role="alert"
-          >
-            {screenshotStatusMessage}
-          </p>
-        )}
       </SettingsList>
 
       <div className="overflow-hidden rounded-lg border border-border bg-card">
