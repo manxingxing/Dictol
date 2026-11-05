@@ -178,6 +178,7 @@ export class AiLookupService {
         model: config.model,
         messages: [{ role: 'system', content: systemPrompt }, ...requestMessages],
         stream: promptTarget !== 'ocr-context',
+        responseFormat: promptTarget === 'ocr-context' ? { type: 'json_object' } : undefined,
         extraParams: config.extraParams
       })
       if (!completionBody.stream) {
@@ -293,6 +294,7 @@ export class AiLookupService {
       throw new Error('AI 解释缺少必要内容。')
     }
     return {
+      phonetic: typeof explanation.phonetic === 'string' ? explanation.phonetic.trim() : '',
       sentenceMeaning: explanation.sentenceMeaning.trim(),
       wordMeaning: explanation.wordMeaning.trim(),
       usage: explanation.usage.trim()

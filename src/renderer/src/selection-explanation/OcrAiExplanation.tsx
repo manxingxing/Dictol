@@ -3,6 +3,7 @@ import { Check, LoaderCircle, Quote } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import type { SelectionExplanationPayload } from '../../../shared/selection-explanation'
+import { PronunciationButton } from './PronunciationButton'
 import { SelectionExplanationHeader } from './SelectionExplanationHeader'
 
 export function OcrAiExplanation({
@@ -32,6 +33,7 @@ export function OcrAiExplanation({
   return (
     <>
       <SelectionExplanationHeader title="AI 语境查词" pinned={payload.pinned}>
+        <PronunciationButton word={payload.word} />
         <Button
           aria-label={saveState === 'saved' ? '已保存到摘抄与笔记' : '保存到摘抄与笔记'}
           className="no-drag size-7 shrink-0 disabled:opacity-100"
@@ -54,7 +56,14 @@ export function OcrAiExplanation({
       {hasOcrText ? (
         <main className="min-h-0 flex-1 overflow-y-auto">
           <section className="px-5 pb-4 pt-4">
-            <h1 className="break-words text-xl font-semibold leading-7">{payload.word}</h1>
+            <h1 className="break-words text-xl font-semibold leading-7">
+              {payload.word}
+              {payload.state === 'content' && explanation?.phonetic && (
+                <span className="ml-2 select-text text-sm font-normal text-muted-foreground">
+                  {explanation.phonetic}
+                </span>
+              )}
+            </h1>
             {payload.state === 'content' && explanation ? (
               <div className="mt-2.5">
                 <p className="select-text text-sm leading-6">{explanation.wordMeaning}</p>

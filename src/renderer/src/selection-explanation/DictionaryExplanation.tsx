@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { LoaderCircle, Square, Volume2 } from 'lucide-react'
+import { useEffect } from 'react'
+import { LoaderCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
@@ -10,6 +10,7 @@ import {
   type SelectionExplanationPayload
 } from '../../../shared/selection-explanation'
 import { ExplanationWordActions } from './ExplanationWordActions'
+import { PronunciationButton } from './PronunciationButton'
 import { SelectionExplanationHeader } from './SelectionExplanationHeader'
 
 type Props = {
@@ -18,50 +19,15 @@ type Props = {
 
 export function DictionaryExplanation({ payload }: Props): React.JSX.Element {
   const wordKey = payload.word.trim()
-  const [pronunciation, setPronunciation] = useState<{
-    word: string
-    state: 'waiting' | 'playing'
-  } | null>(null)
-  const pronunciationState = pronunciation?.word === wordKey ? pronunciation.state : 'idle'
   const dictionaries = payload.dictionaries ?? []
   const hasDictionarySwitcher = dictionaries.length > 1
   useEffect(() => {
     if (payload.state !== 'loading' || payload.requestId === 0) return
     window.dictolSelectionExplanation.loadingReady(payload.requestId)
   }, [payload.requestId, payload.state])
-  useEffect(() => () => window.dictolSelectionExplanation.tts.stop(), [wordKey])
-
-  const togglePronunciation = (): void => {
-    if (pronunciationState !== 'idle') {
-      window.dictolSelectionExplanation.tts.stop()
-      return
-    }
-    window.dictolSelectionExplanation.tts.speak(wordKey, (state, message) => {
-      setPronunciation(state === 'waiting' || state === 'playing' ? { word: wordKey, state } : null)
-      if (state === 'error') window.alert(message || '朗读失败。')
-    })
-  }
-
   const actions = (
     <>
-      <Button
-        aria-label={pronunciationState === 'idle' ? '发音' : '停止发音'}
-        className="no-drag size-7 shrink-0"
-        disabled={payload.state !== 'content' || !wordKey}
-        onClick={togglePronunciation}
-        size="icon"
-        title={pronunciationState === 'idle' ? '发音' : '停止发音'}
-        type="button"
-        variant="ghost"
-      >
-        {pronunciationState === 'waiting' ? (
-          <LoaderCircle className="animate-spin" />
-        ) : pronunciationState === 'playing' ? (
-          <Square />
-        ) : (
-          <Volume2 />
-        )}
-      </Button>
+      <PronunciationButton disabled={payload.state !== 'content'} word={wordKey} />
       {payload.aiEnabled && Boolean(wordKey) && (
         <Button
           aria-label="AI 解释当前词"

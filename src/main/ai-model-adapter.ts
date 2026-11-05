@@ -9,6 +9,7 @@ export type AiCompletionRequest = {
   messages: ChatCompletionMessageParam[]
   extraParams?: string
   stream?: boolean
+  responseFormat?: ChatCompletionCreateParamsBase['response_format']
 }
 
 export function createAiCompletionBody(
@@ -27,7 +28,12 @@ export function createAiCompletionBody(
   if (!isGeminiModel(model) && !isOpenAiReasoningModel(model)) {
     body.temperature = 0.3
   }
-  return { ...body, stream: request.stream, ...parseAiExtraParams(request.extraParams ?? '') }
+  return {
+    ...body,
+    stream: request.stream,
+    ...(request.responseFormat && { response_format: request.responseFormat }),
+    ...parseAiExtraParams(request.extraParams ?? '')
+  }
 }
 
 function isDeepSeekModel(model: string): boolean {
