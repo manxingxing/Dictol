@@ -2,7 +2,9 @@ import '@/assets/main.css'
 import './selection-translation.css'
 import { createRoot } from 'react-dom/client'
 import { useEffect, useState } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SelectionTranslationWorkbench } from './SelectionTranslationWorkbench'
+import type { TtsPlayback } from '../../../shared/tts'
 import type {
   SelectionTranslationPayload,
   TranslationEvent,
@@ -13,6 +15,7 @@ import type {
 declare global {
   interface Window {
     dictolSelectionTranslation: {
+      tts: TtsPlayback
       onUpdate: (callback: (payload: SelectionTranslationPayload) => void) => () => void
       getConfig: () => Promise<TranslationPublicConfig | null>
       start: (request: TranslationRequest) => Promise<string | null>
@@ -24,6 +27,10 @@ declare global {
     }
   }
 }
+
+const queryClient = new QueryClient({
+  defaultOptions: { mutations: { networkMode: 'always' } }
+})
 
 export function SelectionTranslationApp(): React.JSX.Element {
   const [selection, setSelection] = useState<SelectionTranslationPayload>()
@@ -40,4 +47,8 @@ export function SelectionTranslationApp(): React.JSX.Element {
   )
 }
 
-createRoot(document.getElementById('root')!).render(<SelectionTranslationApp />)
+createRoot(document.getElementById('root')!).render(
+  <QueryClientProvider client={queryClient}>
+    <SelectionTranslationApp />
+  </QueryClientProvider>
+)

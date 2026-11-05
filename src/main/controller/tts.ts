@@ -1,5 +1,10 @@
 import { ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron'
-import type { OnlineTtsEngineId, TtsConfig, TtsSaveSettingsRequest } from '../../shared/tts'
+import {
+  TTS_MAX_TEXT_LENGTH,
+  type OnlineTtsEngineId,
+  type TtsConfig,
+  type TtsSaveSettingsRequest
+} from '../../shared/tts'
 import { TtsService } from '../tts-service'
 import { BaseController } from './base-controller'
 
@@ -72,8 +77,8 @@ export class TtsController extends BaseController {
     if (!this.acceptsReader(event.sender)) throw new Error('无权访问朗读服务。')
     if (typeof requestId !== 'string' || !requestId || requestId.length > 100)
       throw new Error('朗读请求无效。')
-    if (typeof text !== 'string' || !text.trim() || text.trim().length > 500)
-      throw new Error('朗读文本须为 1–500 个字符。')
+    if (typeof text !== 'string' || !text.trim() || text.trim().length > TTS_MAX_TEXT_LENGTH)
+      throw new Error(`朗读文本须为 1–${TTS_MAX_TEXT_LENGTH} 个字符。`)
     const key = `${event.sender.id}:${requestId}`
     if (this.pending.has(key)) throw new Error('朗读请求重复。')
     const controller = new AbortController()
@@ -100,6 +105,7 @@ export class TtsController extends BaseController {
       this.runtime.mainWindow?.webContents.id === id ||
       windows.dictionaryView?.acceptsSender(id) ||
       windows.aggregateDictionaryView?.acceptsSender(id) ||
+      windows.selectionTranslationWindow?.webContents.id === id ||
       windows.selectionExplanationWindow?.webContents.id === id ||
       windows.selectionExplanationView?.acceptsSender(id)
     )

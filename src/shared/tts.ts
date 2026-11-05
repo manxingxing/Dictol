@@ -1,3 +1,5 @@
+export const TTS_MAX_TEXT_LENGTH = 800
+
 export type TtsEngineId =
   'system' | 'openai-compatible' | 'elevenlabs' | 'azure-speech' | 'fish-audio'
 export type OnlineTtsEngineId = Exclude<TtsEngineId, 'system'>

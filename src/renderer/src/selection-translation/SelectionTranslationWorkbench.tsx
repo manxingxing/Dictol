@@ -8,9 +8,13 @@ import {
   Languages,
   LoaderCircle,
   Pin,
+  Square,
+  TextWrap,
+  Volume2,
   X
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useTranslationSpeech } from './use-translation-speech'
 import {
   TRANSLATION_LANGUAGES,
   TRANSLATION_LANGUAGE_NAMES,
@@ -49,6 +53,7 @@ export function SelectionTranslationWorkbench({
   const [config, setConfig] = useState<TranslationPublicConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [input, setInput] = useState('')
+  const speech = useTranslationSpeech(input)
   const [sourceLanguage, setSourceLanguage] = useState<TranslationSourceLanguage>('auto')
   const [targetLanguage, setTargetLanguage] = useState<TranslationLanguage>('zh')
   const [sourceCollapsed, setSourceCollapsed] = useState(true)
@@ -279,7 +284,37 @@ export function SelectionTranslationWorkbench({
                       rows={2}
                       value={input}
                     />
-                    <div className="flex justify-end px-2 pb-1.5">
+                    <div className="mt-1.5 flex justify-between px-2 pb-1.5">
+                      <div className="flex items-center">
+                        <Button
+                          aria-label="将换行符替换为空格"
+                          className="size-7 p-0"
+                          disabled={!input}
+                          onClick={() => setInput((text) => text.replace(/\r\n|\r|\n/g, ' '))}
+                          size="xs"
+                          title="将换行符替换为空格"
+                          variant="ghost"
+                        >
+                          <TextWrap />
+                        </Button>
+                        <Button
+                          aria-label={speech.state !== 'idle' ? '停止朗读' : '朗读原文'}
+                          className="size-7 p-0"
+                          disabled={!input.trim() && speech.state === 'idle'}
+                          onClick={speech.toggle}
+                          size="xs"
+                          title={speech.state !== 'idle' ? '停止朗读' : '朗读原文'}
+                          variant="ghost"
+                        >
+                          {speech.state === 'waiting' ? (
+                            <LoaderCircle className="animate-spin" />
+                          ) : speech.state === 'playing' ? (
+                            <Square />
+                          ) : (
+                            <Volume2 />
+                          )}
+                        </Button>
+                      </div>
                       <Button
                         disabled={!input.trim() || !providers.length || pendingCount > 0}
                         onClick={() => submitTranslation(sourceLanguage, targetLanguage)}
@@ -293,6 +328,11 @@ export function SelectionTranslationWorkbench({
                         {pendingCount > 0 ? '翻译中…' : '翻译'}
                       </Button>
                     </div>
+                    {speech.error && (
+                      <p className="px-2 pb-1.5 text-xs text-destructive" role="alert">
+                        {speech.error.message}
+                      </p>
+                    )}
                   </div>
                 )}
               </section>

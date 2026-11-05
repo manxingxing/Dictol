@@ -34,6 +34,13 @@ export default defineConfig({
           if (source === './tts' && importer && importerPath?.startsWith(`${preloadRoot}/`)) {
             return `${resolve('src/preload/tts.ts')}?preload=${basename(importer)}`
           }
+          if (
+            source === '../shared/tts' &&
+            importer &&
+            importerPath?.includes('/preload/tts.ts?preload=')
+          ) {
+            return `${resolve('src/shared/tts.ts')}?${importer.split('?')[1]}`
+          }
           return null
         }
       }

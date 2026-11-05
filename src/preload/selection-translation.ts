@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { createTtsPlayback } from './tts'
 import type {
   SelectionTranslationPayload,
   TranslationEvent,
@@ -17,6 +18,7 @@ ipcRenderer.on('selection-translation:update', (_event, payload: SelectionTransl
 contextBridge.exposeInMainWorld(
   'dictolSelectionTranslation',
   Object.freeze({
+    tts: createTtsPlayback(),
     onUpdate: (callback: (payload: SelectionTranslationPayload) => void): (() => void) => {
       subscribers.add(callback)
       if (latestPayload) callback(latestPayload)
