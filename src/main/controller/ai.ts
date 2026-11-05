@@ -5,8 +5,10 @@ import {
   AI_LOOKUP_MAX_SOURCE_TEXT_LENGTH,
   type AiChatRequest,
   type AiLookupPublicConfig,
+  type AiListModelsRequest,
   type AiSaveConfigRequest
 } from '../../shared/ai-ipc'
+import { isAiProviderId } from '../../shared/ai-settings'
 import { AppRuntime } from '../app-runtime'
 import { AiLookupService } from '../ai-service'
 import { BaseController } from './base-controller'
@@ -25,6 +27,7 @@ export class AiController extends BaseController {
     ipcMain.handle('ai-lookup:get-config', this.getConfig)
     ipcMain.handle('ai-lookup:save-config', this.saveConfig)
     ipcMain.handle('ai-lookup:test-config', this.testConfig)
+    ipcMain.handle('ai-lookup:list-models', this.listModels)
     ipcMain.handle('ai-lookup:start-chat', this.startChat)
     ipcMain.on('ai-lookup:cancel', this.cancel)
   }
@@ -48,9 +51,28 @@ export class AiController extends BaseController {
     return config
   }
 
-  private readonly testConfig = async (event: IpcMainInvokeEvent): Promise<void> => {
+  private readonly listModels = async (
+    event: IpcMainInvokeEvent,
+    request: AiListModelsRequest
+  ): Promise<string[]> => {
+    if (!this.acceptsMainSender(event.sender)) return []
+    if (
+      !request ||
+      typeof request.baseUrl !== 'string' ||
+      (request.apiKey !== undefined && typeof request.apiKey !== 'string')
+    ) {
+      throw new Error('模型列表请求格式无效。')
+    }
+    return this.service.listModels(request)
+  }
+
+  private readonly testConfig = async (
+    event: IpcMainInvokeEvent,
+    request?: AiSaveConfigRequest
+  ): Promise<void> => {
     if (!this.acceptsMainSender(event.sender)) return
-    await this.service.testConfig()
+    if (request !== undefined && !isSaveConfigRequest(request)) throw new Error('AI 设置格式无效。')
+    await this.service.testConfig(request)
   }
 
   private readonly startChat = (
@@ -111,6 +133,8 @@ function isSaveConfigRequest(value: unknown): value is AiSaveConfigRequest {
   return (
     typeof request.enabled === 'boolean' &&
     request.provider === 'openai-compatible' &&
+    isAiProviderId(request.providerId) &&
+    typeof request.extraParams === 'string' &&
     typeof request.baseUrl === 'string' &&
     typeof request.model === 'string' &&
     (request.apiKey === undefined || typeof request.apiKey === 'string')

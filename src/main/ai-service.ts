@@ -2,10 +2,17 @@ import type {
   AiChatMessage,
   AiChatRequest,
   AiLookupPublicConfig,
+  AiListModelsRequest,
   AiSaveConfigRequest,
   AiStreamEvent
 } from '../shared/ai-ipc'
 import { randomUUID } from 'node:crypto'
+import {
+  AI_BASE_URL_MAX_LENGTH,
+  AI_PROVIDER_PRESETS,
+  normalizeAiBaseUrl,
+  parseAiExtraParams
+} from '../shared/ai-settings'
 import { AppConfigStore } from './app-config'
 import { AiCredentialStore } from './ai-credentials'
 import {
@@ -15,6 +22,7 @@ import {
   prepareLookupMessages
 } from './language-task-prompts'
 import { createAiCompletionBody } from './ai-model-adapter'
+import { createOpenAiClient } from './lib/openai-client'
 import type { OcrAiExplanation } from '../shared/ocr'
 
 const MAX_MESSAGES = 100
@@ -45,22 +53,30 @@ export class AiLookupService {
   }
 
   saveConfig(input: AiSaveConfigRequest): ReturnType<AiLookupService['getPublicConfig']> {
-    const baseUrl = normalizeBaseUrl(input.baseUrl)
-    const model = normalizeText(input.model, 200)
+    const baseUrl = normalizeAiBaseUrl(
+      AI_PROVIDER_PRESETS.find((preset) => preset.id === input.providerId)?.baseUrl ?? input.baseUrl
+    )
+    const model = input.model.trim()
     if (!baseUrl) throw new Error('请填写服务地址。')
+    if (baseUrl.length > AI_BASE_URL_MAX_LENGTH) throw new Error('服务地址不能超过 500 个字符。')
+    if (model.length > 200) throw new Error('模型名称不能超过 200 个字符。')
 
+    parseAiExtraParams(input.extraParams)
     const current = this.appConfig.load()
+    const endpointChanged = baseUrl !== normalizeAiBaseUrl(current.aiLookup.baseUrl)
     try {
       this.appConfig.save({
         ...current,
         aiLookup: {
           enabled: input.enabled,
           provider: 'openai-compatible',
+          providerId: input.providerId,
           baseUrl,
-          model
+          model,
+          extraParams: input.extraParams.trim()
         }
       })
-      if (input.apiKey?.trim()) this.credentials.saveApiKey(input.apiKey)
+      if (input.apiKey?.trim() || endpointChanged) this.credentials.saveApiKey(input.apiKey ?? '')
     } catch (error) {
       this.appConfig.save(current)
       throw error
@@ -68,36 +84,50 @@ export class AiLookupService {
     return this.getPublicConfig()
   }
 
-  async testConfig(): Promise<void> {
-    const config = this.appConfig.load().aiLookup
+  async listModels(input: AiListModelsRequest): Promise<string[]> {
+    const baseUrl = normalizeAiBaseUrl(input.baseUrl)
+    if (!baseUrl) throw new Error('请填写有效的服务地址。')
+    const client = createOpenAiClient(baseUrl, this.resolveApiKey(input), VERIFICATION_TIMEOUT_MS)
+    const page = await client.models.list()
+    if (!Array.isArray(page.data) || page.data.some((model) => typeof model?.id !== 'string')) {
+      throw new Error('模型列表格式无效，仍可手动输入模型名称。')
+    }
+    return [...new Set(page.data.map((model) => model.id).filter(Boolean))].sort()
+  }
+
+  private resolveApiKey(input: AiListModelsRequest): string {
+    if (input.apiKey?.trim()) return input.apiKey.trim()
+    const saved = this.appConfig.load().aiLookup
+    return normalizeAiBaseUrl(input.baseUrl) === normalizeAiBaseUrl(saved.baseUrl)
+      ? this.credentials.getApiKey()
+      : ''
+  }
+
+  async testConfig(input?: AiSaveConfigRequest): Promise<void> {
+    const config = input ?? this.appConfig.load().aiLookup
+    const baseUrl = normalizeAiBaseUrl(config.baseUrl)
+    if (!baseUrl) throw new Error('请填写有效的服务地址。')
     if (!config.model) throw new Error('请先在设置中配置模型名称。')
-    const apiKey = this.credentials.getApiKey()
+    const apiKey = this.resolveApiKey(config)
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), VERIFICATION_TIMEOUT_MS)
     try {
-      const response = await fetch(`${config.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
-        },
-        body: JSON.stringify(
-          createAiCompletionBody({
-            model: config.model,
-            stream: false,
-            messages: [{ role: 'user', content: 'Reply with OK.' }]
-          })
-        ),
-        signal: controller.signal
-      })
-      if (!response.ok) {
-        const text = await response.text().catch(() => '')
-        throw new Error(formatProviderError(response.status, text))
+      const client = createOpenAiClient(baseUrl, apiKey, VERIFICATION_TIMEOUT_MS)
+      const completion = await client.chat.completions.create(
+        createAiCompletionBody({
+          model: config.model,
+          messages: [{ role: 'user', content: 'Reply with OK.' }],
+          stream: false,
+          extraParams: config.extraParams
+        }),
+        { signal: controller.signal }
+      )
+      let content = ''
+      if ('choices' in completion) {
+        content = completion.choices[0]?.message.content ?? ''
+      } else {
+        for await (const chunk of completion) content += chunk.choices[0]?.delta.content ?? ''
       }
-      const completion = (await response.json().catch(() => null)) as {
-        choices?: Array<{ message?: { content?: unknown } }>
-      } | null
-      const content = completion?.choices?.[0]?.message?.content
       if (typeof content !== 'string' || !content.trim())
         throw new Error('AI 服务没有返回有效内容。')
     } catch (error) {
@@ -143,78 +173,50 @@ export class AiLookupService {
         requestMessages = prepareLookupMessages(lookupContext.sourceText, bodyMessages)
       }
 
-      const response = await fetch(`${config.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
-        },
-        body: JSON.stringify(
-          createAiCompletionBody({
-            model: config.model,
-            stream: promptTarget !== 'ocr-context',
-            messages: [{ role: 'system', content: systemPrompt }, ...requestMessages]
-          })
-        ),
-        signal: controller.signal
+      const client = createOpenAiClient(config.baseUrl, apiKey, REQUEST_TIMEOUT_MS)
+      const completionBody = createAiCompletionBody({
+        model: config.model,
+        messages: [{ role: 'system', content: systemPrompt }, ...requestMessages],
+        stream: promptTarget !== 'ocr-context',
+        extraParams: config.extraParams
       })
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => '')
-        throw new Error(formatProviderError(response.status, text))
-      }
-      if (promptTarget === 'ocr-context') {
-        const completion = (await response.json()) as {
-          choices?: Array<{ message?: { content?: unknown }; finish_reason?: unknown }>
-        } | null
-        const choice = completion?.choices?.[0]
-        if (choice?.finish_reason === 'length' || choice?.finish_reason === 'max_tokens') {
+      if (!completionBody.stream) {
+        const completion = await client.chat.completions.create(
+          { ...completionBody, stream: false },
+          { signal: controller.signal }
+        )
+        const choice = completion.choices[0]
+        if (['length', 'max_tokens'].includes(choice?.finish_reason ?? '')) {
           throw new Error('AI 输出达到长度上限，结果不完整，请重试。')
         }
         const content = choice?.message?.content
-        if (typeof content !== 'string') throw new Error('AI 未返回有效的 JSON 解释。')
+        if (typeof content !== 'string') throw new Error('AI 未返回有效内容。')
         const event: AiStreamEvent = { type: 'delta', text: content }
         send(event)
         yield event
+        const done: AiStreamEvent = { type: 'done' }
+        send(done)
+        yield done
         return
       }
-      if (!response.body) throw new Error('服务没有返回可读取的响应。')
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let completed = false
-      try {
-        while (true) {
-          const { done, value } = await reader.read()
-          buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done })
-          const lines = buffer.split(/\r?\n/)
-          buffer = lines.pop() ?? ''
-          for (const line of lines) {
-            const event = parseStreamLine(line)
-            if (!event) continue
-            completed = event.type === 'done' || event.type === 'error'
-            send(event)
-            yield event
-          }
-          if (done) {
-            const finalEvent = parseStreamLine(buffer)
-            if (finalEvent) {
-              completed = finalEvent.type === 'done' || finalEvent.type === 'error'
-              send(finalEvent)
-              yield finalEvent
-            }
-            break
-          }
+      const stream = await client.chat.completions.create(
+        { ...completionBody, stream: true },
+        { signal: controller.signal }
+      )
+      for await (const chunk of stream) {
+        const choice = chunk.choices[0]
+        if (['length', 'max_tokens'].includes(choice?.finish_reason ?? '')) {
+          throw new Error('AI 输出达到长度上限，结果不完整，请重试。')
         }
-        if (!completed) {
-          const event: AiStreamEvent = { type: 'done' }
-          send(event)
-          yield event
-        }
-      } finally {
-        reader.releaseLock()
+        const content = choice?.delta.content
+        if (!content) continue
+        const event: AiStreamEvent = { type: 'delta', text: content }
+        send(event)
+        yield event
       }
+      const event: AiStreamEvent = { type: 'done' }
+      send(event)
+      yield event
     } catch (error) {
       if (controller.signal.aborted) return
       const event: AiStreamEvent = {
@@ -356,52 +358,4 @@ function validateMessages(messages: AiChatMessage[]): AiChatMessage[] {
     if (totalLength > 200_000) throw new Error('AI 对话内容过长。')
     return { role: message.role, content }
   })
-}
-
-function normalizeBaseUrl(value: string): string {
-  if (typeof value !== 'string') return ''
-  const normalized = value.trim().replace(/\/+$/, '')
-  if (!/^https?:\/\/[^\s]+$/i.test(normalized)) return ''
-  return normalized
-}
-
-function normalizeText(value: string, maxLength: number): string {
-  if (typeof value !== 'string') return ''
-  const normalized = value.trim()
-  return normalized.length <= maxLength ? normalized : ''
-}
-
-function parseStreamLine(line: string): AiStreamEvent | undefined {
-  if (!line.startsWith('data:')) return undefined
-  const data = line.slice(5).trim()
-  if (!data) return undefined
-  if (data === '[DONE]') return { type: 'done' }
-  try {
-    const value = JSON.parse(data) as {
-      choices?: Array<{ delta?: { content?: unknown }; finish_reason?: unknown }>
-      error?: { message?: unknown }
-    }
-    if (typeof value.error?.message === 'string')
-      return { type: 'error', message: value.error.message }
-    const finishReason = value.choices?.[0]?.finish_reason
-    if (finishReason === 'length' || finishReason === 'max_tokens') {
-      return { type: 'error', message: 'AI 输出达到长度上限，结果不完整，请重试。' }
-    }
-    const content = value.choices?.[0]?.delta?.content
-    if (typeof content === 'string' && content) return { type: 'delta', text: content }
-    if (finishReason) return { type: 'done' }
-  } catch {
-    return undefined
-  }
-  return undefined
-}
-
-function formatProviderError(status: number, response: string): string {
-  try {
-    const parsed = JSON.parse(response) as { error?: { message?: unknown } }
-    if (typeof parsed.error?.message === 'string') return parsed.error.message
-  } catch {
-    // Use the HTTP status below when the provider returned non-JSON text.
-  }
-  return `AI 服务请求失败（${status}）。`
 }

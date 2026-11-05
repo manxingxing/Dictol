@@ -14,6 +14,8 @@ import {
 import { TranslationCredentialStore } from './credentials'
 import { adapters } from './providers'
 import { isSystemTranslationAvailable } from './system'
+import { isAiProviderId, normalizeAiBaseUrl, parseAiExtraParams } from '../../shared/ai-settings'
+import { createOpenAiClient } from '../lib/openai-client'
 
 const REQUEST_TIMEOUT_MS = 120_000
 const SYSTEM_REQUEST_TIMEOUT_MS = 600_000
@@ -71,25 +73,43 @@ export class TranslationService {
       enabled: input.enabled,
       options: input.kind === 'system' ? {} : normalizeOptions(input.kind, input.options)
     }
-    if (input.kind !== 'system' && input.credentials && Object.keys(input.credentials).length > 0) {
-      const credentials = Object.fromEntries(
-        Object.entries(input.credentials)
-          .filter(
-            ([key, value]) =>
-              ['apiKey', 'accessKeyId', 'secretAccessKey', 'secretKey'].includes(key) &&
-              typeof value === 'string' &&
-              value.trim().length > 0
-          )
-          .map(([key, value]) => [key, value.trim()])
-      )
-      if (Object.keys(credentials).length > 0) this.credentials.save(input.id, credentials)
-    }
+    const endpointChanged =
+      input.kind === 'openai-compatible' &&
+      index >= 0 &&
+      normalizeAiBaseUrl(providers[index].options.baseUrl ?? '') !==
+        normalizeAiBaseUrl(provider.options.baseUrl)
     if (index >= 0) providers[index] = provider
     else providers.push(provider)
     this.appConfig.save({
       ...config,
       translation: { ...config.translation, providers }
     })
+    try {
+      if (
+        input.kind !== 'system' &&
+        input.credentials &&
+        Object.keys(input.credentials).length > 0
+      ) {
+        const credentials = Object.fromEntries(
+          Object.entries(input.credentials)
+            .filter(
+              ([key, value]) =>
+                ['apiKey', 'accessKeyId', 'secretAccessKey', 'secretKey'].includes(key) &&
+                typeof value === 'string' &&
+                value.trim().length > 0
+            )
+            .map(([key, value]) => [key, value.trim()])
+        )
+        if (Object.keys(credentials).length > 0)
+          this.credentials.save(input.id, credentials, endpointChanged)
+        else if (endpointChanged) this.credentials.delete(input.id)
+      } else if (endpointChanged) {
+        this.credentials.delete(input.id)
+      }
+    } catch (error) {
+      this.appConfig.save(config)
+      throw error
+    }
     return this.getConfig()
   }
 
@@ -146,8 +166,59 @@ export class TranslationService {
     const provider = config.translation.providers.find((item) => item.id === id)
     if (!provider) throw new Error('翻译服务不存在。')
     const credentials = this.credentials.get(provider.id)
+    await this.testProviderConfig(provider, credentials, config.translation.targetLanguage)
+  }
+
+  async listModels(input: { id: string; baseUrl: string; apiKey?: string }): Promise<string[]> {
+    const baseUrl = normalizeAiBaseUrl(input.baseUrl)
+    if (!baseUrl) throw new Error('请填写有效的服务地址。')
+    const apiKey = this.resolveDraftCredentials(input.id, baseUrl, input.apiKey).apiKey ?? ''
+    const page = await createOpenAiClient(baseUrl, apiKey, 30_000).models.list()
+    if (!Array.isArray(page.data) || page.data.some((model) => typeof model?.id !== 'string')) {
+      throw new Error('模型列表格式无效，仍可手动输入模型名称。')
+    }
+    return [...new Set(page.data.map((model) => model.id).filter(Boolean))].sort()
+  }
+
+  async testDraft(input: TranslationSaveProviderRequest): Promise<void> {
+    validateProvider(input)
+    if (input.kind !== 'openai-compatible') throw new Error('不支持的翻译服务。')
+    const provider = { ...input, options: normalizeOptions(input.kind, input.options) }
+    const credentials = this.resolveDraftCredentials(
+      input.id,
+      provider.options.baseUrl,
+      input.credentials?.apiKey
+    )
+    await this.testProviderConfig(
+      provider,
+      credentials,
+      this.appConfig.load().translation.targetLanguage
+    )
+  }
+
+  private resolveDraftCredentials(
+    id: string,
+    baseUrl: string,
+    apiKey?: string
+  ): Record<string, string> {
+    if (apiKey?.trim()) return { apiKey: apiKey.trim() }
+    const saved = this.appConfig
+      .load()
+      .translation.providers.find(
+        (provider) => provider.id === id && provider.kind === 'openai-compatible'
+      )
+    return saved && normalizeAiBaseUrl(saved.options.baseUrl ?? '') === normalizeAiBaseUrl(baseUrl)
+      ? this.credentials.get(id)
+      : {}
+  }
+
+  private async testProviderConfig(
+    provider: TranslationProviderConfig,
+    credentials: Record<string, string>,
+    defaultTarget: TranslationLanguage
+  ): Promise<void> {
     if (!this.isReady(provider, credentials)) throw new Error('请先完成服务配置。')
-    const targetLanguage = provider.kind === 'system' ? config.translation.targetLanguage : 'zh'
+    const targetLanguage = provider.kind === 'system' ? defaultTarget : 'zh'
     const sourceLanguage = targetLanguage === 'en' ? 'zh' : 'en'
     const verificationText = sourceLanguage === 'zh' ? '你好' : 'Hello'
     const controller = new AbortController()
@@ -160,7 +231,7 @@ export class TranslationService {
         config: provider,
         credentials,
         request: {
-          providerId: id,
+          providerId: provider.id,
           text: provider.kind === 'youdao-web' ? 'This is a test.' : verificationText,
           sourceLanguage,
           targetLanguage
@@ -279,7 +350,7 @@ function validateProvider(value: TranslationSaveProviderRequest): void {
   if (value.kind === 'system' && process.platform !== 'darwin') {
     throw new Error('系统翻译仅支持 macOS。')
   }
-  if (typeof value.name !== 'string' || !value.name.trim() || value.name.length > 100) {
+  if (typeof value.name !== 'string' || !value.name.trim()) {
     throw new Error('请填写服务名称。')
   }
   if (typeof value.enabled !== 'boolean' || !value.options || typeof value.options !== 'object') {
@@ -289,8 +360,11 @@ function validateProvider(value: TranslationSaveProviderRequest): void {
     if (!value.options.model?.trim() || !value.options.baseUrl?.trim()) {
       throw new Error('请填写服务地址和模型。')
     }
-    const url = new URL(value.options.baseUrl)
-    if (!['https:', 'http:'].includes(url.protocol)) throw new Error('服务地址必须使用 HTTP(S)。')
+    if (!normalizeAiBaseUrl(value.options.baseUrl))
+      throw new Error('请填写有效的 HTTP 或 HTTPS 服务地址。')
+    if (value.options.providerId && !isAiProviderId(value.options.providerId))
+      throw new Error('服务商无效。')
+    parseAiExtraParams(value.options.extraParams ?? '')
   }
   if (value.kind === 'microsoft' && value.options.endpoint) {
     const url = new URL(value.options.endpoint)
@@ -312,14 +386,17 @@ function normalizeOptions(
     volcano: [],
     baidu: ['appId'],
     deepl: ['plan'],
-    'openai-compatible': ['baseUrl', 'model'],
+    'openai-compatible': ['baseUrl', 'model', 'providerId', 'extraParams'],
     'youdao-web': [],
     'google-web': [],
     'bing-web': []
   }
   const options: Record<string, string> = {}
   for (const [key, item] of Object.entries(value)) {
-    if (allowed[kind].includes(key) && typeof item === 'string' && item.length <= 500) {
+    if (
+      allowed[kind].includes(key) &&
+      typeof item === 'string'
+    ) {
       options[key] = item.trim()
     }
   }

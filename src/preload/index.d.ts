@@ -1,3 +1,8 @@
+import type {
+  AiListModelsRequest,
+  AiLookupPublicConfig,
+  AiSaveConfigRequest
+} from '../shared/ai-ipc'
 import type { WordCaptureStatus, WordCaptureShortcutResult } from '../main/controller/word-capture'
 import type { ToastPayload } from '../shared/notification'
 import type {
@@ -457,27 +462,10 @@ declare global {
         onVoicesChanged: (callback: () => void) => () => void
       }
       aiLookup: {
-        getConfig: () => Promise<{
-          enabled: boolean
-          provider: 'openai-compatible'
-          baseUrl: string
-          model: string
-          hasApiKey: boolean
-        } | null>
-        saveConfig: (request: {
-          enabled: boolean
-          provider: 'openai-compatible'
-          baseUrl: string
-          model: string
-          apiKey?: string
-        }) => Promise<{
-          enabled: boolean
-          provider: 'openai-compatible'
-          baseUrl: string
-          model: string
-          hasApiKey: boolean
-        } | null>
-        testConfig: () => Promise<void>
+        getConfig: () => Promise<AiLookupPublicConfig | null>
+        saveConfig: (request: AiSaveConfigRequest) => Promise<AiLookupPublicConfig | null>
+        listModels: (request: AiListModelsRequest) => Promise<string[]>
+        testConfig: (request?: AiSaveConfigRequest) => Promise<void>
         startChat: (request: {
           messages: Array<{ role: 'user' | 'assistant'; content: string }>
           promptTarget?: 'sidebar'
@@ -514,6 +502,8 @@ declare global {
           language: TranslationLanguage
         ) => Promise<TranslationPublicConfig | null>
         testProvider: (id: string) => Promise<void>
+        listModels: (input: { id: string; baseUrl: string; apiKey?: string }) => Promise<string[]>
+        testDraft: (input: TranslationSaveProviderRequest) => Promise<void>
         start: (request: TranslationRequest) => Promise<string | null>
         cancel: (requestId: string) => void
         onEvent: (callback: (event: TranslationEvent) => void) => () => void

@@ -6,6 +6,7 @@ import type { TtsConfig, TtsCredentialsStatus, TtsSaveSettingsRequest } from '..
 import type {
   AiChatRequest,
   AiLookupPublicConfig,
+  AiListModelsRequest,
   AiSaveConfigRequest,
   AiStreamEvent
 } from '../shared/ai-ipc'
@@ -536,7 +537,10 @@ const api = Object.freeze({
       ipcRenderer.invoke('ai-lookup:get-config'),
     saveConfig: (request: AiSaveConfigRequest): Promise<AiLookupPublicConfig | null> =>
       ipcRenderer.invoke('ai-lookup:save-config', request),
-    testConfig: (): Promise<void> => ipcRenderer.invoke('ai-lookup:test-config'),
+    listModels: (request: AiListModelsRequest): Promise<string[]> =>
+      ipcRenderer.invoke('ai-lookup:list-models', request),
+    testConfig: (request?: AiSaveConfigRequest): Promise<void> =>
+      ipcRenderer.invoke('ai-lookup:test-config', request),
     startChat: (request: AiChatRequest): Promise<string | null> =>
       ipcRenderer.invoke('ai-lookup:start-chat', request),
     cancel: (requestId: string): void => ipcRenderer.send('ai-lookup:cancel', requestId),
@@ -570,6 +574,10 @@ const api = Object.freeze({
       ipcRenderer.invoke('translation:set-target-language', language),
     testProvider: (id: string): Promise<void> =>
       ipcRenderer.invoke('translation:test-provider', id),
+    listModels: (input: { id: string; baseUrl: string; apiKey?: string }): Promise<string[]> =>
+      ipcRenderer.invoke('translation:list-models', input),
+    testDraft: (input: TranslationSaveProviderRequest): Promise<void> =>
+      ipcRenderer.invoke('translation:test-draft', input),
     start: (request: TranslationRequest): Promise<string | null> =>
       ipcRenderer.invoke('translation:start', request),
     cancel: (requestId: string): void => ipcRenderer.send('translation:cancel', requestId),

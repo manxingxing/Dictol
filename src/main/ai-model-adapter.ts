@@ -1,14 +1,22 @@
+import type {
+  ChatCompletionCreateParamsBase,
+  ChatCompletionMessageParam
+} from 'openai/resources/chat/completions'
+import { parseAiExtraParams } from '../shared/ai-settings'
+
 export type AiCompletionRequest = {
   model: string
-  messages: readonly unknown[]
-  stream: boolean
+  messages: ChatCompletionMessageParam[]
+  extraParams?: string
+  stream?: boolean
 }
 
-export function createAiCompletionBody(request: AiCompletionRequest): Record<string, unknown> {
+export function createAiCompletionBody(
+  request: AiCompletionRequest
+): ChatCompletionCreateParamsBase {
   const model = request.model.trim()
-  const body: Record<string, unknown> = {
+  const body: ChatCompletionCreateParamsBase & { thinking?: { type: string } } = {
     model,
-    stream: request.stream,
     messages: request.messages
   }
   if (isDeepSeekModel(model)) {
@@ -19,7 +27,7 @@ export function createAiCompletionBody(request: AiCompletionRequest): Record<str
   if (!isGeminiModel(model) && !isOpenAiReasoningModel(model)) {
     body.temperature = 0.3
   }
-  return body
+  return { ...body, stream: request.stream, ...parseAiExtraParams(request.extraParams ?? '') }
 }
 
 function isDeepSeekModel(model: string): boolean {

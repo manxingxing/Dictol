@@ -6,6 +6,8 @@ import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
 import type { ThemeMode } from '../shared/theme-mode'
 import type { TtsConfig } from '../shared/tts'
+import type { AiLookupConfig } from '../shared/ai-ipc'
+import { isAiProviderId } from '../shared/ai-settings'
 import {
   SYSTEM_TRANSLATION_PROVIDER_ID,
   TRANSLATION_LANGUAGES,
@@ -35,12 +37,7 @@ export type AppConfig = {
     dictionaryGroupId: number | undefined
     excludedPrograms: string[]
   }
-  aiLookup: {
-    enabled: boolean
-    provider: 'openai-compatible'
-    baseUrl: string
-    model: string
-  }
+  aiLookup: AiLookupConfig
   tts: TtsConfig
   translation: TranslationConfig
 }
@@ -69,8 +66,10 @@ const DEFAULT_CONFIG: AppConfig = {
   aiLookup: {
     enabled: false,
     provider: 'openai-compatible',
-    baseUrl: 'https://api.openai.com/v1',
-    model: ''
+    providerId: 'custom',
+    baseUrl: '',
+    model: '',
+    extraParams: ''
   },
   tts: {
     engine: 'system',
@@ -186,8 +185,10 @@ function parseConfig(value: unknown): AppConfig {
     aiLookup?: {
       enabled?: unknown
       provider?: unknown
+      providerId?: unknown
       baseUrl?: unknown
       model?: unknown
+      extraParams?: unknown
     }
     tts?: {
       engine?: unknown
@@ -256,17 +257,20 @@ function parseConfig(value: unknown): AppConfig {
           ? candidate.aiLookup.enabled
           : DEFAULT_CONFIG.aiLookup.enabled,
       provider: 'openai-compatible',
-      baseUrl: normalizeConfigString(
-        candidate.aiLookup?.baseUrl,
-        DEFAULT_CONFIG.aiLookup.baseUrl,
-        500
-      ),
-      model: normalizeConfigString(candidate.aiLookup?.model, DEFAULT_CONFIG.aiLookup.model, 200)
+      providerId: isAiProviderId(candidate.aiLookup?.providerId)
+        ? candidate.aiLookup.providerId
+        : 'custom',
+      baseUrl: normalizeConfigString(candidate.aiLookup?.baseUrl, DEFAULT_CONFIG.aiLookup.baseUrl),
+      model: normalizeConfigString(candidate.aiLookup?.model, DEFAULT_CONFIG.aiLookup.model),
+      extraParams:
+        typeof candidate.aiLookup?.extraParams === 'string' ? candidate.aiLookup.extraParams : ''
     },
     tts: {
       engine:
-        (typeof candidate.tts?.engine === 'string') &&
-        ['openai-compatible', 'elevenlabs', 'azure-speech', 'fish-audio'].includes(candidate.tts.engine)
+        typeof candidate.tts?.engine === 'string' &&
+        ['openai-compatible', 'elevenlabs', 'azure-speech', 'fish-audio'].includes(
+          candidate.tts.engine
+        )
           ? (candidate.tts.engine as TtsConfig['engine'])
           : 'system',
       systemVoiceUri:
@@ -363,7 +367,6 @@ function normalizeTranslationProviders(value: unknown): TranslationProviderConfi
   if (!Array.isArray(value)) return cloneConfig(DEFAULT_CONFIG).translation.providers
   const providers: TranslationProviderConfig[] = []
   const seen = new Set<string>()
-  let customCount = 0
   const kinds: TranslationProviderKind[] = [
     'system',
     'google',
@@ -390,10 +393,6 @@ function normalizeTranslationProviders(value: unknown): TranslationProviderConfi
     if (provider.kind !== 'system' && provider.id === SYSTEM_TRANSLATION_PROVIDER_ID) continue
     if (provider.kind === 'system' && process.platform !== 'darwin') continue
     if (seen.has(provider.id)) continue
-    if (provider.kind !== 'system') {
-      if (customCount >= 20) continue
-      customCount += 1
-    }
     seen.add(provider.id)
     const options: Record<string, string> = {}
     const allowedOptions: Record<TranslationProviderKind, string[]> = {
@@ -403,7 +402,7 @@ function normalizeTranslationProviders(value: unknown): TranslationProviderConfi
       volcano: [],
       baidu: ['appId'],
       deepl: ['plan'],
-      'openai-compatible': ['baseUrl', 'model'],
+      'openai-compatible': ['baseUrl', 'model', 'providerId', 'extraParams'],
       'youdao-web': [],
       'google-web': [],
       'bing-web': []
@@ -412,8 +411,7 @@ function normalizeTranslationProviders(value: unknown): TranslationProviderConfi
       for (const [key, option] of Object.entries(provider.options)) {
         if (
           allowedOptions[provider.kind as TranslationProviderKind].includes(key) &&
-          typeof option === 'string' &&
-          option.length <= 500
+          typeof option === 'string'
         ) {
           options[key] = option.trim()
         }
@@ -421,9 +419,7 @@ function normalizeTranslationProviders(value: unknown): TranslationProviderConfi
     }
     const kind = provider.kind as TranslationProviderKind
     const name =
-      typeof provider.name === 'string' && provider.name.trim() && provider.name.length <= 100
-        ? provider.name.trim()
-        : kind
+      typeof provider.name === 'string' && provider.name.trim() ? provider.name.trim() : kind
     const renamed = renamedWebProviders[kind]
     providers.push({
       id: provider.id,
@@ -445,10 +441,12 @@ function normalizeTranslationProviders(value: unknown): TranslationProviderConfi
   return providers
 }
 
-function normalizeConfigString(value: unknown, fallback: string, maxLength: number): string {
+function normalizeConfigString(value: unknown, fallback: string, maxLength?: number): string {
   if (typeof value !== 'string') return fallback
   const normalized = value.trim()
-  return normalized && normalized.length <= maxLength ? normalized : fallback
+  return normalized && (maxLength === undefined || normalized.length <= maxLength)
+    ? normalized
+    : fallback
 }
 
 function normalizeExcludedPrograms(value: unknown): string[] {

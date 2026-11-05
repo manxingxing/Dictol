@@ -1,4 +1,5 @@
 import { createAiCompletionBody } from '../ai-model-adapter'
+import { createOpenAiClient } from '../lib/openai-client'
 import type {
   TranslationProviderConfig,
   TranslationProviderKind,
@@ -150,71 +151,38 @@ async function translateWithOpenAiCompatible({
       ? '自动识别的源语言'
       : TRANSLATION_LANGUAGE_NAMES[request.sourceLanguage]
   const target = TRANSLATION_LANGUAGE_NAMES[request.targetLanguage]
-  const response = await fetch(`${config.options.baseUrl.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(credentials.apiKey ? { Authorization: `Bearer ${credentials.apiKey}` } : {})
-    },
-    body: JSON.stringify(
-      createAiCompletionBody({
-        model: config.options.model,
-        stream: true,
-        messages: [
-          {
-            role: 'system',
-            content: getTranslationSystemPrompt(source, target)
-          },
-          { role: 'user', content: request.text }
-        ]
-      })
-    ),
-    signal
+  const client = createOpenAiClient(config.options.baseUrl.replace(/\/$/, ''), credentials.apiKey)
+  const body = createAiCompletionBody({
+    model: config.options.model,
+    messages: [
+      { role: 'system', content: getTranslationSystemPrompt(source, target) },
+      { role: 'user', content: request.text }
+    ],
+    stream: true,
+    extraParams: config.options.extraParams
   })
-  if (!response.ok) {
-    const message = await response.text()
-    throw new Error(`模型翻译请求失败（${response.status}）：${message.slice(0, 300)}`)
-  }
-  if (!response.body) throw new Error('模型没有返回可读取的响应。')
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
   let text = ''
-  let completed = false
-  while (true) {
-    const { done, value } = await reader.read()
-    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done })
-    const lines = buffer.split(/\r?\n/)
-    buffer = lines.pop() ?? ''
-    if (done && buffer) {
-      lines.push(buffer)
-      buffer = ''
-    }
-    for (const line of lines) {
-      if (!line.startsWith('data:')) continue
-      const data = line.slice(5).trim()
-      if (data === '[DONE]') {
-        completed = true
-        continue
-      }
-      if (!data) continue
-      const event = JSON.parse(data) as {
-        error?: { message?: string }
-        choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>
-      }
-      if (event.error) throw new Error(event.error.message || '模型翻译失败。')
-      const choice = event.choices?.[0]
-      if (choice?.finish_reason === 'length') throw new Error('模型输出达到长度上限，译文不完整。')
-      if (choice?.finish_reason) completed = true
-      const delta = choice?.delta?.content
-      if (delta) {
-        text += delta
-        onDelta(delta)
-      }
-    }
-    if (done) break
+  if (!body.stream) {
+    const completion = await client.chat.completions.create({ ...body, stream: false }, { signal })
+    const choice = completion.choices[0]
+    if (choice?.finish_reason === 'length') throw new Error('模型输出达到长度上限，译文不完整。')
+    text = choice?.message.content ?? ''
+    if (!text.trim()) throw new Error('模型翻译未正常完成。')
+    onDelta(text)
+    return { text }
   }
-  if (!completed || !text.trim()) throw new Error('模型翻译未正常完成。')
+  const stream = await client.chat.completions.create({ ...body, stream: true }, { signal })
+  for await (const chunk of stream) {
+    const choice = chunk.choices[0]
+    if (choice?.finish_reason === 'length') throw new Error('模型输出达到长度上限，译文不完整。')
+    const delta = choice?.delta.content
+    if (delta) {
+      text += delta
+      onDelta(delta)
+    }
+  }
+  signal.throwIfAborted()
+  if (!text.trim()) throw new Error('模型翻译未正常完成。')
   return { text }
 }
 

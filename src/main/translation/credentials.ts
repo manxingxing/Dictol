@@ -13,9 +13,9 @@ export class TranslationCredentialStore {
     return { ...this.read()[providerId] }
   }
 
-  save(providerId: string, fields: Record<string, string>): void {
+  save(providerId: string, fields: Record<string, string>, replace = false): void {
     const all = this.read()
-    all[providerId] = { ...all[providerId], ...fields }
+    all[providerId] = { ...(replace ? {} : all[providerId]), ...fields }
     this.write(all)
   }
 

@@ -30,6 +30,8 @@ export class TranslationController extends BaseController {
     ipcMain.handle('translation:reorder-providers', this.reorderProviders)
     ipcMain.handle('translation:set-target-language', this.setTargetLanguage)
     ipcMain.handle('translation:test-provider', this.testProvider)
+    ipcMain.handle('translation:list-models', this.listModels)
+    ipcMain.handle('translation:test-draft', this.testDraft)
     ipcMain.handle('translation:selection-shortcut-status', (event) => {
       if (!this.isMainSender(event.sender)) return null
       return this.getSelectionShortcutStatus()
@@ -159,6 +161,29 @@ export class TranslationController extends BaseController {
   private readonly testProvider = async (event: IpcMainInvokeEvent, id: string): Promise<void> => {
     if (!this.isMainSender(event.sender)) return
     await this.runtime.translationService.testProvider(id)
+  }
+
+  private readonly listModels = async (
+    event: IpcMainInvokeEvent,
+    input: { id: string; baseUrl: string; apiKey?: string }
+  ): Promise<string[]> => {
+    if (!this.isMainSender(event.sender)) return []
+    if (
+      !input ||
+      typeof input.id !== 'string' ||
+      typeof input.baseUrl !== 'string' ||
+      (input.apiKey !== undefined && typeof input.apiKey !== 'string')
+    )
+      throw new Error('模型列表请求格式无效。')
+    return this.runtime.translationService.listModels(input)
+  }
+
+  private readonly testDraft = async (
+    event: IpcMainInvokeEvent,
+    input: TranslationSaveProviderRequest
+  ): Promise<void> => {
+    if (!this.isMainSender(event.sender)) return
+    await this.runtime.translationService.testDraft(input)
   }
 
   private readonly start = (

@@ -1,8 +1,23 @@
 import { useEffect, useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { GripVertical, LoaderCircle, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { AiModelSelect } from '@/components/settings/AiModelSelect'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
+import {
+  AI_PROVIDER_PRESETS,
+  isAiProviderId,
+  normalizeAiBaseUrl,
+  parseAiExtraParams
+} from '../../../../shared/ai-settings'
 import { Switch } from '@/components/ui/switch'
 import {
   DropdownMenu,
@@ -13,6 +28,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
@@ -91,7 +107,12 @@ export function TranslationSettingsPage(): React.JSX.Element {
         kind === 'deepl'
           ? { plan: 'free' }
           : kind === 'openai-compatible'
-            ? { baseUrl: 'https://api.openai.com/v1', model: '' }
+            ? {
+                providerId: 'custom',
+                baseUrl: 'https://api.openai.com/v1',
+                model: '',
+                extraParams: ''
+              }
             : {},
       credentials: {}
     }
@@ -332,151 +353,377 @@ export function TranslationSettingsPage(): React.JSX.Element {
         }}
         open={Boolean(draft)}
       >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>配置翻译服务</DialogTitle>
-          </DialogHeader>
-          {draft && (
-            <div className="max-h-[60dvh] space-y-4 overflow-y-auto py-2">
-              <label className="block space-y-1 text-sm">
-                <span>名称</span>
-                <Input
-                  onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-                  value={draft.name}
-                />
-              </label>
-              {draft.kind === 'microsoft' && (
-                <>
-                  <label className="block space-y-1 text-sm">
-                    <span>Region（区域资源必填）</span>
-                    <Input
-                      onChange={(event) => updateOption('region', event.target.value)}
-                      placeholder="例如 eastasia"
-                      value={draft.options.region ?? ''}
-                    />
-                  </label>
-                  <label className="block space-y-1 text-sm">
-                    <span>服务地址（可选）</span>
-                    <Input
-                      onChange={(event) => updateOption('endpoint', event.target.value)}
-                      placeholder="https://api.cognitive.microsofttranslator.com"
-                      value={draft.options.endpoint ?? ''}
-                    />
-                  </label>
-                </>
-              )}
-              {draft.kind === 'deepl' && (
+        {draft?.kind === 'openai-compatible' ? (
+          <OpenAiTranslationDialog
+            draft={draft}
+            setDraft={setDraft}
+            saved={config?.providers.find((provider) => provider.id === draft.id)}
+            error={error}
+            setError={setError}
+            saving={Boolean(busyOperation)}
+            onSave={() => void saveDraft()}
+            onClose={() => setDraft(null)}
+          />
+        ) : (
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>配置翻译服务</DialogTitle>
+            </DialogHeader>
+            {draft && (
+              <div className="max-h-[60dvh] space-y-4 overflow-y-auto py-2">
                 <label className="block space-y-1 text-sm">
-                  <span>API 套餐</span>
-                  <select
-                    className="h-9 w-full rounded-md border border-input bg-background px-3"
-                    onChange={(event) => updateOption('plan', event.target.value)}
-                    value={draft.options.plan ?? 'free'}
-                  >
-                    <option value="free">API Free</option>
-                    <option value="pro">API Pro</option>
-                  </select>
+                  <span>名称</span>
+                  <Input
+                    onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                    value={draft.name}
+                  />
                 </label>
-              )}
-              {draft.kind === 'baidu' && (
-                <>
-                  <p className="text-xs text-muted-foreground">
-                    请先在百度翻译开放平台开通通用文本翻译 API。
+                {draft.kind === 'microsoft' && (
+                  <>
+                    <label className="block space-y-1 text-sm">
+                      <span>Region（区域资源必填）</span>
+                      <Input
+                        onChange={(event) => updateOption('region', event.target.value)}
+                        placeholder="例如 eastasia"
+                        value={draft.options.region ?? ''}
+                      />
+                    </label>
+                    <label className="block space-y-1 text-sm">
+                      <span>服务地址（可选）</span>
+                      <Input
+                        onChange={(event) => updateOption('endpoint', event.target.value)}
+                        placeholder="https://api.cognitive.microsofttranslator.com"
+                        value={draft.options.endpoint ?? ''}
+                      />
+                    </label>
+                  </>
+                )}
+                {draft.kind === 'deepl' && (
+                  <label className="block space-y-1 text-sm">
+                    <span>API 套餐</span>
+                    <select
+                      className="h-9 w-full rounded-md border border-input bg-background px-3"
+                      onChange={(event) => updateOption('plan', event.target.value)}
+                      value={draft.options.plan ?? 'free'}
+                    >
+                      <option value="free">API Free</option>
+                      <option value="pro">API Pro</option>
+                    </select>
+                  </label>
+                )}
+                {draft.kind === 'baidu' && (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      请先在百度翻译开放平台开通通用文本翻译 API。
+                    </p>
+                    <label className="block space-y-1 text-sm">
+                      <span>APP ID</span>
+                      <Input
+                        onChange={(event) => updateOption('appId', event.target.value)}
+                        placeholder="百度翻译开放平台的 APP ID"
+                        value={draft.options.appId ?? ''}
+                      />
+                    </label>
+                  </>
+                )}
+                {draft.kind === 'volcano' ? (
+                  <>
+                    <label className="block space-y-1 text-sm">
+                      <span>Access Key ID</span>
+                      <Input
+                        autoComplete="off"
+                        onChange={(event) => updateCredential('accessKeyId', event.target.value)}
+                        placeholder="留空保留已保存的密钥"
+                        type="password"
+                        value={draft.credentials?.accessKeyId ?? ''}
+                      />
+                    </label>
+                    <label className="block space-y-1 text-sm">
+                      <span>Secret Access Key</span>
+                      <Input
+                        autoComplete="off"
+                        onChange={(event) =>
+                          updateCredential('secretAccessKey', event.target.value)
+                        }
+                        placeholder="留空保留已保存的密钥"
+                        type="password"
+                        value={draft.credentials?.secretAccessKey ?? ''}
+                      />
+                    </label>
+                  </>
+                ) : draft.kind === 'baidu' ? (
+                  <label className="block space-y-1 text-sm">
+                    <span>密钥</span>
+                    <Input
+                      autoComplete="off"
+                      onChange={(event) => updateCredential('secretKey', event.target.value)}
+                      placeholder="留空保留已保存的密钥"
+                      type="password"
+                      value={draft.credentials?.secretKey ?? ''}
+                    />
+                  </label>
+                ) : (
+                  <label className="block space-y-1 text-sm">
+                    <span>API Key</span>
+                    <Input
+                      autoComplete="off"
+                      onChange={(event) => updateCredential('apiKey', event.target.value)}
+                      placeholder="留空保留已保存的密钥"
+                      type="password"
+                      value={draft.credentials?.apiKey ?? ''}
+                    />
+                  </label>
+                )}
+                {error && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {error}
                   </p>
-                  <label className="block space-y-1 text-sm">
-                    <span>APP ID</span>
-                    <Input
-                      onChange={(event) => updateOption('appId', event.target.value)}
-                      placeholder="百度翻译开放平台的 APP ID"
-                      value={draft.options.appId ?? ''}
-                    />
-                  </label>
-                </>
-              )}
-              {draft.kind === 'openai-compatible' && (
-                <>
-                  <label className="block space-y-1 text-sm">
-                    <span>服务地址</span>
-                    <Input
-                      onChange={(event) => updateOption('baseUrl', event.target.value)}
-                      placeholder="https://api.openai.com/v1"
-                      value={draft.options.baseUrl ?? ''}
-                    />
-                  </label>
-                  <label className="block space-y-1 text-sm">
-                    <span>模型</span>
-                    <Input
-                      onChange={(event) => updateOption('model', event.target.value)}
-                      value={draft.options.model ?? ''}
-                    />
-                  </label>
-                </>
-              )}
-              {draft.kind === 'volcano' ? (
-                <>
-                  <label className="block space-y-1 text-sm">
-                    <span>Access Key ID</span>
-                    <Input
-                      autoComplete="off"
-                      onChange={(event) => updateCredential('accessKeyId', event.target.value)}
-                      placeholder="留空保留已保存的密钥"
-                      type="password"
-                      value={draft.credentials?.accessKeyId ?? ''}
-                    />
-                  </label>
-                  <label className="block space-y-1 text-sm">
-                    <span>Secret Access Key</span>
-                    <Input
-                      autoComplete="off"
-                      onChange={(event) => updateCredential('secretAccessKey', event.target.value)}
-                      placeholder="留空保留已保存的密钥"
-                      type="password"
-                      value={draft.credentials?.secretAccessKey ?? ''}
-                    />
-                  </label>
-                </>
-              ) : draft.kind === 'baidu' ? (
-                <label className="block space-y-1 text-sm">
-                  <span>密钥</span>
-                  <Input
-                    autoComplete="off"
-                    onChange={(event) => updateCredential('secretKey', event.target.value)}
-                    placeholder="留空保留已保存的密钥"
-                    type="password"
-                    value={draft.credentials?.secretKey ?? ''}
-                  />
-                </label>
-              ) : (
-                <label className="block space-y-1 text-sm">
-                  <span>
-                    API Key{draft.kind === 'openai-compatible' ? '（本地模型可留空）' : ''}
-                  </span>
-                  <Input
-                    autoComplete="off"
-                    onChange={(event) => updateCredential('apiKey', event.target.value)}
-                    placeholder="留空保留已保存的密钥"
-                    type="password"
-                    value={draft.credentials?.apiKey ?? ''}
-                  />
-                </label>
-              )}
-              {error && (
-                <p className="text-sm text-destructive" role="alert">
-                  {error}
-                </p>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button onClick={() => setDraft(null)} variant="outline">
-              取消
-            </Button>
-            <Button disabled={Boolean(busyOperation)} onClick={() => void saveDraft()}>
-              {busyOperation ? '保存中…' : '保存'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+                )}
+              </div>
+            )}
+            <DialogFooter>
+              <Button onClick={() => setDraft(null)} variant="outline">
+                取消
+              </Button>
+              <Button disabled={Boolean(busyOperation)} onClick={() => void saveDraft()}>
+                {busyOperation ? '保存中…' : '保存'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
       </Dialog>
     </SettingsSection>
+  )
+}
+
+function OpenAiTranslationDialog({
+  draft,
+  setDraft,
+  saved,
+  error,
+  setError,
+  saving,
+  onSave,
+  onClose
+}: {
+  draft: TranslationSaveProviderRequest
+  setDraft: React.Dispatch<React.SetStateAction<TranslationSaveProviderRequest | null>>
+  saved?: TranslationPublicProvider
+  error: string
+  setError: (value: string) => void
+  saving: boolean
+  onSave: () => void
+  onClose: () => void
+}): React.JSX.Element {
+  const [extraOpen, setExtraOpen] = useState(false)
+  const test = useMutation({
+    mutationFn: (input: TranslationSaveProviderRequest) =>
+      window.dictol.translation.testDraft(input),
+    gcTime: 0
+  })
+  const baseUrl = normalizeAiBaseUrl(draft.options.baseUrl ?? '')
+  const savedKey = Boolean(
+    saved?.hasCredentials && baseUrl && baseUrl === normalizeAiBaseUrl(saved.options.baseUrl ?? '')
+  )
+  const busy = saving || test.isPending
+  const providerId = isAiProviderId(draft.options.providerId) ? draft.options.providerId : 'custom'
+  const update = (options: Record<string, string>, apiKey?: string): void => {
+    setDraft((current) =>
+      current
+        ? {
+            ...current,
+            options: { ...current.options, ...options },
+            credentials:
+              apiKey === undefined ? current.credentials : { ...current.credentials, apiKey }
+          }
+        : current
+    )
+  }
+  const validate = (): boolean => {
+    setError('')
+    if (!draft.name.trim()) {
+      setError('请填写服务名称。')
+      return false
+    }
+    if (!baseUrl) {
+      setError('请填写有效的 HTTP 或 HTTPS 服务地址。')
+      return false
+    }
+    if (!draft.options.model?.trim()) {
+      setError('请选择或输入模型名称。')
+      return false
+    }
+    try {
+      parseAiExtraParams(draft.options.extraParams ?? '')
+      return true
+    } catch (cause) {
+      setExtraOpen(true)
+      setError(cause instanceof Error ? cause.message : '额外参数无效。')
+      return false
+    }
+  }
+  return (
+    <DialogContent
+      showCloseButton={!busy}
+      className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-2xl"
+      onInteractOutside={(event) => {
+        if (busy) event.preventDefault()
+      }}
+      onEscapeKeyDown={(event) => {
+        if (busy) event.preventDefault()
+      }}
+    >
+      <DialogHeader variant="section">
+        <DialogTitle>配置翻译服务</DialogTitle>
+        <DialogDescription>连接兼容 OpenAI Chat Completions 的模型服务</DialogDescription>
+      </DialogHeader>
+      <div className="min-h-0 overflow-y-auto px-6 py-4">
+        <fieldset disabled={busy} className="min-w-0 space-y-4">
+          <label className="block space-y-1.5 text-sm">
+            <span className="font-medium">名称</span>
+            <Input
+              value={draft.name}
+              onChange={(event) =>
+                setDraft((current) =>
+                  current ? { ...current, name: event.target.value } : current
+                )
+              }
+            />
+          </label>
+          <div className="space-y-1.5 text-sm">
+            <label htmlFor="translation-ai-provider" className="font-medium">
+              服务商
+            </label>
+            <Select
+              value={providerId}
+              onValueChange={(id) => {
+                if (!isAiProviderId(id)) return
+                const preset = AI_PROVIDER_PRESETS.find((item) => item.id === id)
+                update(
+                  {
+                    providerId: id,
+                    baseUrl: preset?.baseUrl ?? draft.options.baseUrl,
+                    model: id === 'custom' ? draft.options.model : ''
+                  },
+                  ''
+                )
+                setError('')
+              }}
+            >
+              <SelectTrigger id="translation-ai-provider">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AI_PROVIDER_PRESETS.map((preset) => (
+                  <SelectItem key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </SelectItem>
+                ))}
+                <SelectItem value="custom">自定义</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {providerId === 'custom' ? (
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium">服务地址（Base URL）</span>
+              <Input
+                type="url"
+                placeholder="https://api.example.com/v1"
+                value={draft.options.baseUrl ?? ''}
+                onChange={(event) => update({ baseUrl: event.target.value }, '')}
+              />
+            </label>
+          ) : (
+            <p className="break-all text-xs text-muted-foreground">
+              服务地址：{draft.options.baseUrl}
+            </p>
+          )}
+          <label className="block space-y-1.5 text-sm">
+            <span className="font-medium">API Key</span>
+            <Input
+              autoComplete="off"
+              type="password"
+              value={draft.credentials?.apiKey ?? ''}
+              placeholder={savedKey ? '已配置，留空以保留' : 'API Key (本地服务可留空)'}
+              onChange={(event) => update({}, event.target.value)}
+            />
+            <span className="block text-xs leading-5 text-muted-foreground">
+              API Key 使用系统安全存储加密。更换服务地址后需重新填写。
+            </span>
+          </label>
+          <div className="space-y-1.5 text-sm">
+            <label htmlFor="ai-model" className="font-medium">
+              模型
+            </label>
+            <AiModelSelect
+              translationProviderId={draft.id}
+              baseUrl={baseUrl}
+              apiKey={draft.credentials?.apiKey ?? ''}
+              hasSavedKey={savedKey}
+              value={draft.options.model ?? ''}
+              onChange={(model) => update({ model })}
+            />
+          </div>
+          <details
+            open={extraOpen}
+            onToggle={(event) => setExtraOpen(event.currentTarget.open)}
+            className="rounded-lg border border-border px-3 py-2"
+          >
+            <summary className="cursor-pointer text-sm font-medium">额外请求参数（JSON）</summary>
+            <label className="mt-3 block space-y-2">
+              <span className="block text-xs leading-5 text-muted-foreground">
+                在请求前按顶层字段合并，同名参数覆盖默认值；嵌套对象整体替换。留空使用默认参数。
+              </span>
+              <textarea
+                aria-label="额外请求参数（JSON）"
+                spellCheck={false}
+                rows={6}
+                className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 font-mono text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+                placeholder={'{\n  "temperature": 0.5,\n  "max_tokens": 2048\n}'}
+                value={draft.options.extraParams ?? ''}
+                onChange={(event) => update({ extraParams: event.target.value })}
+              />
+            </label>
+          </details>
+        </fieldset>
+        {error && (
+          <p
+            className="mt-4 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+            role="alert"
+          >
+            {error}
+          </p>
+        )}
+      </div>
+      <DialogFooter className="justify-end border-t border-border bg-muted/20 px-6 py-4 sm:items-center">
+        <Button
+          size="sm"
+          variant="outline"
+          className="sm:mr-auto"
+          disabled={busy}
+          onClick={() => {
+            if (validate())
+              test.mutate(draft, {
+                onSuccess: () => toast.success('翻译服务验证成功。'),
+                onError: (cause) => setError(cause.message)
+              })
+          }}
+        >
+          {test.isPending ? '验证中…' : '测试连接'}
+        </Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={onClose}>
+          取消
+        </Button>
+        <Button
+          size="sm"
+          disabled={busy}
+          onClick={() => {
+            if (validate()) onSave()
+          }}
+        >
+          {saving ? '保存中…' : '保存配置'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   )
 }
