@@ -46,7 +46,8 @@ export interface WordRange {
 export declare function recognizeMacText(
   png: Buffer,
   languages: string[],
-  accurate: boolean
+  accurate: boolean,
+  autoDetectLanguage?: boolean
 ): Promise<MacOcrResult>
 
 /** Recognize PNG text with Windows.Media.Ocr. Available on Windows. */

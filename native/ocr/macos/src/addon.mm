@@ -7,6 +7,7 @@
 
 extern "C" int dictol_recognize_mac_text(const uint8_t *png, size_t png_length,
                                          const char *language_list, int accurate,
+                                         int auto_detect_language,
                                          uint8_t **output, size_t *output_length);
 extern "C" void dictol_free_mac_ocr_json(uint8_t *bytes);
 extern "C" int dictol_chinese_word_range(const char *utf8, uint32_t offset,
@@ -18,6 +19,7 @@ struct OcrWork {
     std::vector<uint8_t> png;
     std::string languages;
     bool accurate = false;
+    bool auto_detect_language = false;
     uint8_t *json = nullptr;
     size_t json_length = 0;
     int result = 0;
@@ -48,6 +50,7 @@ static void execute_ocr(napi_env, void *data) {
     auto *work = static_cast<OcrWork *>(data);
     work->result = dictol_recognize_mac_text(
         work->png.data(), work->png.size(), work->languages.c_str(), work->accurate ? 1 : 0,
+        work->auto_detect_language ? 1 : 0,
         &work->json, &work->json_length);
 }
 
@@ -85,16 +88,19 @@ static void complete_ocr(napi_env env, napi_status status, void *data) {
 }
 
 static napi_value recognize_mac_text(napi_env env, napi_callback_info info) {
-    size_t argc = 3;
-    napi_value argv[3];
-    if (napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr) != napi_ok || argc != 3) {
-        napi_throw_type_error(env, nullptr, "recognizeMacText expects png, languages, accurate");
+    size_t argc = 4;
+    napi_value argv[4];
+    if (napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr) != napi_ok ||
+        (argc != 3 && argc != 4)) {
+        napi_throw_type_error(env, nullptr,
+                              "recognizeMacText expects png, languages, accurate, optional autoDetectLanguage");
         return nullptr;
     }
 
     bool is_buffer = false;
     bool is_array = false;
     bool accurate = false;
+    bool auto_detect_language = false;
     napi_valuetype accurate_type;
     if (napi_is_buffer(env, argv[0], &is_buffer) != napi_ok || !is_buffer ||
         napi_is_array(env, argv[1], &is_array) != napi_ok || !is_array ||
@@ -102,6 +108,15 @@ static napi_value recognize_mac_text(napi_env env, napi_callback_info info) {
         napi_get_value_bool(env, argv[2], &accurate) != napi_ok) {
         napi_throw_type_error(env, nullptr, "recognizeMacText expects (Buffer, string[], boolean)");
         return nullptr;
+    }
+    if (argc == 4) {
+        napi_valuetype auto_detect_type;
+        if (napi_typeof(env, argv[3], &auto_detect_type) != napi_ok ||
+            auto_detect_type != napi_boolean ||
+            napi_get_value_bool(env, argv[3], &auto_detect_language) != napi_ok) {
+            napi_throw_type_error(env, nullptr, "autoDetectLanguage must be a boolean");
+            return nullptr;
+        }
     }
 
     void *bytes;
@@ -115,6 +130,7 @@ static napi_value recognize_mac_text(napi_env env, napi_callback_info info) {
     auto *start = static_cast<uint8_t *>(bytes);
     work->png.assign(start, start + length);
     work->accurate = accurate;
+    work->auto_detect_language = auto_detect_language;
     uint32_t count = 0;
     napi_get_array_length(env, argv[1], &count);
     for (uint32_t index = 0; index < count; index++) {

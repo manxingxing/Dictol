@@ -133,8 +133,14 @@ export class ScreenshotTranslationAction {
       }
       const observations =
         process.platform === 'darwin'
-          ? (await recognizeMacText(image.data, ['en-US', 'zh-Hans', 'ja-JP', 'zh-Hant'], true))
-              .observations
+          ? (
+              await recognizeMacText(
+                image.data,
+                ['en-US', 'zh-Hans', 'ja-JP', 'zh-Hant'],
+                true,
+                true
+              )
+            ).observations
           : (await recognizeWindowsText(image.data)).observations
       const recognizedText = screenshotTranslationText(observations)
       const lexicon = this.runtime.builtInLexicon

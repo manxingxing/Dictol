@@ -11,8 +11,8 @@ if (!['darwin', 'win32'].includes(process.platform)) {
       }
     }
     module.exports = {
-      recognizeMacText: async (png, languages, accurate) => {
-        const result = await addon.recognizeMacText(png, languages, accurate)
+      recognizeMacText: async (png, languages, accurate, autoDetectLanguage = false) => {
+        const result = await addon.recognizeMacText(png, languages, accurate, autoDetectLanguage)
         if (result.error) throw new Error(result.error)
         return result
       },

@@ -28,7 +28,7 @@ static NSDictionary *top_left_point_json(CGPoint point) {
 }
 
 int dictol_recognize_mac_text(const uint8_t *png, size_t png_length,
-                             const char *language_list, int accurate,
+                             const char *language_list, int accurate, int auto_detect_language,
                              uint8_t **output, size_t *output_length) {
     @autoreleasepool {
         if (!png || !png_length || !language_list || !output || !output_length) return 0;
@@ -52,9 +52,9 @@ int dictol_recognize_mac_text(const uint8_t *png, size_t png_length,
         request.recognitionLevel = accurate ? VNRequestTextRecognitionLevelAccurate
                                             : VNRequestTextRecognitionLevelFast;
         request.recognitionLanguages = languages;
-        // The requested languages already cover mixed text. Automatic detection can turn
-        // a short Chinese span in an English line into Latin gibberish.
-        if (@available(macOS 13.0, *)) request.automaticallyDetectsLanguage = NO;
+        if (@available(macOS 13.0, *)) {
+            request.automaticallyDetectsLanguage = auto_detect_language ? YES : NO;
+        }
         request.usesLanguageCorrection = YES;
         VNImageRequestHandler *handler = [[VNImageRequestHandler alloc] initWithCGImage:image options:@{}];
         NSError *error = nil;
