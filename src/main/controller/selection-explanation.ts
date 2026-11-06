@@ -551,7 +551,7 @@ export class SelectionExplanationController extends BaseController {
           this.db.lookupDictionaryEntry(dictionaryId, term)
         ).then(({ request }) => {
           if (version === this.lookupVersion) {
-            this.showExplanation(request.word, request.sourceDictionaryId, request.anchor)
+            this.showExplanation(request.word, request.sourceDictionaryId, request.anchor, false)
           }
         })
       }
