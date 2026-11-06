@@ -176,10 +176,13 @@ export function ShortcutSettingControl(props: ShortcutSettingControlProps): Reac
             : '未设置'}
         </kbd>
       )}
+      {/* 等待捕获时保留按钮焦点，避免禁用按钮触发 blur 取消录入。 */}
       <Button
+        aria-disabled={saving || starting}
         aria-label={recording ? '取消设置快捷键' : '修改快捷键'}
-        disabled={saving || starting}
+        disabled={saving}
         onClick={() => {
+          if (starting) return
           if (recording) void stopRecording()
           else void beginRecording()
         }}
