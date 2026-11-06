@@ -50,7 +50,7 @@ export function WordbooksPage(): React.JSX.Element {
 
   return (
     <section className="flex lg:h-full min-h-0 flex-1 flex-col bg-background lg:flex-row">
-      <aside className="hidden min-h-0 w-54 shrink-0 flex-col border-r border-border bg-sidebar/35 p-3 lg:flex lg:h-full">
+      <aside className="hidden min-h-0 w-54 shrink-0 flex-col border-r border-border bg-[var(--panel-background)] p-3 lg:flex lg:h-full">
         <div className="hidden lg:flex mb-2 items-center justify-between px-1 lg:mb-3">
           <h1 className="text-sm font-semibold lg:block">生词本</h1>
           <CreateWordbookDialog onOpenChange={setCreateDialogOpen} open={createDialogOpen} />

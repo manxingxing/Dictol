@@ -20,7 +20,7 @@ export function SettingsPage(): React.JSX.Element {
 
   return (
     <section className="flex h-full min-h-0 bg-background">
-      <aside className="flex h-full w-40 shrink-0 flex-col overflow-y-auto bg-sidebar/35 px-3 py-5 md:w-48 lg:w-56">
+      <aside className="flex h-full w-40 shrink-0 flex-col overflow-y-auto bg-[var(--panel-background)] px-3 py-5 md:w-48 lg:w-56">
         <p className="px-1 text-lg font-semibold">设置</p>
         <nav aria-label="设置页面" className="mt-6 flex flex-col gap-1">
           {settingsNavigation.map(({ label, path, icon: Icon }) => (
