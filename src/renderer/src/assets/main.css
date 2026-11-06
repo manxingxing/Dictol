@@ -36,7 +36,7 @@
   --sidebar-background: #f5f5f2;
   --window-chrome-background: color-mix(in srgb, var(--sidebar-background) 84%, transparent);
   --window-chrome-opacity: 64%;
-  --panel-background: #faf9f6;
+  --panel-background: color-mix(in srgb, var(--sidebar-background) 35%, var(--background));
   --surface-hover: #eeeeea;
   --surface-pressed: #e5e6e1;
   --accent-soft: #e3ebe5;
@@ -54,7 +54,7 @@
 }
 
 :root[data-chrome-tone='moss'] {
-  --background: #f7faf7;
+  --background: #f9fbf8;
   --foreground: #20241f;
   --card: #fbfcf9;
   --card-foreground: #20241f;
@@ -63,9 +63,8 @@
   --border: #d8d7ce;
   --border-strong: #c6c9bf;
   --input: #c6c9bf;
-  --sidebar-background: #e8ebdf;
+  --sidebar-background: #eceee6;
   --window-chrome-background: color-mix(in srgb, var(--sidebar-background) 84%, transparent);
-  --panel-background: color-mix(in oklab, var(--sidebar-background) 35%, transparent);
   --surface-hover: #ecefe5;
   --surface-pressed: #dce3d8;
   --accent-soft: #dfeadf;
@@ -98,7 +97,6 @@
     --sidebar-background: #191919;
     --window-chrome-background: color-mix(in srgb, var(--sidebar-background) 88%, transparent);
     --window-chrome-opacity: 68%;
-    --panel-background: #262626;
     --surface-hover: #303030;
     --surface-pressed: #3a3a3a;
     --accent-soft: #263229;
@@ -127,7 +125,6 @@
     --input: #454a45;
     --sidebar-background: #181a18;
     --window-chrome-background: color-mix(in srgb, var(--sidebar-background) 88%, transparent);
-    --panel-background: color-mix(in oklab, var(--sidebar-background) 35%, transparent);
     --surface-hover: #282a28;
     --surface-pressed: #30332f;
     --accent-soft: #2a302b;
@@ -506,9 +503,9 @@ body [data-sonner-toaster].toaster [data-sonner-toast] * {
 
 .appearance-theme-preview__pane[data-color-tone='moss'][data-color-scheme='light'],
 .appearance-theme-preview__pane[data-color-tone='moss'][data-color-scheme='current'] {
-  --preview-chrome: #e8ebdf;
-  --preview-sidebar: #e8ebdf;
-  --preview-panel: #f7faf7;
+  --preview-chrome: #eceee6;
+  --preview-sidebar: #eceee6;
+  --preview-panel: #f9fbf8;
   --preview-toolbar: #fbfcf9;
   --preview-input: #eef2ec;
   --preview-border: #d8d7ce;
