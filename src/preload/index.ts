@@ -41,6 +41,8 @@ import type {
 } from '../shared/dictionary-note'
 import type { TouchBarPage, TouchBarState } from '../shared/touch-bar'
 import type {
+  ClipboardTranslationSettingResult,
+  ClipboardTranslationStatus,
   ScreenshotTranslationSettingResult,
   ScreenshotTranslationStatus,
   SelectionTranslationShortcutResult,
@@ -560,6 +562,12 @@ const api = Object.freeze({
       ipcRenderer.invoke('screenshot-translation:status'),
     setScreenshotShortcut: (shortcut: string): Promise<ScreenshotTranslationSettingResult | null> =>
       ipcRenderer.invoke('screenshot-translation:set-shortcut', shortcut),
+    getClipboardShortcutStatus: (): Promise<ClipboardTranslationStatus | null> =>
+      ipcRenderer.invoke('translation:clipboard-shortcut-status'),
+    setClipboardShortcut: (
+      shortcut: string
+    ): Promise<ClipboardTranslationSettingResult | null> =>
+      ipcRenderer.invoke('translation:set-clipboard-shortcut', shortcut),
     getConfig: (): Promise<TranslationPublicConfig | null> =>
       ipcRenderer.invoke('translation:get-config'),
     saveProvider: (

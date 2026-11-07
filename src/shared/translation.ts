@@ -41,6 +41,18 @@ export type ScreenshotTranslationSettingResult = {
   error?: string
 }
 
+export type ClipboardTranslationStatus = {
+  supported: boolean
+  shortcut: string
+  registered: boolean
+}
+
+export type ClipboardTranslationSettingResult = {
+  ok: boolean
+  status: ClipboardTranslationStatus
+  error?: string
+}
+
 export type TranslationProviderKind =
   | 'system'
   | 'google'

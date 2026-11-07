@@ -47,8 +47,15 @@ export class TrayManager {
         registerAccelerator: false,
         click: () => void this.runtime.actions.screenshotTranslation.toggleSelector()
       })
-      items.push({ type: 'separator' })
     }
+    const clipboardShortcut = this.runtime.appConfig.load().shortcuts.clipboardTranslation
+    items.push({
+      label: '翻译剪贴板内容',
+      accelerator: clipboardShortcut || undefined,
+      registerAccelerator: false,
+      click: () => void this.runtime.actions.clipboardTranslation.translateFromClipboard()
+    })
+    items.push({ type: 'separator' })
     items.push({ label: '退出 Dictol', click: () => app.quit() })
     return Menu.buildFromTemplate(items)
   }

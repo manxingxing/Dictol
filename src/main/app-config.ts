@@ -32,6 +32,7 @@ export type AppConfig = {
     ocrDictionary: string
     ocrAi: string
     screenshotTranslation: string
+    clipboardTranslation: string
   }
   selection: {
     dictionaryGroupId: number | undefined
@@ -57,7 +58,8 @@ const DEFAULT_CONFIG: AppConfig = {
     showMainWindow: 'CommandOrControl+Alt+D',
     ocrDictionary: 'Alt+S',
     ocrAi: 'Alt+T',
-    screenshotTranslation: process.platform === 'darwin' ? 'Alt+R' : ''
+    screenshotTranslation: process.platform === 'darwin' ? 'Alt+R' : '',
+    clipboardTranslation: ''
   },
   selection: {
     dictionaryGroupId: undefined,
@@ -180,6 +182,7 @@ function parseConfig(value: unknown): AppConfig {
       ocrDictionary?: unknown
       ocrAi?: unknown
       screenshotTranslation?: unknown
+      clipboardTranslation?: unknown
     }
     selection?: { dictionaryGroupId?: unknown; excludedPrograms?: unknown }
     aiLookup?: {
@@ -244,7 +247,11 @@ function parseConfig(value: unknown): AppConfig {
       screenshotTranslation:
         typeof candidate.shortcuts?.screenshotTranslation === 'string'
           ? candidate.shortcuts.screenshotTranslation.trim()
-          : DEFAULT_CONFIG.shortcuts.screenshotTranslation
+          : DEFAULT_CONFIG.shortcuts.screenshotTranslation,
+      clipboardTranslation:
+        typeof candidate.shortcuts?.clipboardTranslation === 'string'
+          ? candidate.shortcuts.clipboardTranslation.trim()
+          : DEFAULT_CONFIG.shortcuts.clipboardTranslation
     },
     selection: {
       dictionaryGroupId: normalizeDictionaryGroupId(candidate.selection?.dictionaryGroupId),

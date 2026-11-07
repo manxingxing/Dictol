@@ -7,6 +7,8 @@ import {
 } from '@tanstack/react-query'
 
 import type {
+  ClipboardTranslationSettingResult,
+  ClipboardTranslationStatus,
   ScreenshotTranslationSettingResult,
   ScreenshotTranslationStatus,
   SelectionTranslationShortcutResult,
@@ -15,6 +17,7 @@ import type {
 
 export const screenshotStatusQueryKey = ['translation', 'screenshot-status'] as const
 export const selectionShortcutStatusQueryKey = ['translation', 'selection-shortcut-status'] as const
+export const clipboardStatusQueryKey = ['translation', 'clipboard-status'] as const
 
 // 截图翻译
 export function useScreenshotTranslationStatus(): UseQueryResult<
@@ -47,6 +50,41 @@ export function useUpdateScreenshotShortcut(): UseMutationResult<
     },
     onSuccess: (result) => {
       if (result.ok) queryClient.setQueryData(screenshotStatusQueryKey, result.status)
+    }
+  })
+}
+
+// 剪贴板翻译
+export function useClipboardTranslationStatus(): UseQueryResult<
+  ClipboardTranslationStatus,
+  Error
+> {
+  return useQuery({
+    queryKey: clipboardStatusQueryKey,
+    queryFn: async () => {
+      const status = await window.dictol.translation.getClipboardShortcutStatus()
+      if (!status) throw new Error('无法读取剪贴板翻译设置。')
+      return status
+    },
+    refetchOnWindowFocus: true,
+    retry: false
+  })
+}
+
+export function useUpdateClipboardShortcut(): UseMutationResult<
+  ClipboardTranslationSettingResult,
+  Error,
+  string
+> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (shortcut: string) => {
+      const result = await window.dictol.translation.setClipboardShortcut(shortcut)
+      if (!result) throw new Error('无法保存剪贴板翻译设置。')
+      return result
+    },
+    onSuccess: (result) => {
+      if (result.ok) queryClient.setQueryData(clipboardStatusQueryKey, result.status)
     }
   })
 }

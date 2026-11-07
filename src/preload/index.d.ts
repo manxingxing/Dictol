@@ -25,6 +25,8 @@ import type {
 } from '../shared/custom-css-editor'
 import type { TouchBarPage, TouchBarState } from '../shared/touch-bar'
 import type {
+  ClipboardTranslationSettingResult,
+  ClipboardTranslationStatus,
   ScreenshotTranslationSettingResult,
   ScreenshotTranslationStatus,
   SelectionTranslationShortcutResult,
@@ -492,6 +494,10 @@ declare global {
         setScreenshotShortcut: (
           shortcut: string
         ) => Promise<ScreenshotTranslationSettingResult | null>
+        getClipboardShortcutStatus: () => Promise<ClipboardTranslationStatus | null>
+        setClipboardShortcut: (
+          shortcut: string
+        ) => Promise<ClipboardTranslationSettingResult | null>
         getConfig: () => Promise<TranslationPublicConfig | null>
         saveProvider: (
           request: TranslationSaveProviderRequest
