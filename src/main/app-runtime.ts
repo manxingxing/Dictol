@@ -5,6 +5,7 @@ import { stopWindowsScreenCaptureSessions } from '@dictol/screen-capture-native'
 import { AppConfigStore, type AppConfig } from './app-config'
 import { TranslationActions } from './action/translation'
 import { ScreenshotTranslationAction } from './action/screenshot-translation'
+import { ClipboardTranslationAction } from './action/clipboard-translation'
 import { AiLookupService } from './ai-service'
 import { TranslationService } from './translation/service'
 import { BuiltInLexiconService } from './built-in-lexicon-service'
@@ -29,6 +30,7 @@ import { DictionarySearchScope } from './dictionary-search-scope'
 import { OCR_SUPPORTED } from '../shared/ocr'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 import {
+  CLIPBOARD_TRANSLATION_SHORTCUT,
   LOOKUP_WORD_ON_SHORTCUT,
   OCR_AI_SHORTCUT,
   OCR_DICTIONARY_SHORTCUT,
@@ -60,7 +62,8 @@ export class AppRuntime {
   shortcutRegister: ShortcutRegister = new ShortcutRegister()
   readonly actions = {
     translation: new TranslationActions(this),
-    screenshotTranslation: new ScreenshotTranslationAction(this)
+    screenshotTranslation: new ScreenshotTranslationAction(this),
+    clipboardTranslation: new ClipboardTranslationAction(this)
   }
   trayManager: TrayManager = new TrayManager(this)
   mainWindowShortcutRouter: MainWindowShortcutRouter | undefined
@@ -221,6 +224,7 @@ export class AppRuntime {
 
     this.registerLookupWordShortCut(config.shortcuts)
     this.registerSelectionTranslationShortcut(config)
+    this.registerClipboardTranslationShortcut(config)
     if (OCR_SUPPORTED) this.registerOcrShortcuts(config)
     if (OCR_SUPPORTED) this.registerScreenshotTranslationShortcut(config)
   }
@@ -265,6 +269,20 @@ export class AppRuntime {
       SCREENSHOT_TRANSLATION_SHORTCUT,
       config.shortcuts.screenshotTranslation,
       { handleShortcut: () => this.actions.screenshotTranslation.toggleSelector() }
+    )
+  }
+
+  restartClipboardTranslationShortcut(): boolean {
+    return this.registerClipboardTranslationShortcut(this.appConfig.load())
+  }
+
+  private registerClipboardTranslationShortcut(config: AppConfig): boolean {
+    this.shortcutRegister.unregister(CLIPBOARD_TRANSLATION_SHORTCUT)
+    if (!config.shortcuts.clipboardTranslation) return false
+    return this.shortcutRegister.register(
+      CLIPBOARD_TRANSLATION_SHORTCUT,
+      config.shortcuts.clipboardTranslation,
+      { handleShortcut: () => this.actions.clipboardTranslation.translateFromClipboard() }
     )
   }
 
@@ -325,6 +343,7 @@ export class AppRuntime {
     this.shortcutRegister.unregister(OCR_DICTIONARY_SHORTCUT)
     this.shortcutRegister.unregister(OCR_AI_SHORTCUT)
     this.shortcutRegister.unregister(SCREENSHOT_TRANSLATION_SHORTCUT)
+    this.shortcutRegister.unregister(CLIPBOARD_TRANSLATION_SHORTCUT)
     const config = this.appConfig.load()
     this.initSelectionHook(config)
     this.registerGlobalShortCuts(config)

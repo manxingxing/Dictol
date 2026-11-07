@@ -7,6 +7,8 @@ import {
 } from 'electron'
 import {
   TRANSLATION_LANGUAGES,
+  type ClipboardTranslationSettingResult,
+  type ClipboardTranslationStatus,
   type SelectionTranslationShortcutResult,
   type SelectionTranslationShortcutStatus,
   type TranslationLanguage,
@@ -14,7 +16,7 @@ import {
   type TranslationRequest,
   type TranslationSaveProviderRequest
 } from '../../shared/translation'
-import { TRANSLATE_SELECTION_SHORTCUT } from '../../shared/shortcuts'
+import { CLIPBOARD_TRANSLATION_SHORTCUT, TRANSLATE_SELECTION_SHORTCUT } from '../../shared/shortcuts'
 import type { SelectionAnchor } from '../lib/selection-position'
 import { BaseController } from './base-controller'
 
@@ -32,11 +34,10 @@ export class TranslationController extends BaseController {
     ipcMain.handle('translation:test-provider', this.testProvider)
     ipcMain.handle('translation:list-models', this.listModels)
     ipcMain.handle('translation:test-draft', this.testDraft)
-    ipcMain.handle('translation:selection-shortcut-status', (event) => {
-      if (!this.isMainSender(event.sender)) return null
-      return this.getSelectionShortcutStatus()
-    })
+    ipcMain.handle('translation:selection-shortcut-status', this.handleSelectionShortcutStatus)
     ipcMain.handle('translation:set-selection-shortcut', this.setSelectionShortcut)
+    ipcMain.handle('translation:clipboard-shortcut-status', this.handleClipboardShortcutStatus)
+    ipcMain.handle('translation:set-clipboard-shortcut', this.setClipboardShortcut)
     ipcMain.handle('translation:start', this.start)
     ipcMain.on('translation:cancel', this.cancel)
     ipcMain.handle('selection-translation:toggle-pin', this.togglePin)
@@ -76,6 +77,13 @@ export class TranslationController extends BaseController {
   private readonly getConfig = (event: IpcMainInvokeEvent): TranslationPublicConfig | null => {
     if (!this.acceptsSender(event.sender)) return null
     return this.runtime.translationService.getConfig()
+  }
+
+  private readonly handleSelectionShortcutStatus = (
+    event: IpcMainInvokeEvent
+  ): SelectionTranslationShortcutStatus | null => {
+    if (!this.isMainSender(event.sender)) return null
+    return this.getSelectionShortcutStatus()
   }
 
   private getSelectionShortcutStatus(): SelectionTranslationShortcutStatus {
@@ -123,6 +131,54 @@ export class TranslationController extends BaseController {
       }
     }
     return { ok: true, status: this.getSelectionShortcutStatus() }
+  }
+
+  private readonly handleClipboardShortcutStatus = (
+    event: IpcMainInvokeEvent
+  ): ClipboardTranslationStatus | null => {
+    if (!this.isMainSender(event.sender)) return null
+    return this.getClipboardShortcutStatus()
+  }
+
+  private getClipboardShortcutStatus(): ClipboardTranslationStatus {
+    const config = this.runtime.appConfig.load()
+    return {
+      supported: true,
+      registered: this.runtime.shortcutRegister.isRegistered(CLIPBOARD_TRANSLATION_SHORTCUT),
+      shortcut: config.shortcuts.clipboardTranslation
+    }
+  }
+
+  private readonly setClipboardShortcut = (
+    event: IpcMainInvokeEvent,
+    shortcut: unknown
+  ): ClipboardTranslationSettingResult | null => {
+    if (!this.isMainSender(event.sender)) return null
+    if (typeof shortcut !== 'string' || shortcut.length > 64)
+      return { ok: false, status: this.getClipboardShortcutStatus(), error: '无效的快捷键。' }
+    const normalized = shortcut.trim()
+    const previous = this.runtime.appConfig.load()
+    if (
+      normalized === previous.shortcuts.clipboardTranslation &&
+      (!normalized || this.runtime.shortcutRegister.isRegistered(CLIPBOARD_TRANSLATION_SHORTCUT))
+    ) {
+      return { ok: true, status: this.getClipboardShortcutStatus() }
+    }
+    this.runtime.appConfig.save({
+      ...previous,
+      shortcuts: { ...previous.shortcuts, clipboardTranslation: normalized }
+    })
+    const registered = this.runtime.restartClipboardTranslationShortcut()
+    if (normalized && !registered) {
+      this.runtime.appConfig.save(previous)
+      this.runtime.restartClipboardTranslationShortcut()
+      return {
+        ok: false,
+        status: this.getClipboardShortcutStatus(),
+        error: '这个快捷键无效或已被占用，请更换快捷键。'
+      }
+    }
+    return { ok: true, status: this.getClipboardShortcutStatus() }
   }
 
   private readonly saveProvider = (

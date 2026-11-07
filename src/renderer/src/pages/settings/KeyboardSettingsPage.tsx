@@ -7,8 +7,10 @@ import {
   useUpdateMainWindowShortcut
 } from '@/hooks/use-keyboard-shortcuts'
 import {
+  useClipboardTranslationStatus,
   useSelectionTranslationShortcutStatus,
   useScreenshotTranslationStatus,
+  useUpdateClipboardShortcut,
   useUpdateScreenshotShortcut,
   useUpdateSelectionTranslationShortcut
 } from '@/hooks/use-translation-shortcuts'
@@ -20,6 +22,7 @@ import {
 import { formatShortcut } from '@/lib/keyboard-shortcut'
 import { useAppStore } from '@/stores/app-store'
 import {
+  CLIPBOARD_TRANSLATION_SHORTCUT,
   SCREENSHOT_TRANSLATION_SHORTCUT,
   TRANSLATE_SELECTION_SHORTCUT
 } from '../../../../shared/shortcuts'
@@ -37,10 +40,14 @@ export function KeyboardSettingsPage(): React.JSX.Element {
   const selectionShortcutStatus = selectionShortcutStatusQuery.data
   const screenshotStatusQuery = useScreenshotTranslationStatus()
   const screenshotStatus = screenshotStatusQuery.data
+  const clipboardStatusQuery = useClipboardTranslationStatus()
+  const clipboardStatus = clipboardStatusQuery.data
   const updateSelectionShortcutMutation = useUpdateSelectionTranslationShortcut()
   const updateScreenshotShortcutMutation = useUpdateScreenshotShortcut()
+  const updateClipboardShortcutMutation = useUpdateClipboardShortcut()
   const resetSelectionShortcutMutation = updateSelectionShortcutMutation.reset
   const resetScreenshotShortcutMutation = updateScreenshotShortcutMutation.reset
+  const resetClipboardShortcutMutation = updateClipboardShortcutMutation.reset
   const shortcutError =
     updateMainShortcutMutation.error?.message ??
     (updateMainShortcutMutation.data?.ok === false
@@ -71,6 +78,15 @@ export function KeyboardSettingsPage(): React.JSX.Element {
     (screenshotStatus?.supported && screenshotStatus.shortcut && !screenshotStatus.registered
       ? `截图翻译快捷键 ${formatShortcut(screenshotStatus.shortcut, window.dictol.platform)} 注册失败，可能已被系统或其他应用占用。请更换快捷键。`
       : null)
+  const clipboardStatusMessage =
+    updateClipboardShortcutMutation.error?.message ??
+    (updateClipboardShortcutMutation.data?.ok === false
+      ? (updateClipboardShortcutMutation.data.error ?? '无法保存剪贴板翻译设置。')
+      : null) ??
+    clipboardStatusQuery.error?.message ??
+    (clipboardStatus?.supported && clipboardStatus.shortcut && !clipboardStatus.registered
+      ? `剪贴板翻译快捷键 ${formatShortcut(clipboardStatus.shortcut, window.dictol.platform)} 注册失败，可能已被系统或其他应用占用。请更换快捷键。`
+      : null)
 
   useEffect(() => {
     if (selectionShortcutStatusQuery.dataUpdatedAt) resetSelectionShortcutMutation()
@@ -79,6 +95,10 @@ export function KeyboardSettingsPage(): React.JSX.Element {
   useEffect(() => {
     if (screenshotStatusQuery.dataUpdatedAt) resetScreenshotShortcutMutation()
   }, [screenshotStatusQuery.dataUpdatedAt, resetScreenshotShortcutMutation])
+
+  useEffect(() => {
+    if (clipboardStatusQuery.dataUpdatedAt) resetClipboardShortcutMutation()
+  }, [clipboardStatusQuery.dataUpdatedAt, resetClipboardShortcutMutation])
 
   const updateShortcut = async (shortcut: string): Promise<void> => {
     await updateMainShortcutMutation.mutateAsync(shortcut)
@@ -98,6 +118,10 @@ export function KeyboardSettingsPage(): React.JSX.Element {
 
   const updateScreenshotShortcut = async (shortcut: string): Promise<void> => {
     await updateScreenshotShortcutMutation.mutateAsync(shortcut)
+  }
+
+  const updateClipboardShortcut = async (shortcut: string): Promise<void> => {
+    await updateClipboardShortcutMutation.mutateAsync(shortcut)
   }
 
   return (
@@ -266,6 +290,34 @@ export function KeyboardSettingsPage(): React.JSX.Element {
             role="alert"
           >
             {screenshotStatusMessage}
+          </p>
+        )}
+        {clipboardStatus?.supported && (
+          <SettingsRow
+            label="剪贴板翻译"
+            description={
+              !clipboardStatus.shortcut
+                ? '未设置快捷键'
+                : clipboardStatus.registered
+                  ? '读取剪贴板中的文本，在翻译弹窗里查看译文'
+                  : '快捷键未启用，请重新设置'
+            }
+          >
+            <ShortcutSettingControl
+              allowClear
+              command={CLIPBOARD_TRANSLATION_SHORTCUT}
+              currentShortcut={clipboardStatus.shortcut}
+              onClear={() => updateClipboardShortcut('')}
+              onUpdate={updateClipboardShortcut}
+            />
+          </SettingsRow>
+        )}
+        {clipboardStatusMessage && (
+          <p
+            className="border-b border-border bg-card px-4 py-2 text-xs text-destructive last:border-b-0"
+            role="alert"
+          >
+            {clipboardStatusMessage}
           </p>
         )}
         <SettingsRow label="搜索词条" description="聚焦查词搜索框">
