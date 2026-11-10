@@ -8,11 +8,16 @@ export type { AccessibleText, AccessibleTextLookup } from '../accessibility/type
 export async function captureAccessibleText(mode: OcrLookupMode): Promise<OcrCapture | null> {
   const lookup = await readFromCurrentPlatform(mode)
   const result = lookup.result
-  const context = result && sentenceContextAt(result.text, result.offset)
-  const matched = Boolean(
-    result && context && (mode === 'dictionary' || context.context !== result.word)
-  )
-  if (!result || !context || !matched) return null
+  if (!result) return null
+  if (mode === 'dictionary') {
+    return {
+      selection: { word: result.word, sentence: '', context: '' },
+      wordBounds: result.bounds
+    }
+  }
+  if (result.text === undefined || result.offset === undefined) return null
+  const context = sentenceContextAt(result.text, result.offset)
+  if (!context || context.context === result.word) return null
 
   return {
     selection: {

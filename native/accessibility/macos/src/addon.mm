@@ -4,10 +4,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+// The Objective-C bridge allocates a UTF-8 JSON buffer; the caller must free it.
 extern "C" int dictol_read_mac_accessible_text(double x, double y, int include_context,
                                                  uint8_t **output, size_t *output_length);
 extern "C" void dictol_free_mac_accessible_text(uint8_t *bytes);
 
+// Shared by the N-API worker and its completion callback until the promise settles.
 struct AccessibilityWork {
     napi_async_work work;
     napi_deferred deferred;
@@ -27,12 +29,14 @@ static napi_value make_error(napi_env env, const char *message) {
     return error;
 }
 
+// Run synchronous Accessibility calls on a worker without using JavaScript APIs.
 static void execute_lookup(napi_env, void *data) {
     auto *work = static_cast<AccessibilityWork *>(data);
     work->result = dictol_read_mac_accessible_text(
         work->x, work->y, work->include_context ? 1 : 0, &work->json, &work->json_length);
 }
 
+// Back on the JavaScript thread, parse the native JSON and settle the promise.
 static void complete_lookup(napi_env env, napi_status status, void *data) {
     auto *work = static_cast<AccessibilityWork *>(data);
     if (status == napi_ok && work->result && work->json) {
@@ -66,6 +70,7 @@ static void complete_lookup(napi_env env, napi_status status, void *data) {
     delete work;
 }
 
+// Validate the JavaScript arguments before scheduling any native work.
 static napi_value read_accessible_text(napi_env env, napi_callback_info info) {
     size_t argc = 3;
     napi_value argv[3];

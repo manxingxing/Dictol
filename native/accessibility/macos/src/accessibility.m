@@ -8,6 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 
+// 判断某个屏幕坐标是否落在当前进程自己的窗口内
 // An AX hit test against our own window calls Electron's accessibilityHitTest
 // in this process. That callback must run on the AppKit main thread.
 static BOOL point_is_inside_own_window(double x, double y) {
@@ -34,6 +35,7 @@ static BOOL point_is_inside_own_window(double x, double y) {
     return inside;
 }
 
+// Transfer an owned JSON buffer to the N-API bridge without a trailing NUL.
 static int copy_json(id value, uint8_t **output, size_t *output_length) {
     NSData *json = [NSJSONSerialization dataWithJSONObject:value options:0 error:NULL];
     if (!json) return 0;
@@ -45,6 +47,8 @@ static int copy_json(id value, uint8_t **output, size_t *output_length) {
     return 1;
 }
 
+// AX and NSString ranges use UTF-16 offsets. Keep a window around the hit and
+// report its start so callers can translate back to the element's coordinates.
 static NSString *text_near_position(AXUIElementRef element, CFIndex position,
                                     CFIndex *window_start) {
     CFTypeRef count_value = NULL;
@@ -77,6 +81,7 @@ static NSString *text_near_position(AXUIElementRef element, CFIndex position,
         CFRelease(count_value);
     }
 
+    // Some elements expose a value but do not support string-for-range.
     CFTypeRef value = NULL;
     if (AXUIElementCopyAttributeValue(element, kAXValueAttribute, &value) != kAXErrorSuccess ||
         !value) {
@@ -101,6 +106,8 @@ static BOOL is_ascii_compound_character(unichar character) {
            character == '_' || character == '-' || character == '\'' || character == 0x2019;
 }
 
+// Extend the token across common ASCII compound-word characters, then trim
+// separators from its edges so the returned range contains the lookup word.
 static NSRange word_range(NSString *text, NSUInteger offset) {
     NLTokenizer *tokenizer = [[NLTokenizer alloc] initWithUnit:NLTokenUnitWord];
     tokenizer.string = text;
@@ -142,9 +149,92 @@ static BOOL bounds_for_range(AXUIElementRef element, CFRange range, CGRect *boun
     return valid;
 }
 
-// Chromium exposes AXBoundsForRange on static text, but AXRangeForPosition can
-// return an empty range. Inspect word rectangles only for that case.
-static NSDictionary *text_by_word_bounds(AXUIElementRef element, CGPoint point) {
+static BOOL bounds_for_character(AXUIElementRef element, NSRange character,
+                                 CFIndex window_start, CGRect *bounds) {
+    return bounds_for_range(element,
+                            CFRangeMake(window_start + character.location, character.length),
+                            bounds);
+}
+
+// A word spanning lines has one enclosing rectangle that includes unrelated
+// text. Verify the point against character rectangles and return the hit line.
+static BOOL word_bounds_at_point(AXUIElementRef element, NSString *text, NSRange word,
+                                 CFIndex window_start, CGPoint point, CGRect *bounds) {
+    if (!CGRectContainsPoint(CGRectInset(*bounds, -4, -4), point)) return NO;
+
+    NSRange first = [text rangeOfComposedCharacterSequenceAtIndex:word.location];
+    NSRange last = [text rangeOfComposedCharacterSequenceAtIndex:NSMaxRange(word) - 1];
+    if (NSEqualRanges(first, last)) return YES;
+
+    CGRect first_bounds = CGRectZero, last_bounds = CGRectZero;
+    if (!bounds_for_character(element, first, window_start, &first_bounds) ||
+        !bounds_for_character(element, last, window_start, &last_bounds)) return YES;
+    if (CGRectGetMinY(first_bounds) < CGRectGetMaxY(last_bounds) &&
+        CGRectGetMinY(last_bounds) < CGRectGetMaxY(first_bounds)) return YES;
+
+    NSMutableArray<NSValue *> *rectangles = [NSMutableArray array];
+    CGRect hit = CGRectNull;
+    for (NSUInteger index = word.location; index < NSMaxRange(word);) {
+        NSRange character = [text rangeOfComposedCharacterSequenceAtIndex:index];
+        CGRect character_bounds = CGRectZero;
+        BOOL valid = YES;
+        if (NSEqualRanges(character, first)) {
+            character_bounds = first_bounds;
+        } else if (NSEqualRanges(character, last)) {
+            character_bounds = last_bounds;
+        } else {
+            valid = bounds_for_character(element, character, window_start, &character_bounds);
+        }
+        if (valid) {
+            [rectangles addObject:[NSValue valueWithRect:character_bounds]];
+            if (CGRectIsNull(hit) &&
+                CGRectContainsPoint(CGRectInset(character_bounds, -4, -4), point)) {
+                hit = character_bounds;
+            }
+        }
+        index = NSMaxRange(character);
+    }
+    if (CGRectIsNull(hit)) return NO;
+
+    CGRect line_bounds = CGRectNull;
+    for (NSValue *value in rectangles) {
+        CGRect rectangle = value.rectValue;
+        if (CGRectGetMinY(rectangle) < CGRectGetMaxY(hit) &&
+            CGRectGetMinY(hit) < CGRectGetMaxY(rectangle)) {
+            line_bounds = CGRectUnion(line_bounds, rectangle);
+        }
+    }
+    *bounds = line_bounds;
+    return YES;
+}
+
+// Normal lookups need only the word and bounds; AI lookups also need the
+// surrounding text and the UTF-16 offset used for sentence extraction.
+static NSDictionary *lookup_result(NSString *text, NSUInteger offset, NSRange word,
+                                   CGRect bounds, BOOL include_context) {
+    NSMutableDictionary *result = [@{
+        @"word": [text substringWithRange:word],
+        @"x": @(bounds.origin.x),
+        @"y": @(bounds.origin.y),
+        @"width": @(bounds.size.width),
+        @"height": @(bounds.size.height)
+    } mutableCopy];
+    if (include_context) {
+        result[@"text"] = text;
+        result[@"offset"] = @(offset);
+    }
+    return result;
+}
+
+// Preserve UTF-16 offsets while treating line breaks inside a text node as spaces.
+static NSString *normalize_static_text(NSString *text) {
+    return [text stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
+}
+
+// Chromium may return an empty AXRangeForPosition for static text. Scan token
+// rectangles, then validate the expanded word; offset remains the token start.
+static NSDictionary *text_by_word_bounds(AXUIElementRef element, CGPoint point,
+                                         BOOL include_context) {
     CFTypeRef value = NULL;
     if (AXUIElementCopyAttributeValue(element, kAXValueAttribute, &value) != kAXErrorSuccess ||
         !value) {
@@ -166,30 +256,25 @@ static NSDictionary *text_by_word_bounds(AXUIElementRef element, CGPoint point) 
         if (token.length == 0 || NSMaxRange(token) > text.length) return;
         CFRange token_range = CFRangeMake(token.location, token.length);
         CGRect token_bounds = CGRectZero;
-        if (!bounds_for_range(element, token_range, &token_bounds) ||
-            !CGRectContainsPoint(CGRectInset(token_bounds, -2, -2), point)) return;
+        if (!bounds_for_range(element, token_range, &token_bounds)) return;
+        if (!CGRectContainsPoint(CGRectInset(token_bounds, -2, -2), point)) return;
 
         NSRange word = word_range(text, token.location);
         if (word.location == NSNotFound) return;
         CFRange global_word = CFRangeMake(word.location, word.length);
         CGRect bounds = CGRectZero;
         if (!bounds_for_range(element, global_word, &bounds) ||
-            !CGRectContainsPoint(CGRectInset(bounds, -4, -4), point)) return;
-        hit = @{
-            @"text": text,
-            @"offset": @(token.location),
-            @"word": [text substringWithRange:word],
-            @"x": @(bounds.origin.x),
-            @"y": @(bounds.origin.y),
-            @"width": @(bounds.size.width),
-            @"height": @(bounds.size.height)
-        };
+            !word_bounds_at_point(element, text, word, 0, point, &bounds)) return;
+        hit = lookup_result(include_context ? normalize_static_text(text) : text,
+                            token.location, word, bounds, include_context);
         *stop = YES;
     }];
     return hit;
 }
 
-static NSDictionary *text_at_point(AXUIElementRef element, CGPoint point, NSString **failure) {
+// Resolve the character at the point to a word and verify its screen rectangle.
+static NSDictionary *text_at_point(AXUIElementRef element, CGPoint point, BOOL include_context,
+                                   AXError *position_error, NSString **failure) {
     AXValueRef position = AXValueCreate(kAXValueCGPointType, &point);
     if (!position) {
         *failure = @"position-value";
@@ -198,6 +283,7 @@ static NSDictionary *text_at_point(AXUIElementRef element, CGPoint point, NSStri
     CFTypeRef range_value = NULL;
     AXError error = AXUIElementCopyParameterizedAttributeValue(
         element, kAXRangeForPositionParameterizedAttribute, position, &range_value);
+    *position_error = error;
     CFRelease(position);
     if (error != kAXErrorSuccess || !range_value) {
         if (range_value) CFRelease(range_value);
@@ -251,20 +337,12 @@ static NSDictionary *text_at_point(AXUIElementRef element, CGPoint point, NSStri
         *failure = @"invalid-word-bounds";
         return nil;
     }
-    if (!CGRectContainsPoint(CGRectInset(bounds, -4, -4), point)) {
+    if (!word_bounds_at_point(element, text, word, window_start, point, &bounds)) {
         *failure = @"word-bounds-miss-pointer";
         return nil;
     }
 
-    return @{
-        @"text": text,
-        @"offset": @(offset),
-        @"word": [text substringWithRange:word],
-        @"x": @(bounds.origin.x),
-        @"y": @(bounds.origin.y),
-        @"width": @(bounds.size.width),
-        @"height": @(bounds.size.height)
-    };
+    return lookup_result(text, offset, word, bounds, include_context);
 }
 
 static NSString *string_attribute(AXUIElementRef element, CFStringRef attribute) {
@@ -293,7 +371,7 @@ static BOOL append_inline_text(AXUIElementRef element, AXUIElementRef target,
         NSString *value = string_attribute(element, kAXValueAttribute);
         if (!value || text.length + value.length > 8192) return NO;
         if (CFEqual(element, target)) *target_start = text.length;
-        [text appendString:value];
+        [text appendString:normalize_static_text(value)];
         (*leaves)++;
         return YES;
     }
@@ -316,6 +394,7 @@ static BOOL append_inline_text(AXUIElementRef element, AXUIElementRef target,
         return NO;
     }
     CFArrayRef children = (CFArrayRef)children_value;
+    // Do not return partially combined text when a child cannot be represented.
     BOOL complete = CFArrayGetCount(children) > 0;
     for (CFIndex index = 0; complete && index < CFArrayGetCount(children); index++) {
         CFTypeRef child = CFArrayGetValueAtIndex(children, index);
@@ -327,8 +406,10 @@ static BOOL append_inline_text(AXUIElementRef element, AXUIElementRef target,
     return complete;
 }
 
+// Merge only a complete hit-node value so its offset remains valid after
+// preceding sibling text is added.
 static NSDictionary *with_inline_context(AXUIElementRef target, NSDictionary *result) {
-    NSString *target_text = string_attribute(target, kAXValueAttribute);
+    NSString *target_text = normalize_static_text(string_attribute(target, kAXValueAttribute));
     if (!target_text || ![target_text isEqualToString:result[@"text"]]) return result;
     NSUInteger target_offset = [result[@"offset"] unsignedIntegerValue];
     if (target_offset >= target_text.length) return result;
@@ -363,16 +444,17 @@ static NSDictionary *with_inline_context(AXUIElementRef target, NSDictionary *re
     return result;
 }
 
-static NSDictionary *text_by_group_word_bounds(AXUIElementRef element, CGPoint point,
-                                                BOOL include_context, NSUInteger depth,
-                                                NSUInteger *visited) {
-    if (++*visited > 32 || depth > 3) return nil;
+// Search a subtree before moving outward; any element may expose children.
+static NSDictionary *text_by_descendant_word_bounds(AXUIElementRef element, CGPoint point,
+                                                     BOOL include_context,
+                                                     CFMutableSetRef visited) {
+    if (CFSetContainsValue(visited, element) || CFSetGetCount(visited) >= 32) return nil;
+    CFSetAddValue(visited, element);
     NSString *role = string_attribute(element, kAXRoleAttribute);
     if ([role isEqualToString:@"AXStaticText"]) {
-        NSDictionary *result = text_by_word_bounds(element, point);
-        return result && include_context ? with_inline_context(element, result) : result;
+        NSDictionary *result = text_by_word_bounds(element, point, include_context);
+        if (result) return include_context ? with_inline_context(element, result) : result;
     }
-    if (![role isEqualToString:@"AXGroup"] && ![role isEqualToString:@"AXLink"]) return nil;
 
     CFTypeRef children_value = NULL;
     if (AXUIElementCopyAttributeValue(element, kAXChildrenAttribute, &children_value)
@@ -386,19 +468,23 @@ static NSDictionary *text_by_group_word_bounds(AXUIElementRef element, CGPoint p
     }
     CFArrayRef children = (CFArrayRef)children_value;
     NSDictionary *result = nil;
-    for (CFIndex index = 0; !result && index < CFArrayGetCount(children); index++) {
+    for (CFIndex index = 0; !result && CFSetGetCount(visited) < 32 &&
+         index < CFArrayGetCount(children); index++) {
         CFTypeRef child = CFArrayGetValueAtIndex(children, index);
         if (child && CFGetTypeID(child) == AXUIElementGetTypeID()) {
-            result = text_by_group_word_bounds((AXUIElementRef)child, point,
-                                               include_context, depth + 1, visited);
+            result = text_by_descendant_word_bounds((AXUIElementRef)child, point,
+                                                    include_context, visited);
         }
     }
     CFRelease(children);
     return result;
 }
 
+// Hit-test the system-wide AX tree, then try the hit element and its parents.
+// A successful bridge call returns JSON even when the lookup itself failed.
 int dictol_read_mac_accessible_text(double x, double y, int include_context,
                                     uint8_t **output, size_t *output_length) {
+    // Electron's own accessibility callback must execute on the AppKit thread.
     if (!pthread_main_np() && point_is_inside_own_window(x, y)) {
         __block int result = 0;
         dispatch_sync(dispatch_get_main_queue(), ^{
@@ -422,32 +508,43 @@ int dictol_read_mac_accessible_text(double x, double y, int include_context,
             if (hit_error == kAXErrorSuccess && element) {
                 CGPoint point = CGPointMake(x, y);
                 NSMutableArray<NSString *> *attempts = [NSMutableArray array];
-                for (int depth = 0; depth < 4 && element && !result; depth++) {
+                CFMutableSetRef visited = CFSetCreateMutable(NULL, 0, &kCFTypeSetCallBacks);
+                // Expand through ancestors without repeatedly searching the same subtree.
+                for (int depth = 0; depth < 32 && element && !result; depth++) {
                     AXUIElementSetMessagingTimeout(element, 0.3f);
                     CFTypeRef role_value = NULL;
                     AXUIElementCopyAttributeValue(element, kAXRoleAttribute, &role_value);
                     NSString *role = role_value && CFGetTypeID(role_value) == CFStringGetTypeID()
                         ? [(__bridge NSString *)role_value copy] : @"unknown";
                     if (role_value) CFRelease(role_value);
+                    // Stop before searching broad containers and their subtrees.
+                    if ([role isEqualToString:@"AXWebArea"] ||
+                        [role isEqualToString:@"AXWindow"] ||
+                        [role isEqualToString:@"AXScrollArea"] ||
+                        [role isEqualToString:@"AXApplication"]) {
+                        [attempts addObject:[NSString stringWithFormat:@"%@: search-boundary", role]];
+                        break;
+                    }
                     NSString *attempt_failure = nil;
-                    result = text_at_point(element, point, &attempt_failure);
-                    if (!result && [role isEqualToString:@"AXStaticText"] &&
-                        [attempt_failure isEqualToString:@"invalid-character-range"]) {
-                        result = text_by_word_bounds(element, point);
-                        if (!result) attempt_failure = @"static-text-word-bounds-miss";
-                    }
-                    if (!result && [role isEqualToString:@"AXGroup"] &&
-                        [attempt_failure isEqualToString:@"invalid-character-range"]) {
-                        NSUInteger visited = 0;
-                        result = text_by_group_word_bounds(element, point,
-                                                           include_context, 0, &visited);
-                        if (!result) attempt_failure = @"group-word-bounds-miss";
-                    }
+                    AXError position_error = kAXErrorSuccess;
+                    result = text_at_point(element, point, include_context, &position_error,
+                                           &attempt_failure);
                     if (result) {
                         if (include_context && [role isEqualToString:@"AXStaticText"]) {
+                            NSMutableDictionary *normalized = [result mutableCopy];
+                            normalized[@"text"] = normalize_static_text(result[@"text"]);
+                            result = normalized;
                             result = with_inline_context(element, result);
                         }
                         break;
+                    }
+                    // A communication failure does not justify more calls into the same element.
+                    if (position_error != kAXErrorCannotComplete) {
+                        result = text_by_descendant_word_bounds(element, point,
+                                                                include_context, visited);
+                        if (result) break;
+                        attempt_failure = [attempt_failure stringByAppendingString:
+                            @"; descendant-word-bounds-miss"];
                     }
                     [attempts addObject:[NSString stringWithFormat:@"%@: %@", role,
                                          attempt_failure ?: @"unknown"]];
@@ -462,6 +559,7 @@ int dictol_read_mac_accessible_text(double x, double y, int include_context,
                         CFRelease(parent);
                     }
                 }
+                CFRelease(visited);
                 if (!result) failure = [attempts componentsJoinedByString:@"; "];
                 if (element) CFRelease(element);
             } else if (element) {

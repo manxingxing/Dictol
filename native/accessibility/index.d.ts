@@ -1,6 +1,6 @@
 export interface AccessibleText {
-  text: string
-  offset: number
+  text?: string
+  offset?: number
   word: string
   x: number
   y: number
@@ -13,7 +13,7 @@ export interface AccessibleLookup {
   failure?: string
 }
 
-/** Read the text and word bounds at a physical screen point. */
+/** Read a word and its bounds; includeContext also returns text and its UTF-16 offset. */
 export declare function readAccessibleText(
   x: number,
   y: number,

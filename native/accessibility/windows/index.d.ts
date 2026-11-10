@@ -6,8 +6,8 @@ export interface AccessibleLookup {
 }
 
 export interface AccessibleText {
-  text: string
-  offset: number
+  text?: string
+  offset?: number
   word: string
   x: number
   y: number

@@ -1,8 +1,8 @@
 import type { Rectangle } from 'electron'
 
 export type AccessibleText = {
-  text: string
-  offset: number
+  text?: string
+  offset?: number
   word: string
   bounds: Rectangle
 }
