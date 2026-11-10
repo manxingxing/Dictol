@@ -14,7 +14,10 @@ import {
 import { getMainWindowChromeMaterial, MAIN_WINDOW_TITLEBAR_HEIGHT } from '../shared/window-chrome'
 import { DICTIONARY_SESSION_PARTITION, EMBED_BROWSER_SESSION_PARTITION } from './entry-assets'
 import { resolvePreloadPath } from './output-path'
-import { applySelectionWindowBehavior } from './selection-window-behavior'
+import {
+  applySelectionWindowBehavior,
+  showSelectionWindowInactive
+} from './selection-window-behavior'
 import { WebContentsViewManager } from './web-contents-view-manager'
 import { NativeSelectionPanel } from './native-selection-panel'
 import { configureElectronPanel } from '@dictol/mdict-native'
@@ -426,7 +429,7 @@ export class WindowManager {
       window = highlightWindow
       this.ocrHighlightWindow = highlightWindow
       highlightWindow.setIgnoreMouseEvents(true)
-      if (process.platform === 'win32') applySelectionWindowBehavior(highlightWindow)
+      applySelectionWindowBehavior(highlightWindow)
       void highlightWindow
         .loadURL(ocrHighlightPage)
         .then(() => {
@@ -515,17 +518,14 @@ export class WindowManager {
         this.ocrHighlightRequested &&
         this.ocrHighlightVersion === version
       ) {
-        window.showInactive()
-        if (process.platform === 'win32') {
-          window.moveTop()
-          const explanation = this.selectionExplanationWindow
-          if (
-            explanation instanceof BrowserWindow &&
-            !explanation.isDestroyed() &&
-            explanation.isVisible()
-          ) {
-            explanation.moveTop()
-          }
+        showSelectionWindowInactive(window, { mainWindowToKeepHidden: this.mainWindow })
+        const explanation = this.selectionExplanationWindow
+        if (
+          explanation instanceof BrowserWindow &&
+          !explanation.isDestroyed() &&
+          explanation.isVisible()
+        ) {
+          explanation.moveTop()
         }
       }
     } catch (error) {
