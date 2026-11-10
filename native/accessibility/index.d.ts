@@ -19,3 +19,14 @@ export declare function readAccessibleText(
   y: number,
   includeContext: boolean
 ): Promise<AccessibleLookup>
+
+export interface AccessibleSelection {
+  selectedText: string
+  text?: string
+  offset?: number
+}
+
+/** macOS only. Context fields are omitted if the focused element cannot provide them. */
+export declare function readAccessibleSelection(
+  includeContext?: boolean
+): Promise<{ result: AccessibleSelection | null; failure: string | null }>

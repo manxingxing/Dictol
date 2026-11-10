@@ -6,5 +6,11 @@ if (typeof addon.readAccessibleText !== 'function') {
 }
 
 module.exports = {
-  readAccessibleText: addon.readAccessibleText
+  readAccessibleText: addon.readAccessibleText,
+  readAccessibleSelection: (includeContext) => {
+    if (process.platform !== 'darwin') {
+      throw new Error('readAccessibleSelection is only supported on macOS')
+    }
+    return addon.readAccessibleSelection(includeContext)
+  }
 }

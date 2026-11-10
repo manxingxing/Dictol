@@ -575,6 +575,78 @@ int dictol_read_mac_accessible_text(double x, double y, int include_context,
     }
 }
 
+// Read the selection from the focused element, optionally with its text window.
+int dictol_read_mac_accessible_selection(int include_context, uint8_t **output,
+                                         size_t *output_length) {
+    @autoreleasepool {
+        if (!output || !output_length) return 0;
+        *output = NULL;
+        *output_length = 0;
+        NSString *failure = @"accessibility-not-authorized";
+        NSDictionary *result = nil;
+        if (AXIsProcessTrusted()) {
+            AXUIElementRef system = AXUIElementCreateSystemWide();
+            AXUIElementSetMessagingTimeout(system, 0.3f);
+            CFTypeRef focused = NULL;
+            AXError error = AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute, &focused);
+            if (error == kAXErrorSuccess && focused && CFGetTypeID(focused) == AXUIElementGetTypeID()) {
+                AXUIElementRef element = (AXUIElementRef)focused;
+                pid_t pid = 0;
+                if (!pthread_main_np() && AXUIElementGetPid(element, &pid) == kAXErrorSuccess &&
+                    pid == getpid()) {
+                    CFRelease(focused);
+                    CFRelease(system);
+                    __block int bridge_result = 0;
+                    dispatch_sync(dispatch_get_main_queue(), ^{
+                        bridge_result = dictol_read_mac_accessible_selection(include_context, output, output_length);
+                    });
+                    return bridge_result;
+                }
+                AXUIElementSetMessagingTimeout(element, 0.3f);
+                NSString *selected = string_attribute(element, kAXSelectedTextAttribute);
+                if (selected.length == 0) {
+                    failure = @"selected-text-unavailable";
+                } else {
+                    NSMutableDictionary *selection = [@{ @"selectedText": selected } mutableCopy];
+                    if (include_context) {
+                        CFTypeRef range_value = NULL;
+                        CFRange range = CFRangeMake(0, 0);
+                        error = AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute, &range_value);
+                        BOOL valid = error == kAXErrorSuccess && range_value &&
+                            CFGetTypeID(range_value) == AXValueGetTypeID() &&
+                            AXValueGetType(range_value) == kAXValueCFRangeType &&
+                            AXValueGetValue(range_value, kAXValueCFRangeType, &range) &&
+                            range.location >= 0 && range.length > 0;
+                        if (range_value) CFRelease(range_value);
+                        if (valid) {
+                            CFIndex start = 0;
+                            NSString *text = text_near_position(element, range.location, &start);
+                            if (text && range.location >= start && range.location - start < text.length) {
+                                if ([string_attribute(element, kAXRoleAttribute) isEqualToString:@"AXStaticText"]) {
+                                    text = normalize_static_text(text);
+                                }
+                                selection[@"text"] = text;
+                                selection[@"offset"] = @(range.location - start);
+                            }
+                        }
+                    }
+                    result = selection;
+                    if (selection[@"text"] &&
+                        [string_attribute(element, kAXRoleAttribute) isEqualToString:@"AXStaticText"]) {
+                        result = with_inline_context(element, selection);
+                    }
+                }
+            } else {
+                failure = [NSString stringWithFormat:@"focused-element:%d", error];
+            }
+            if (focused) CFRelease(focused);
+            CFRelease(system);
+        }
+        return copy_json(@{ @"result": result ?: NSNull.null,
+                            @"failure": result ? NSNull.null : failure }, output, output_length);
+    }
+}
+
 void dictol_free_mac_accessible_text(uint8_t *bytes) {
     free(bytes);
 }
