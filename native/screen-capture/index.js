@@ -6,7 +6,14 @@ if (!['darwin', 'win32'].includes(process.platform)) {
 
   const requiredExports =
     process.platform === 'darwin'
-      ? ['captureScreenRegion', 'hasScreenCapturePermission']
+      ? [
+          'captureScreenRegion',
+          'captureDisplay',
+          'captureWindow',
+          'listShareableDisplays',
+          'listShareableWindows',
+          'hasScreenCapturePermission'
+        ]
       : [
           'captureWindowsDisplayAtPoint',
           'captureWindowsScreenRegion',

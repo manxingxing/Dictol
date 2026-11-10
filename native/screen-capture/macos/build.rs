@@ -1,3 +1,4 @@
+// 配置 Node 原生模块构建，并编译系统版本与显示器缩放查询桥接代码。
 fn main() {
     napi_build::setup();
     println!("cargo:rerun-if-changed=src/os_version.m");

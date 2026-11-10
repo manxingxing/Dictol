@@ -26,7 +26,14 @@ function copyBuild(source, platform, arch) {
   const binary = readFileSync(outputPath)
   const exports =
     platform === 'darwin'
-      ? ['captureScreenRegion', 'hasScreenCapturePermission']
+      ? [
+          'captureScreenRegion',
+          'captureDisplay',
+          'captureWindow',
+          'listShareableDisplays',
+          'listShareableWindows',
+          'hasScreenCapturePermission'
+        ]
       : [
           'captureWindowsDisplayAtPoint',
           'captureWindowsScreenRegion',

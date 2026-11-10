@@ -25,7 +25,7 @@ export type CaptureRequest = {
 
 function supportsMacNativeCapture(): boolean {
   const [major] = process.getSystemVersion().split('.').map(Number)
-  return major >= 14
+  return major >= 13
 }
 
 function validateRegion(display: Display, region: Rectangle): void {
