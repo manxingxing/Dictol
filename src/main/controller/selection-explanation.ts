@@ -497,7 +497,7 @@ export class SelectionExplanationController extends BaseController {
   }
 
   private showExplanationWindow(window: SelectionSurfaceWindow): void {
-    showSelectionWindowInactive(window)
+    showSelectionWindowInactive(window, { mainWindowToKeepHidden: this.runtime.mainWindow })
     this.onVisibilityChange?.()
   }
 

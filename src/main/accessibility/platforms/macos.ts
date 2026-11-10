@@ -9,7 +9,7 @@ export async function readAccessibleTextAtCursor(
 ): Promise<AccessibleTextLookup> {
   const pointer = screen.getCursorScreenPoint()
   const lookup = await readAccessibleText(pointer.x, pointer.y, mode === 'ai')
-  console.info('[Accessibility] macOS native result', lookup)
+  console.info('[Accessibility] read Text Via macOS Accessibility API', lookup)
   const result = lookup.result
   if (!result) return { failure: lookup.failure }
 

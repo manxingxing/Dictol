@@ -18,17 +18,14 @@ export function showSelectionWindowInactive(
   options: { mainWindowToKeepHidden?: BrowserWindow } = {}
 ): void {
   if (window.isDestroyed()) return
-
-  if (window instanceof NativeSelectionPanel) {
-    const appWasHidden = app.isHidden()
-    window.showInactive()
-    const mainWindow = options.mainWindowToKeepHidden
-    if (appWasHidden && mainWindow && !mainWindow.isDestroyed()) mainWindow.hide()
-    return
-  }
-
   window.showInactive()
-  if (process.platform === 'win32') window.moveTop()
+
+  // avoid unhiding the application after Cmd+H.
+  const appWasHidden = process.platform === 'darwin' && app.isHidden()
+  const mainWindow = options.mainWindowToKeepHidden
+  if (appWasHidden && mainWindow && !mainWindow.isDestroyed()) mainWindow.hide()
+  
+  if (window instanceof BrowserWindow) window.moveTop()
 }
 
 /**
