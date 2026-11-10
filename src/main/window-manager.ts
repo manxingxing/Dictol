@@ -412,6 +412,7 @@ export class WindowManager {
         frame: false,
         roundedCorners: false,
         type: process.platform === 'darwin' ? 'panel' : undefined,
+        enableLargerThanScreen: process.platform === 'darwin',
         transparent: true,
         backgroundColor: '#00000000',
         hasShadow: false,

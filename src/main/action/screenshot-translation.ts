@@ -48,7 +48,9 @@ export class ScreenshotTranslationAction {
             maximizable: false,
             fullscreenable: false,
             skipTaskbar: true,
-            ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
+            ...(process.platform === 'darwin'
+              ? { type: 'panel' as const, enableLargerThanScreen: true }
+              : {}),
             webPreferences: {
               preload: resolvePreloadPath('screenshot-area.js'),
               contextIsolation: true,
