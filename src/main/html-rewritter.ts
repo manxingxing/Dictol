@@ -34,6 +34,7 @@ export function rewriteEntryHref(href: string, dictionaryId: number): string {
   if (!/^entry:\/\//i.test(href)) return href
   const word = href.replace(/^entry:\/\/\/?/i, '')
   if (!word) return href
+  if (word.startsWith('#')) return word
   return `entry://dictionary-${dictionaryId}/${word}`
 }
 
