@@ -17,7 +17,7 @@ export interface AccessibleLookup {
 export declare function readAccessibleText(
   x: number,
   y: number,
-  includeContext: boolean
+  includeContext?: boolean
 ): Promise<AccessibleLookup>
 
 export interface AccessibleSelection {

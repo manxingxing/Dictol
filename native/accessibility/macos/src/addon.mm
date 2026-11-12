@@ -97,8 +97,8 @@ static napi_value schedule_lookup(napi_env env, AccessibilityWork *work, const c
 static napi_value read_accessible_text(napi_env env, napi_callback_info info) {
     size_t argc = 3;
     napi_value argv[3];
-    if (napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr) != napi_ok || argc != 3) {
-        napi_throw_type_error(env, nullptr, "readAccessibleText expects x, y, includeContext");
+    if (napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr) != napi_ok || argc < 2) {
+        napi_throw_type_error(env, nullptr, "readAccessibleText expects x, y, and optional includeContext");
         return nullptr;
     }
 
@@ -108,10 +108,11 @@ static napi_value read_accessible_text(napi_env env, napi_callback_info info) {
     napi_valuetype context_type;
     if (napi_typeof(env, argv[0], &x_type) != napi_ok || x_type != napi_number ||
         napi_typeof(env, argv[1], &y_type) != napi_ok || y_type != napi_number ||
-        napi_typeof(env, argv[2], &context_type) != napi_ok || context_type != napi_boolean ||
         napi_get_value_double(env, argv[0], &work->x) != napi_ok ||
         napi_get_value_double(env, argv[1], &work->y) != napi_ok ||
-        napi_get_value_bool(env, argv[2], &work->include_context) != napi_ok) {
+        (argc == 3 && (napi_typeof(env, argv[2], &context_type) != napi_ok ||
+         (context_type != napi_undefined && (context_type != napi_boolean ||
+          napi_get_value_bool(env, argv[2], &work->include_context) != napi_ok))))) {
         delete work;
         napi_throw_type_error(env, nullptr, "readAccessibleText expects (number, number, boolean)");
         return nullptr;

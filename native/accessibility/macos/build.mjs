@@ -34,8 +34,8 @@ const sdk = execFileSync('xcrun', ['--sdk', 'macosx', '--show-sdk-path'], {
 const includeDirectory = resolve(dirname(process.execPath), '../include/node')
 const archFlag = targetArch === 'arm64' ? 'arm64' : 'x86_64'
 const commonArgs = ['-isysroot', sdk, '-arch', archFlag, '-O2', '-Wall']
-const deploymentTarget = process.env.MACOSX_DEPLOYMENT_TARGET
-if (deploymentTarget) commonArgs.push(`-mmacosx-version-min=${deploymentTarget}`)
+const deploymentTarget = process.env.MACOSX_DEPLOYMENT_TARGET ?? '13.0'
+commonArgs.push(`-mmacosx-version-min=${deploymentTarget}`)
 
 execFileSync(
   'clang',
@@ -80,7 +80,7 @@ execFileSync(
     sdk,
     '-arch',
     archFlag,
-    ...(deploymentTarget ? [`-mmacosx-version-min=${deploymentTarget}`] : []),
+    `-mmacosx-version-min=${deploymentTarget}`,
     bridgeObject,
     addonObject,
     '-framework',

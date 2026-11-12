@@ -8,8 +8,11 @@ export async function readAccessibleTextAtCursor(
   mode: OcrLookupMode
 ): Promise<AccessibleTextLookup> {
   const pointer = screen.getCursorScreenPoint()
+  const startedAt = performance.now()
   const lookup = await readAccessibleText(pointer.x, pointer.y, mode === 'ai')
-  console.info('[Accessibility] read Text Via macOS Accessibility API', lookup)
+  console.info('[Accessibility] read Text Via macOS Accessibility API', lookup, {
+    elapsedMs: Math.round(performance.now() - startedAt)
+  })
   const result = lookup.result
   if (!result) return { failure: lookup.failure }
 

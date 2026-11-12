@@ -4,7 +4,7 @@ Standalone Node.js native addon for reading text at a physical screen point.
 
 The package exports the same API on macOS and Windows:
 
-- `readAccessibleText(x, y, includeContext)` returns a word and its screen bounds,
+- `readAccessibleText(x, y, includeContext = false)` returns a word and its screen bounds,
   or a failure reason. With `includeContext: true`, the result also contains text
   and a UTF-16 offset into that text.
 - macOS also exports `readAccessibleSelection(includeContext = false)`. It reads
