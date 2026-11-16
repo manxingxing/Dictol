@@ -103,12 +103,15 @@ export class SelectionExplanationController extends BaseController {
     this.flushExplanationPayload()
   }
 
-  prepareForOcrCapture(): void {
+  prepareForOcrCapture(): number {
     this.lookupVersion += 1
     this.cancelAiExplanation()
     this.resolvePendingExplanationLoading()
-    const window = this.currentWindow
-    if (window?.isVisible()) hideSelectionWindow(window)
+    return this.lookupVersion
+  }
+
+  isLookupCurrent(version: number): boolean {
+    return version === this.lookupVersion
   }
 
   hideIfOutside(point: Point): void {
