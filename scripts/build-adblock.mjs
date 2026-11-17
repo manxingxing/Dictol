@@ -11,6 +11,8 @@ const addonPath = join(jsDirectory, 'index.node')
 const cargoCpArtifact = join(rootDirectory, 'node_modules', '.bin', 'cargo-cp-artifact')
 const windowsTarget = 'x86_64-pc-windows-msvc'
 
+if (process.platform === 'darwin') process.env.MACOSX_DEPLOYMENT_TARGET ??= '13.0'
+
 const targetArgumentIndex = process.argv.indexOf('--target')
 const target =
   targetArgumentIndex === -1

@@ -16,6 +16,7 @@ import { WordbooksPage } from '@/pages/WordbooksPage'
 import { WordbookWords } from '@/pages/WordbookWords'
 import { AboutPage } from '@/pages/settings/AboutPage'
 import { AiLookupSettingsPage } from '@/pages/settings/AiLookupSettingsPage'
+import { OcrSettingsPage } from '@/pages/settings/OcrSettingsPage'
 import { AppearanceSettingsPage } from '@/pages/settings/AppearanceSettingsPage'
 import { KeyboardSettingsPage } from '@/pages/settings/KeyboardSettingsPage'
 import { TranslationSettingsPage } from '@/pages/settings/TranslationSettingsPage'
@@ -68,6 +69,7 @@ export const router = createHashRouter([
         children: [
           { index: true, element: <Navigate to="appearance" replace /> },
           { path: 'appearance', element: <AppearanceSettingsPage /> },
+          { path: 'ocr', element: <OcrSettingsPage /> },
           { path: 'capture', element: <WordCaptureSettingsPage /> },
           { path: 'translation', element: <TranslationSettingsPage /> },
           { path: 'ai', element: <AiLookupSettingsPage /> },

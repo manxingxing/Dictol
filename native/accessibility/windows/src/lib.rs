@@ -25,6 +25,70 @@ pub struct AccessibleLookup {
 }
 
 #[cfg(windows)]
+#[napi(object)]
+pub struct AccessibleSelection {
+    pub selected_text: String,
+    pub text: Option<String>,
+    pub offset: Option<u32>,
+}
+
+#[cfg(windows)]
+#[napi(object)]
+pub struct AccessibleSelectionLookup {
+    pub result: Option<AccessibleSelection>,
+    pub failure: Option<String>,
+}
+
+#[cfg(windows)]
+pub struct ReadAccessibleSelectionTask {
+    include_context: bool,
+}
+
+#[cfg(windows)]
+impl Task for ReadAccessibleSelectionTask {
+    type Output = AccessibleSelectionLookup;
+    type JsValue = AccessibleSelectionLookup;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        match ui_automation::read_accessible_selection(self.include_context) {
+            Ok(Some(selection)) => Ok(AccessibleSelectionLookup {
+                result: Some(AccessibleSelection {
+                    selected_text: selection.selected_text,
+                    text: selection.text,
+                    offset: selection.offset,
+                }),
+                failure: None,
+            }),
+            Ok(None) => Ok(AccessibleSelectionLookup {
+                result: None,
+                failure: Some("selected-text-unavailable".into()),
+            }),
+            Err(error) => Ok(AccessibleSelectionLookup {
+                result: None,
+                failure: Some(format!("uia-error: {error}")),
+            }),
+        }
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output)
+    }
+}
+
+#[cfg(windows)]
+#[napi(
+    js_name = "readAccessibleSelection",
+    ts_return_type = "Promise<AccessibleSelectionLookup>"
+)]
+pub fn read_accessible_selection(
+    include_context: Option<bool>,
+) -> AsyncTask<ReadAccessibleSelectionTask> {
+    AsyncTask::new(ReadAccessibleSelectionTask {
+        include_context: include_context.unwrap_or(false),
+    })
+}
+
+#[cfg(windows)]
 pub struct ReadAccessibleTextTask {
     x: i32,
     y: i32,
@@ -74,11 +138,11 @@ impl Task for ReadAccessibleTextTask {
 pub fn read_accessible_text(
     x: f64,
     y: f64,
-    include_context: bool,
+    include_context: Option<bool>,
 ) -> AsyncTask<ReadAccessibleTextTask> {
     AsyncTask::new(ReadAccessibleTextTask {
         x: x.round() as i32,
         y: y.round() as i32,
-        include_context,
+        include_context: include_context.unwrap_or(false),
     })
 }

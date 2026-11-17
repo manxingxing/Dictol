@@ -1,10 +1,9 @@
-import { recognizeMacText, recognizeWindowsText } from '@dictol/ocr-native'
 import { app, BrowserWindow, Notification, screen, type Rectangle } from 'electron'
 import { TRANSLATION_MAX_TEXT_LENGTH } from '../../shared/translation'
 import type { AppRuntime } from '../app-runtime'
 import { createCursorAnchor } from '../lib/selection-position'
 import { captureScreen } from '../ocr/screen-capture'
-import { repairMergedEnglishWords, screenshotTranslationText } from '../ocr/ocr-translation'
+import { recognizeScreenshotText } from '../ocr/screenshot-ocr'
 import { resolvePreloadPath, resolveRendererUrl } from '../output-path'
 
 /** Owns the screenshot selector, OCR work, and translation handoff. */
@@ -124,38 +123,42 @@ export class ScreenshotTranslationAction {
     const region = { x: left, y: top, width: right - left, height: bottom - top }
     this.closeOverlays()
     this.busy = true
-    void this.translateRegion(display.id, region).finally(() => {
+    const engine = this.runtime.appConfig.load().ocrEngine
+    void this.translateRegion(display.id, region, engine).finally(() => {
       this.busy = false
     })
   }
 
-  private async translateRegion(displayId: number, region: Rectangle): Promise<void> {
+  private async translateRegion(
+    displayId: number,
+    region: Rectangle,
+    engine: 'system' | 'paddle'
+  ): Promise<void> {
     try {
       // Let the window compositor remove the selection overlay before capturing.
       await new Promise((resolve) => setTimeout(resolve, 80))
+      const captureStartedAt = performance.now()
       const image = await captureScreen({ displayId, region })
+      if (engine === 'paddle') {
+        console.info('[PaddleOCR] Screenshot captured', {
+          source: 'screenshot-translation',
+          elapsedMs: Math.round(performance.now() - captureStartedAt),
+          backend: image.backend,
+          size: image.pixelSize
+        })
+      }
       try {
         this.showProgress(region)
       } catch (error) {
         console.warn('[ScreenshotTranslation] Failed to show OCR progress', error)
       }
-      const observations =
-        process.platform === 'darwin'
-          ? (
-              await recognizeMacText(
-                image.data,
-                ['en-US', 'zh-Hans', 'ja-JP', 'zh-Hant'],
-                true,
-                true
-              )
-            ).observations
-          : (await recognizeWindowsText(image.data)).observations
-      const recognizedText = screenshotTranslationText(observations)
       const lexicon = this.runtime.builtInLexicon
       const text = (
-        lexicon
-          ? repairMergedEnglishWords(recognizedText, (word) => lexicon.lookup(word)?.frq ?? null)
-          : recognizedText
+        await recognizeScreenshotText(
+          engine,
+          image.data,
+          lexicon ? (word) => lexicon.lookup(word)?.frq ?? null : undefined
+        )
       ).slice(0, TRANSLATION_MAX_TEXT_LENGTH)
       if (!text) throw new Error('没有识别到文字')
       this.closeStatusWindow()

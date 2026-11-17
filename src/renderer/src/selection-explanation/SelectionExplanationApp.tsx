@@ -12,10 +12,13 @@ declare global {
     dictolSelectionExplanation: {
       tts: TtsPlayback
       nativeRoundedWindow: boolean
+      chromeMaterial: 'vibrancy' | 'mica' | null
       onUpdate: (callback: (payload: SelectionExplanationPayload) => void) => () => void
       loadingReady: (requestId: number) => void
       lookupWord: (word: string) => void
       showAi: () => void
+      showContext: () => void
+      returnToDictionary: () => void
       selectDictionary: (dictionaryId: string) => void
       close: () => void
       togglePin: () => void

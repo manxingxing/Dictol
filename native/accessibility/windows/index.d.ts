@@ -5,6 +5,17 @@ export interface AccessibleLookup {
   failure?: string
 }
 
+export interface AccessibleSelection {
+  selectedText: string
+  text?: string
+  offset?: number
+}
+
+export interface AccessibleSelectionLookup {
+  result?: AccessibleSelection
+  failure?: string
+}
+
 export interface AccessibleText {
   text?: string
   offset?: number
@@ -15,4 +26,6 @@ export interface AccessibleText {
   height: number
 }
 
-export declare function readAccessibleText(x: number, y: number, includeContext: boolean): Promise<AccessibleLookup>
+export declare function readAccessibleSelection(includeContext?: boolean | undefined | null): Promise<AccessibleSelectionLookup>
+
+export declare function readAccessibleText(x: number, y: number, includeContext?: boolean | undefined | null): Promise<AccessibleLookup>

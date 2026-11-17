@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
+import type { OcrEngine } from '../shared/ocr'
 import type { ThemeMode } from '../shared/theme-mode'
 import type { TtsConfig } from '../shared/tts'
 import type { AiLookupConfig } from '../shared/ai-ipc'
@@ -18,6 +19,7 @@ import {
 
 export type AppConfig = {
   themeMode: ThemeMode
+  ocrEngine: OcrEngine
   aggregateLayout: 'vertical' | 'horizontal'
   dictionaryLayout: DictionaryLayout
   dictionaryDisplay: DictionaryDisplay
@@ -45,6 +47,7 @@ export type AppConfig = {
 
 const DEFAULT_CONFIG: AppConfig = {
   themeMode: 'auto',
+  ocrEngine: 'system',
   aggregateLayout: 'vertical',
   dictionaryLayout: 'single',
   dictionaryDisplay: 'icon',
@@ -167,6 +170,7 @@ export class AppConfigStore {
 function parseConfig(value: unknown): AppConfig {
   if (typeof value !== 'object' || value === null) return cloneConfig(DEFAULT_CONFIG)
   const candidate = value as {
+    ocrEngine?: unknown
     themeMode?: unknown
     aggregateLayout?: unknown
     dictionaryLayout?: unknown
@@ -205,6 +209,7 @@ function parseConfig(value: unknown): AppConfig {
   }
 
   return {
+    ocrEngine: candidate.ocrEngine === 'paddle' ? 'paddle' : 'system',
     themeMode:
       candidate.themeMode === 'light' || candidate.themeMode === 'dark'
         ? candidate.themeMode
@@ -319,6 +324,7 @@ function parseConfig(value: unknown): AppConfig {
 function cloneConfig(config: AppConfig): AppConfig {
   return {
     themeMode: config.themeMode,
+    ocrEngine: config.ocrEngine,
     aggregateLayout: config.aggregateLayout,
     dictionaryLayout: config.dictionaryLayout,
     dictionaryDisplay: config.dictionaryDisplay,

@@ -25,5 +25,6 @@ export type SelectionExplanationPayload = {
   ocrSentence?: string
   ocrContext?: string
   ocrExplanation?: OcrAiExplanation
+  selectionContext?: { word: string; sentence: string; context: string }
 }
 import type { OcrAiExplanation } from './ocr'

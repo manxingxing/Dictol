@@ -30,7 +30,6 @@ files:
   - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,build.mjs,index.d.ts,package-lock.json}'
   - '!node_modules/@dictol/mdict-native/*.node'
   - '!node_modules/@dictol/accessibility-native/{macos,windows,target,test,node_modules}/**'
-  - '!node_modules/@dictol/screen-capture-native/{macos,windows,target,test,node_modules}/**'
   - '!node_modules/@dictol/ocr-native/{macos,windows,target,test,node_modules}/**'
   - '!node_modules/adblock-rs/Cargo.lock'
   - '!node_modules/adblock-rs/Cargo.toml'
@@ -49,10 +48,10 @@ files:
   - '!node_modules/adblock-rs/js/src/**'
   - '!node_modules/adblock-rs/js/test/**'
 asarUnpack:
+  - node_modules/onnxruntime-node/bin/**
   - resources/**
   - node_modules/@dictol/mdict-native/prebuilds/**/*.node
   - node_modules/@dictol/accessibility-native/prebuilds/**/*.node
-  - node_modules/@dictol/screen-capture-native/prebuilds/**/*.node
   - node_modules/@dictol/ocr-native/prebuilds/**/*.node
   - node_modules/adblock-rs/js/index.node
   - node_modules/selection-hook/prebuilds/**
@@ -96,7 +95,6 @@ win:
     - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,build.mjs,index.d.ts,package-lock.json}'
     - '!node_modules/@dictol/mdict-native/*.node'
     - '!node_modules/@dictol/accessibility-native/{macos,windows,target,test,node_modules}/**'
-    - '!node_modules/@dictol/screen-capture-native/{macos,windows,target,test,node_modules}/**'
     - '!node_modules/@dictol/ocr-native/{macos,windows,target,test,node_modules}/**'
     - '!node_modules/adblock-rs/Cargo.lock'
     - '!node_modules/adblock-rs/Cargo.toml'
@@ -118,10 +116,8 @@ win:
     - '!node_modules/@dictol/mdict-native/prebuilds/linux-*/**'
     - '!node_modules/@dictol/mdict-native/prebuilds/win32-arm64/**'
     - '!node_modules/@dictol/accessibility-native/prebuilds/darwin-*/**'
-    - '!node_modules/@dictol/screen-capture-native/prebuilds/darwin-*/**'
     - '!node_modules/@dictol/ocr-native/prebuilds/darwin-*/**'
     - '!node_modules/@dictol/accessibility-native/prebuilds/win32-arm64/**'
-    - '!node_modules/@dictol/screen-capture-native/prebuilds/win32-arm64/**'
     - '!node_modules/@dictol/ocr-native/prebuilds/win32-arm64/**'
     - '!node_modules/better-sqlite3/{deps,src}/**'
     - '!node_modules/better-sqlite3/prebuilds/darwin*.node'
@@ -131,6 +127,8 @@ win:
     - '!node_modules/selection-hook/prebuilds/darwin*/**'
     - '!node_modules/selection-hook/prebuilds/linux*/**'
     - '!node_modules/selection-hook/prebuilds/win32-arm64/**'
+    - '!node_modules/onnxruntime-node/bin/napi-v6/{darwin,linux}/**'
+    - '!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**'
     - '!node_modules/@img/sharp-darwin-*/**'
     - '!node_modules/@img/sharp-libvips-darwin-*/**'
     - '!node_modules/@img/sharp-linux*/**'
@@ -157,7 +155,7 @@ nsis:
   allowToChangeInstallationDirectory: true
 mac:
   icon: build/icon.icns
-  minimumSystemVersion: '14.0'
+  minimumSystemVersion: '13.0'
   artifactName: ${name}-${version}-${arch}-mac.${ext}
   # Do not let electron-builder sign with a fallback identity. The afterPack
   # hook ad-hoc signs executable code on both macOS architectures; the app has
@@ -194,7 +192,6 @@ mac:
     - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,build.mjs,index.d.ts,package-lock.json}'
     - '!node_modules/@dictol/mdict-native/*.node'
     - '!node_modules/@dictol/accessibility-native/{macos,windows,target,test,node_modules}/**'
-    - '!node_modules/@dictol/screen-capture-native/{macos,windows,target,test,node_modules}/**'
     - '!node_modules/@dictol/ocr-native/{macos,windows,target,test,node_modules}/**'
     - '!node_modules/adblock-rs/Cargo.lock'
     - '!node_modules/adblock-rs/Cargo.toml'
@@ -222,11 +219,9 @@ mac:
     - '!node_modules/@dictol/mdict-native/prebuilds/win32-*/**'
     - '!node_modules/@dictol/mdict-native/prebuilds/linux-*/**'
     - '!node_modules/@dictol/accessibility-native/prebuilds/win32-*/**'
-    - '!node_modules/@dictol/screen-capture-native/prebuilds/win32-*/**'
     - '!node_modules/@dictol/ocr-native/prebuilds/win32-*/**'
     - node_modules/@dictol/mdict-native/prebuilds/darwin-*/**
     - node_modules/@dictol/accessibility-native/prebuilds/darwin-*/**
-    - node_modules/@dictol/screen-capture-native/prebuilds/darwin-*/**
     - node_modules/@dictol/ocr-native/prebuilds/darwin-*/**
     - '!node_modules/better-sqlite3/{deps,src}/**'
     - '!node_modules/better-sqlite3/prebuilds/linux*.node'
@@ -236,6 +231,7 @@ mac:
     - '!node_modules/selection-hook/prebuilds/linux*/**'
     - '!node_modules/selection-hook/prebuilds/win32*/**'
     - node_modules/selection-hook/prebuilds/darwin-*/selection-hook.node
+    - '!node_modules/onnxruntime-node/bin/napi-v6/{win32,linux}/**'
     - '!node_modules/@img/sharp-win32-*/**'
     - '!node_modules/@img/sharp-linux*/**'
     - '!node_modules/@img/sharp-libvips-linux*/**'
@@ -262,8 +258,6 @@ linux:
     - '!node_modules/@dictol/mdict-native/prebuilds/win32-*/**'
     - '!node_modules/@dictol/accessibility-native/prebuilds/darwin-*/**'
     - '!node_modules/@dictol/accessibility-native/prebuilds/win32-*/**'
-    - '!node_modules/@dictol/screen-capture-native/prebuilds/darwin-*/**'
-    - '!node_modules/@dictol/screen-capture-native/prebuilds/win32-*/**'
     - '!node_modules/@dictol/ocr-native/prebuilds/darwin-*/**'
     - '!node_modules/@dictol/ocr-native/prebuilds/win32-*/**'
   icon: build/icon.png

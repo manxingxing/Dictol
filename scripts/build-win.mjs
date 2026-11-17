@@ -36,6 +36,7 @@ try {
   runNpm(['run', 'native:build:win-x64'])
   runNpm(['run', 'adblock:build:win-x64'])
   runNpm(['run', 'native:sign:win-x64'])
+  runNpm(['run', 'rapidocr:prepare'])
   runNpm(['run', 'typecheck'])
   runBinary('electron-vite', ['build'])
   runBinary('electron-builder', ['--win', '--x64', ...process.argv.slice(2)])

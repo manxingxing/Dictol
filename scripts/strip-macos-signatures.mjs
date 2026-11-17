@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+
 import { execFileSync } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -158,15 +160,7 @@ function pruneAndVerifyNativeModules(appPath, arch) {
       `darwin-${arch}`,
       'accessibility.node'
     ),
-    join(
-      unpacked,
-      '@dictol',
-      'screen-capture-native',
-      'prebuilds',
-      `darwin-${arch}`,
-      'screen-capture.node'
-    ),
-    join(unpacked, '@dictol', 'ocr-native', 'prebuilds', `darwin-${arch}`, 'ocr.node'),
+    join(unpacked, '@dictol', 'ocr-native', 'prebuilds', `darwin-${arch}`, 'screen-capture.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', `darwin-${arch}.node`),
     join(unpacked, 'selection-hook', 'prebuilds', `darwin-${arch}`, 'selection-hook.node'),
     join(
@@ -197,12 +191,11 @@ function pruneAndVerifyNativeModules(appPath, arch) {
     join(
       unpacked,
       '@dictol',
-      'screen-capture-native',
+      'ocr-native',
       'prebuilds',
       `darwin-${otherArch}`,
       'screen-capture.node'
     ),
-    join(unpacked, '@dictol', 'ocr-native', 'prebuilds', `darwin-${otherArch}`, 'ocr.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', `darwin-${otherArch}.node`),
     join(unpacked, 'selection-hook', 'prebuilds', `darwin-${otherArch}`, 'selection-hook.node')
   ]
@@ -240,6 +233,29 @@ function pruneAndVerifyNativeModules(appPath, arch) {
     }
   }
 
+  const screenCaptureBinary = readFileSync(expected[2])
+  const screenCaptureExports = [
+    'captureScreenRegion',
+    'captureDisplay',
+    'captureWindow',
+    'listShareableDisplays',
+    'listShareableWindows',
+    'hasScreenCapturePermission',
+    'recognizeMacPng',
+    'chineseWordRange',
+    'captureAndRecognizeMacText',
+    'recognizeMacSnapshot',
+    'releaseMacSnapshot'
+  ]
+  const missingCaptureExports = screenCaptureExports.filter(
+    (name) => !screenCaptureBinary.includes(Buffer.from(name))
+  )
+  if (missingCaptureExports.length > 0) {
+    throw new Error(
+      `Packaged macOS screen capture binding is missing exports: ${missingCaptureExports.join(', ')}`
+    )
+  }
+
   console.log(`  • verified macOS native modules arch=${arch} count=${expected.length}`)
 }
 
@@ -267,15 +283,7 @@ function verifyWindowsNativeModules(appOutDir, arch) {
       'win32-x64',
       'accessibility.node'
     ),
-    join(
-      unpacked,
-      '@dictol',
-      'screen-capture-native',
-      'prebuilds',
-      'win32-x64',
-      'screen-capture.node'
-    ),
-    join(unpacked, '@dictol', 'ocr-native', 'prebuilds', 'win32-x64', 'ocr.node'),
+    join(unpacked, '@dictol', 'ocr-native', 'prebuilds', 'win32-x64', 'screen-capture.node'),
     join(unpacked, 'adblock-rs', 'js', 'index.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', 'win32-x64.node'),
     join(unpacked, 'selection-hook', 'prebuilds', 'win32-x64', 'selection-hook.node'),
@@ -285,7 +293,6 @@ function verifyWindowsNativeModules(appOutDir, arch) {
   const nativePackageRoots = [
     join(unpacked, '@dictol', 'mdict-native'),
     join(unpacked, '@dictol', 'accessibility-native'),
-    join(unpacked, '@dictol', 'screen-capture-native'),
     join(unpacked, '@dictol', 'ocr-native'),
     join(unpacked, 'adblock-rs'),
     join(unpacked, 'better-sqlite3'),
@@ -341,10 +348,16 @@ function verifyWindowsNativeModules(appOutDir, arch) {
 
   const screenCaptureBinary = readFileSync(expected[2])
   const screenCaptureExports = [
-    'captureWindowsDisplayAtPoint',
-    'captureWindowsScreenRegion',
+    'captureScreenRegion',
+    'captureDisplay',
+    'captureWindow',
+    'listShareableDisplays',
+    'listShareableWindows',
     'getWindowsDisplayBoundsAtPoint',
-    'stopWindowsScreenCaptureSessions'
+    'recognizeWindowsText',
+    'captureAndRecognizeWindowsText',
+    'recognizeWindowsSnapshot',
+    'releaseWindowsSnapshot'
   ]
   const missingCaptureExports = screenCaptureExports.filter(
     (name) => !screenCaptureBinary.includes(Buffer.from(name))
@@ -355,11 +368,54 @@ function verifyWindowsNativeModules(appOutDir, arch) {
     )
   }
 
-  if (!readFileSync(expected[3]).includes(Buffer.from('recognizeWindowsText'))) {
-    throw new Error('Packaged Windows OCR binding is missing recognizeWindowsText')
-  }
-
   console.log(`  • verified Windows native modules arch=${arch} count=${expected.length}`)
+}
+
+function verifyRapidOcrAssets(resourcesPath, platform, arch) {
+  const unpacked = join(resourcesPath, 'app.asar.unpacked')
+  const models = join(unpacked, 'resources', 'rapidocr')
+  for (const name of [
+    'PP-OCRv6_det_small.onnx',
+    'PP-OCRv6_rec_small.onnx',
+    'ch_ppocr_mobile_v2.0_cls_mobile.onnx',
+    'multi_PP-OCRv6_rec_small-dictionary.txt'
+  ]) {
+    const path = join(models, name)
+    if (!existsSync(path)) throw new Error(`Missing RapidOCR model: ${path}`)
+  }
+  for (const name of ['onnxruntime-LICENSE.txt', 'onnxruntime-ThirdPartyNotices.txt']) {
+    const path = join(unpacked, 'resources', 'rapidocr-licenses', name)
+    if (!existsSync(path)) throw new Error(`Missing ONNX Runtime license notice: ${path}`)
+  }
+  const base = join(unpacked, 'node_modules', 'onnxruntime-node', 'bin', 'napi-v6', platform)
+  const binding = join(base, arch, 'onnxruntime_binding.node')
+  const runtimeVersion = JSON.parse(
+    readFileSync(
+      join(import.meta.dirname, '..', 'node_modules', 'onnxruntime-node', 'package.json')
+    )
+  ).version
+  const runtime = join(
+    base,
+    arch,
+    platform === 'darwin' ? `libonnxruntime.${runtimeVersion}.dylib` : 'onnxruntime.dll'
+  )
+  for (const path of [binding, runtime]) {
+    if (!existsSync(path)) throw new Error(`Missing RapidOCR native dependency: ${path}`)
+    if (platform === 'darwin') {
+      const expected = arch === 'arm64' ? 'arm64' : 'x86_64'
+      if (!fileArchitecture(path).includes(expected)) throw new Error(`Wrong architecture: ${path}`)
+    } else if (platform === 'win32' && !isWindowsX64Pe(path)) {
+      throw new Error(`Wrong architecture: ${path}`)
+    }
+  }
+  if (platform === 'win32' && existsSync(join(base, 'arm64'))) {
+    throw new Error('Unexpected Windows arm64 ONNX Runtime in x64 package')
+  }
+  if (platform === 'darwin') {
+    const other = join(base, arch === 'arm64' ? 'x64' : 'arm64')
+    if (existsSync(other)) rmSync(other, { recursive: true, force: true })
+  }
+  console.log(`  • verified RapidOCR models and runtime platform=${platform} arch=${arch}`)
 }
 
 export default async function verifyAndSignNativePackages(context) {
@@ -367,6 +423,7 @@ export default async function verifyAndSignNativePackages(context) {
     const arch = context.arch === 1 || context.arch === 'x64' ? 'x64' : String(context.arch)
     pruneSqliteSimple(join(context.appOutDir, 'resources'), 'win32', arch)
     verifyWindowsNativeModules(context.appOutDir, arch)
+    verifyRapidOcrAssets(join(context.appOutDir, 'resources'), 'win32', arch)
     return
   }
   if (context.electronPlatformName === 'linux') {
@@ -388,6 +445,7 @@ export default async function verifyAndSignNativePackages(context) {
   pruneSqliteSimple(join(appPath, 'Contents', 'Resources'), 'darwin', arch)
   verifySystemTranslationHelper(appPath, [arch === 'x64' ? 'x86_64' : 'arm64'])
   pruneAndVerifyNativeModules(appPath, arch)
+  verifyRapidOcrAssets(join(appPath, 'Contents', 'Resources'), 'darwin', arch)
 
   const { bundles, files } = collectCandidates(appPath)
   // Sign nested code before its parent to keep every resource seal valid.

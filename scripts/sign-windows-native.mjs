@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, renameSync, rmSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const root = resolve(import.meta.dirname, '..')
@@ -21,7 +21,17 @@ const files = [
     'win32-x64',
     'dictol-mdict-node.win32-x64-msvc.node'
   ),
-  join(root, 'native', 'ocr', 'prebuilds', 'win32-x64', 'ocr.node'),
+  join(root, 'native', 'ocr', 'prebuilds', 'win32-x64', 'screen-capture.node'),
+  join(
+    root,
+    'node_modules',
+    'onnxruntime-node',
+    'bin',
+    'napi-v6',
+    'win32',
+    'x64',
+    'onnxruntime_binding.node'
+  ),
   join(root, 'node_modules', 'adblock-rs', 'js', 'index.node'),
   join(root, 'node_modules', 'better-sqlite3', 'prebuilds', 'win32-x64.node'),
   join(root, 'node_modules', 'selection-hook', 'prebuilds', 'win32-x64', 'selection-hook.node')

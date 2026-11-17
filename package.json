@@ -15,9 +15,9 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "start": "electron-vite preview",
-    "dev": "npm run system-translation:build && npm run system-translation:stage && electron-vite dev",
-    "inspect": "npm run system-translation:build && npm run system-translation:stage && electron-vite dev --inspect 9229 --sourcemap",
-    "build": "npm run native:build && npm run system-translation:build && npm run system-translation:stage && npm run adblock:build && npm run typecheck && electron-vite build",
+    "dev": "npm run rapidocr:prepare && npm run system-translation:build && npm run system-translation:stage && electron-vite dev",
+    "inspect": "npm run rapidocr:prepare && npm run system-translation:build && npm run system-translation:stage && electron-vite dev --inspect 9229 --sourcemap",
+    "build": "npm run rapidocr:prepare && npm run native:build && npm run system-translation:build && npm run system-translation:stage && npm run adblock:build && npm run typecheck && electron-vite build",
     "build:native": "node scripts/build-native-dependencies.mjs",
     "build:native:mac:x64": "node scripts/build-native-dependencies.mjs --platform mac --arch x64",
     "build:native:mac:arm64": "node scripts/build-native-dependencies.mjs --platform mac --arch arm64",
@@ -42,12 +42,12 @@
     "build:win": "node scripts/build-win.mjs",
     "build:mac": "node scripts/build-mac.mjs x64",
     "build:mac-arm64": "node scripts/build-mac.mjs arm64",
-    "build:linux": "node scripts/build-linux.mjs"
+    "build:linux": "node scripts/build-linux.mjs",
+    "rapidocr:prepare": "node scripts/prepare-rapidocr-models.mjs"
   },
   "dependencies": {
-    "@dictol/mdict-native": "file:native/mdict-node",
     "@dictol/accessibility-native": "file:native/accessibility",
-    "@dictol/screen-capture-native": "file:native/screen-capture",
+    "@dictol/mdict-native": "file:native/mdict-node",
     "@dictol/ocr-native": "file:native/ocr",
     "@electron-toolkit/utils": "^4.0.0",
     "@radix-ui/react-popover": "^1.1.23",
@@ -63,12 +63,14 @@
     "cmdk": "^1.1.1",
     "drizzle-orm": "^0.45.2",
     "exceljs": "4.4.0",
+    "onnxruntime-node": "1.23.0",
     "openai": "^7.47.0",
     "parse5": "^7.3.0",
     "postcss": "^8.5.25",
     "postcss-selector-parser": "^7.1.6",
     "postcss-value-parser": "^4.2.0",
-    "selection-hook": "^2.1.1",
+    "rapidocr-node": "0.2.3",
+    "selection-hook": "^2.1.2",
     "sharp": "0.35.5"
   },
   "devDependencies": {
@@ -147,9 +149,14 @@
     "fsevents@2.3.3": true,
     "electron-winstaller@5.4.0": true,
     "better-sqlite3@13.0.2": true,
-    "selection-hook@2.1.1": true,
+    "selection-hook@2.1.2": true,
     "adblock-rs@0.13.2": true,
     "esbuild@0.18.20": true,
     "esbuild@0.25.12": true
+  },
+  "overrides": {
+    "rapidocr-node": {
+      "onnxruntime-node": "1.23.0"
+    }
   }
 }

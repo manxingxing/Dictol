@@ -157,7 +157,13 @@ impl Task for RecognizeWindowsTextTask {
     fn compute(&mut self) -> Result<Self::Output> {
         #[cfg(windows)]
         {
-            recognize(&self.png, self.language.as_deref()).map_err(|error| {
+            let started = std::time::Instant::now();
+            let result = recognize(Input::Png(&self.png), self.language.as_deref());
+            eprintln!(
+                "[Native OCR] PNG recognition elapsedMs={:.2}",
+                started.elapsed().as_secs_f64() * 1000.0
+            );
+            result.map_err(|error| {
                 Error::new(Status::GenericFailure, format!("Windows OCR 失败：{error}"))
             })
         }
@@ -191,11 +197,17 @@ pub fn recognize_windows_text(
 }
 
 #[cfg(windows)]
-fn recognize(png: &[u8], language: Option<&str>) -> windows::core::Result<WindowsOcrResult> {
+enum Input<'a> {
+    Png(&'a [u8]),
+    Bgra(&'a [u8], u32, u32),
+}
+
+#[cfg(windows)]
+fn recognize(input: Input<'_>, language: Option<&str>) -> windows::core::Result<WindowsOcrResult> {
     use windows::Globalization::Language;
     use windows::Graphics::Imaging::{
         BitmapAlphaMode, BitmapDecoder, BitmapInterpolationMode, BitmapPixelFormat,
-        BitmapTransform, ColorManagementMode, ExifOrientationMode,
+        BitmapTransform, ColorManagementMode, ExifOrientationMode, SoftwareBitmap,
     };
     use windows::Media::Ocr::OcrEngine;
     use windows::Storage::Streams::{DataWriter, InMemoryRandomAccessStream};
@@ -228,42 +240,96 @@ fn recognize(png: &[u8], language: Option<&str>) -> windows::core::Result<Window
     }
     let recognizer_language = engine.RecognizerLanguage()?.LanguageTag()?.to_string();
 
-    let stream = InMemoryRandomAccessStream::new()?;
-    let writer = DataWriter::CreateDataWriter(&stream)?;
-    writer.WriteBytes(png)?;
-    writer.StoreAsync()?.join()?;
-    writer.DetachStream()?;
-    stream.Seek(0)?;
-
-    let decoder = BitmapDecoder::CreateAsync(&stream)?.join()?;
-    let original_width = decoder.PixelWidth()?;
-    let original_height = decoder.PixelHeight()?;
     let max_dimension = OcrEngine::MaxImageDimension()?;
-    // Small labels in illustrations are often only a dozen physical pixels
-    // high. Enlarge the crop before recognition while keeping memory bounded.
-    let longest_edge = original_width.max(original_height);
-    let scale = (max_dimension.min(3_200) as f64 / longest_edge as f64).min(3.0);
-    let bitmap = if (scale - 1.0).abs() > 0.001 {
-        let transform = BitmapTransform::new()?;
-        transform.SetScaledWidth((original_width as f64 * scale).round().max(1.0) as u32)?;
-        transform.SetScaledHeight((original_height as f64 * scale).round().max(1.0) as u32)?;
-        transform.SetInterpolationMode(BitmapInterpolationMode::Cubic)?;
-        decoder
-            .GetSoftwareBitmapTransformedAsync(
+    let (bitmap, original_width, original_height) = match input {
+        Input::Png(png) => {
+            let stream = InMemoryRandomAccessStream::new()?;
+            let writer = DataWriter::CreateDataWriter(&stream)?;
+            writer.WriteBytes(png)?;
+            writer.StoreAsync()?.join()?;
+            writer.DetachStream()?;
+            stream.Seek(0)?;
+            let decoder = BitmapDecoder::CreateAsync(&stream)?.join()?;
+            let width = decoder.PixelWidth()?;
+            let height = decoder.PixelHeight()?;
+            let scale = (max_dimension.min(3_200) as f64 / width.max(height) as f64).min(3.0);
+            let bitmap = if (scale - 1.0).abs() > 0.001 {
+                let transform = BitmapTransform::new()?;
+                transform.SetScaledWidth((width as f64 * scale).round().max(1.0) as u32)?;
+                transform.SetScaledHeight((height as f64 * scale).round().max(1.0) as u32)?;
+                transform.SetInterpolationMode(BitmapInterpolationMode::Cubic)?;
+                decoder
+                    .GetSoftwareBitmapTransformedAsync(
+                        BitmapPixelFormat::Bgra8,
+                        BitmapAlphaMode::Premultiplied,
+                        &transform,
+                        ExifOrientationMode::IgnoreExifOrientation,
+                        ColorManagementMode::DoNotColorManage,
+                    )?
+                    .join()?
+            } else {
+                decoder
+                    .GetSoftwareBitmapConvertedAsync(
+                        BitmapPixelFormat::Bgra8,
+                        BitmapAlphaMode::Premultiplied,
+                    )?
+                    .join()?
+            };
+            (bitmap, width, height)
+        }
+        Input::Bgra(pixels, width, height) => {
+            use windows::Win32::Graphics::Imaging::{
+                CLSID_WICImagingFactory, GUID_WICPixelFormat32bppPBGRA, IWICImagingFactory,
+                WICBitmapInterpolationModeCubic,
+            };
+            use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
+            let scale = (max_dimension.min(3_200) as f64 / width.max(height) as f64).min(3.0);
+            let scaled_width = (width as f64 * scale).round().max(1.0) as u32;
+            let scaled_height = (height as f64 * scale).round().max(1.0) as u32;
+            let resized;
+            let pixels = if scaled_width != width || scaled_height != height {
+                let factory: IWICImagingFactory = unsafe {
+                    CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)?
+                };
+                let source = unsafe {
+                    factory.CreateBitmapFromMemory(
+                        width,
+                        height,
+                        &GUID_WICPixelFormat32bppPBGRA,
+                        width * 4,
+                        pixels,
+                    )?
+                };
+                let scaler = unsafe { factory.CreateBitmapScaler()? };
+                unsafe {
+                    scaler.Initialize(
+                        &source,
+                        scaled_width,
+                        scaled_height,
+                        WICBitmapInterpolationModeCubic,
+                    )?;
+                }
+                let mut output = vec![0; scaled_width as usize * scaled_height as usize * 4];
+                unsafe {
+                    scaler.CopyPixels(std::ptr::null(), scaled_width * 4, &mut output)?;
+                }
+                resized = output;
+                resized.as_slice()
+            } else {
+                pixels
+            };
+            let writer = DataWriter::new()?;
+            writer.WriteBytes(pixels)?;
+            let buffer = writer.DetachBuffer()?;
+            let bitmap = SoftwareBitmap::CreateCopyWithAlphaFromBuffer(
+                &buffer,
                 BitmapPixelFormat::Bgra8,
+                scaled_width as i32,
+                scaled_height as i32,
                 BitmapAlphaMode::Premultiplied,
-                &transform,
-                ExifOrientationMode::IgnoreExifOrientation,
-                ColorManagementMode::DoNotColorManage,
-            )?
-            .join()?
-    } else {
-        decoder
-            .GetSoftwareBitmapConvertedAsync(
-                BitmapPixelFormat::Bgra8,
-                BitmapAlphaMode::Premultiplied,
-            )?
-            .join()?
+            )?;
+            (bitmap, width, height)
+        }
     };
     let image_width = bitmap.PixelWidth()? as f64;
     let image_height = bitmap.PixelHeight()? as f64;
@@ -441,4 +507,240 @@ mod tests {
         ];
         assert_eq!(repair_split_latin_words("an image", &words), "an image");
     }
+}
+
+#[cfg(windows)]
+#[napi(object)]
+pub struct OcrCrop {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+#[cfg(windows)]
+fn checked_crop(crop: Option<OcrCrop>) -> Result<Option<OcrCrop>> {
+    if let Some(crop) = &crop {
+        if ![crop.x, crop.y, crop.width, crop.height]
+            .iter()
+            .all(|n| n.is_finite())
+            || crop.x < 0.0
+            || crop.y < 0.0
+            || crop.width <= 0.0
+            || crop.height <= 0.0
+            || crop.x + crop.width > 1.0
+            || crop.y + crop.height > 1.0
+        {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Invalid normalized OCR crop",
+            ));
+        }
+    }
+    Ok(crop)
+}
+
+#[cfg(windows)]
+#[napi(object, object_from_js = false)]
+pub struct WindowsCaptureOcrResult {
+    pub snapshot: napi::bindgen_prelude::External<
+        std::sync::Mutex<Option<std::sync::Arc<super::windows_screen_capture::RawFrame>>>,
+    >,
+    pub snapshot_width: u32,
+    pub snapshot_height: u32,
+    pub result: WindowsOcrResult,
+    pub capture_ms: f64,
+    pub ocr_ms: f64,
+}
+
+#[cfg(windows)]
+#[napi(object)]
+pub struct WindowsSnapshotOcrResult {
+    pub result: WindowsOcrResult,
+    pub ocr_ms: f64,
+}
+
+#[cfg(windows)]
+fn recognize_frame(
+    frame: &super::windows_screen_capture::RawFrame,
+    crop: Option<&OcrCrop>,
+    language: Option<&str>,
+) -> Result<WindowsSnapshotOcrResult> {
+    let start = std::time::Instant::now();
+    let cropped;
+    let (pixels, width, height) = if let Some(crop) = crop {
+        let left = (crop.x * frame.width as f64).round() as u32;
+        let top = (crop.y * frame.height as f64).round() as u32;
+        let right = ((crop.x + crop.width) * frame.width as f64).round() as u32;
+        let bottom = ((crop.y + crop.height) * frame.height as f64).round() as u32;
+        let width = right - left;
+        let height = bottom - top;
+        if width == 0 || height == 0 {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "OCR crop is smaller than one pixel",
+            ));
+        }
+        cropped =
+            super::frame_crop::crop_bgra(&frame.pixels, frame.width, left, top, right, bottom);
+        (cropped.as_slice(), width, height)
+    } else {
+        (frame.pixels.as_slice(), frame.width, frame.height)
+    };
+    let result = recognize(Input::Bgra(pixels, width, height), language).map_err(|error| {
+        Error::new(Status::GenericFailure, format!("Windows OCR 失败：{error}"))
+    })?;
+    Ok(WindowsSnapshotOcrResult {
+        result,
+        ocr_ms: start.elapsed().as_secs_f64() * 1000.0,
+    })
+}
+
+#[cfg(windows)]
+pub struct CaptureOcrTask {
+    id: String,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    crop: Option<OcrCrop>,
+    language: Option<String>,
+}
+#[cfg(windows)]
+pub struct CaptureOcrOutput {
+    frame: std::sync::Arc<super::windows_screen_capture::RawFrame>,
+    result: WindowsSnapshotOcrResult,
+    capture_ms: f64,
+}
+#[cfg(windows)]
+impl Task for CaptureOcrTask {
+    type Output = CaptureOcrOutput;
+    type JsValue = WindowsCaptureOcrResult;
+    fn compute(&mut self) -> Result<Self::Output> {
+        let start = std::time::Instant::now();
+        let frame = super::windows_screen_capture::capture_region_raw(
+            self.id.clone(),
+            self.x,
+            self.y,
+            self.width,
+            self.height,
+        )
+        .map_err(|error| {
+            eprintln!(
+                "[Native OCR] capture failed elapsedMs={:.2}",
+                start.elapsed().as_secs_f64() * 1000.0
+            );
+            Error::new(
+                Status::GenericFailure,
+                format!("DICTOL_CAPTURE_ERROR: {error}"),
+            )
+        })?;
+        let capture_ms = start.elapsed().as_secs_f64() * 1000.0;
+        eprintln!("[Native OCR] capture elapsedMs={capture_ms:.2}");
+        let ocr_start = std::time::Instant::now();
+        let result = recognize_frame(&frame, self.crop.as_ref(), self.language.as_deref());
+        eprintln!(
+            "[Native OCR] recognition elapsedMs={:.2}",
+            ocr_start.elapsed().as_secs_f64() * 1000.0
+        );
+        let result = result?;
+        Ok(CaptureOcrOutput {
+            frame: std::sync::Arc::new(frame),
+            result,
+            capture_ms,
+        })
+    }
+    fn resolve(&mut self, _: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(WindowsCaptureOcrResult {
+            snapshot_width: output.frame.width,
+            snapshot_height: output.frame.height,
+            snapshot: napi::bindgen_prelude::External::new(std::sync::Mutex::new(Some(
+                output.frame,
+            ))),
+            result: output.result.result,
+            capture_ms: output.capture_ms,
+            ocr_ms: output.result.ocr_ms,
+        })
+    }
+}
+#[cfg(windows)]
+#[napi]
+pub fn capture_and_recognize_windows_text(
+    display_id: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    crop: Option<OcrCrop>,
+    language: Option<String>,
+) -> Result<AsyncTask<CaptureOcrTask>> {
+    let (id, x, y, width, height) =
+        super::windows_screen_capture::validate_capture_region(&display_id, x, y, width, height)?;
+    Ok(AsyncTask::new(CaptureOcrTask {
+        id,
+        x,
+        y,
+        width,
+        height,
+        crop: checked_crop(crop)?,
+        language,
+    }))
+}
+#[cfg(windows)]
+pub struct SnapshotOcrTask {
+    frame: std::sync::Arc<super::windows_screen_capture::RawFrame>,
+    crop: Option<OcrCrop>,
+    language: Option<String>,
+}
+#[cfg(windows)]
+impl Task for SnapshotOcrTask {
+    type Output = WindowsSnapshotOcrResult;
+    type JsValue = WindowsSnapshotOcrResult;
+    fn compute(&mut self) -> Result<Self::Output> {
+        let start = std::time::Instant::now();
+        let result = recognize_frame(&self.frame, self.crop.as_ref(), self.language.as_deref());
+        eprintln!(
+            "[Native OCR] snapshot recognition elapsedMs={:.2}",
+            start.elapsed().as_secs_f64() * 1000.0
+        );
+        result
+    }
+    fn resolve(&mut self, _: Env, result: Self::Output) -> Result<Self::JsValue> {
+        Ok(result)
+    }
+}
+#[cfg(windows)]
+#[napi]
+pub fn recognize_windows_snapshot(
+    snapshot: &napi::bindgen_prelude::External<
+        std::sync::Mutex<Option<std::sync::Arc<super::windows_screen_capture::RawFrame>>>,
+    >,
+    crop: Option<OcrCrop>,
+    language: Option<String>,
+) -> Result<AsyncTask<SnapshotOcrTask>> {
+    let frame = snapshot
+        .lock()
+        .map_err(|_| Error::new(Status::GenericFailure, "Snapshot lock failed"))?
+        .as_ref()
+        .cloned()
+        .ok_or_else(|| Error::new(Status::InvalidArg, "Snapshot has been released"))?;
+    Ok(AsyncTask::new(SnapshotOcrTask {
+        frame,
+        crop: checked_crop(crop)?,
+        language,
+    }))
+}
+
+#[cfg(windows)]
+#[napi]
+pub fn release_windows_snapshot(
+    snapshot: &napi::bindgen_prelude::External<
+        std::sync::Mutex<Option<std::sync::Arc<super::windows_screen_capture::RawFrame>>>,
+    >,
+) -> Result<()> {
+    snapshot
+        .lock()
+        .map_err(|_| Error::new(Status::GenericFailure, "Snapshot lock failed"))?
+        .take();
+    Ok(())
 }

@@ -9,6 +9,7 @@ import type {
 import { EventEmitter } from 'node:events'
 
 import type { ShortcutHandler } from './shortcut-register'
+import { sentenceContextAt, type OcrSelection } from './ocr/ocr-text'
 
 export type SelectionHookConfig = {
   passiveMode: boolean
@@ -20,6 +21,7 @@ export type SelectionSource = 'shortcut' | 'selection'
 export type CapturedSelection = {
   source: SelectionSource
   selection: TextSelectionData
+  context?: Promise<OcrSelection | null>
 }
 
 export type SelectionHookStatus = {
@@ -46,6 +48,10 @@ export class SelectionHookService implements ShortcutHandler {
   readonly eventBus = new EventEmitter<SelectionHookEvents>()
   private hook: SelectionHookInstance | undefined
   private config: SelectionHookConfig = { passiveMode: true, excludedPrograms: [] }
+  private readonly selectionContexts = new WeakMap<
+    TextSelectionData,
+    Promise<OcrSelection | null>
+  >()
 
   start(config: SelectionHookConfig): SelectionHookStatus {
     const nextConfig = validateConfig(config)
@@ -107,7 +113,10 @@ export class SelectionHookService implements ShortcutHandler {
 
   getCurrentSelection(): TextSelectionData | null {
     if (!this.hook?.isRunning()) return null
-    return this.hook.getCurrentSelection()
+    const selection = this.hook.getCurrentSelection()
+    if (selection)
+      this.selectionContexts.set(selection, this.readSelectionContext(selection, 'shortcut'))
+    return selection
   }
 
   getStatus(): SelectionHookStatus {
@@ -190,7 +199,45 @@ export class SelectionHookService implements ShortcutHandler {
   }
 
   private emitSelection(selection: TextSelectionData, source: SelectionSource): void {
-    this.eventBus.emit('text-selection', { source, selection })
+    const context =
+      this.selectionContexts.get(selection) ?? this.readSelectionContext(selection, source)
+    this.eventBus.emit('text-selection', { source, selection, context })
+  }
+
+  private async readSelectionContext(
+    selection: TextSelectionData,
+    source: SelectionSource
+  ): Promise<OcrSelection | null> {
+    if (process.platform === 'darwin' || process.platform === 'win32') {
+      try {
+        const { readAccessibleSelection } =
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('@dictol/accessibility-native') as typeof import('@dictol/accessibility-native')
+        const lookup = await readAccessibleSelection(true)
+        console.info('[Accessibility] selected text context', {
+          source,
+          selectionHookText: selection.text,
+          ...lookup
+        })
+        const result = lookup.result
+        if (
+          !result ||
+          result.selectedText.trim() !== selection.text.trim() ||
+          result.text === undefined ||
+          result.offset === undefined ||
+          result.text.slice(result.offset, result.offset + result.selectedText.length) !==
+            result.selectedText
+        ) {
+          return null
+        }
+        const context = sentenceContextAt(result.text, result.offset)
+        if (!context?.context.trim()) return null
+        return { word: selection.text.trim(), sentence: context.sentence, context: context.context }
+      } catch (error) {
+        console.error('[Accessibility] Failed to read selected text context', error)
+      }
+    }
+    return null
   }
 
   private readonly handleTextSelection = (selection: TextSelectionData): void => {

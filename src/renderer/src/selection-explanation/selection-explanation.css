@@ -32,3 +32,11 @@ body,
   border: 0;
   border-radius: 0;
 }
+
+:root[data-chrome-material] .selection-explanation-window {
+  background: var(--window-chrome-background);
+}
+
+:root[data-chrome-material] .selection-explanation-window > header {
+  background: transparent;
+}

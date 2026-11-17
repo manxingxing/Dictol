@@ -37,57 +37,50 @@ Node 原生模块通常在工作线程执行 Accessibility 查询；如果坐标
 
 原生层先检查辅助功能授权。未授权返回 `accessibility-not-authorized`，坐标命中调用报错返回 `hit-test:<AXError>`，两者都直接交给主进程回退 OCR。
 
-仅在首次坐标命中满足下表条件时，工作线程才等待 20 ms，再以**同一坐标**调用一次 `AXUIElementCopyElementAtPosition`。
+前两次坐标命中时，如果角色是 `AXWebArea` 或 `AXScrollArea`，或者节点矩形不可用、不包含光标，就等待 20 ms 并以**同一坐标**重试。最多命中测试 3 次，重试 2 次；第三次按实际命中节点继续，不再因这些条件等待。
 
-| 首次命中 | 重试原因日志 | 第二次命中后的处理 |
-| --- | --- | --- |
-| `AXWebArea` | `AXWebArea` | 仍是网页容器则返回 `AXWebArea: search-boundary` |
-| `AXImage` 缺少有效位置或尺寸 | `bounds-unavailable` | 仍是图像则返回 `AXImage: image-content` |
-| `AXImage` 的有效矩形未包含光标 | `image-bounds-miss` | 仍是图像则返回 `AXImage: image-content` |
-| `AXStaticText` 缺少有效位置或尺寸 | `bounds-unavailable` | 若仍是静态文本，直接尝试词定位 |
-| `AXStaticText` 的有效矩形未包含光标 | `static-text-bounds-miss` | 若仍是静态文本，直接尝试词定位 |
+命中的图像矩形包含光标时，直接返回 `AXImage: image-content`；第三次仍命中图像时同样返回该结果。节点矩形检查使用原始矩形，词框容差仅用于后续词定位。`invalid-character-range` 和词框未命中本身都不会触发等待。`AXVideo` 子角色按其角色走常规流程。
 
-第二次以新命中的角色继续。首次命中的图像矩形包含光标时，直接返回 `AXImage: image-content`。首次静态文本和图像的节点矩形检查使用原始矩形，词框容差仅用于后续词定位。`invalid-character-range` 和词框未命中本身都不会触发等待。`AXVideo` 子角色按其角色走常规流程。
+角色判断、重试和搜索边界检查先于 `AXValue` / `AXTitle` 读取。需要重试时，单次查找只返回内部重试状态；完成后才统一序列化 JSON，原生输出缓冲区只分配一次。
 
 ## 3. 查找词和词框
 
-原生实现在 [accessibility.m](../native/accessibility/macos/src/accessibility.m)。从起始元素开始，代码尝试当前节点，再向内搜索子节点；仍未命中则逐层向父节点搜索。起始元素为深度 0，最多向上移动 10 次，到深度 10 为止。
-
-每一层都先完成当前节点及其子树的查找，再读取父节点。祖先链上的 `AXWebArea`、`AXScrollArea`、`AXWindow` 和 `AXApplication` 都是停止边界，遇到即返回 `<角色>: search-boundary`。子树遍历单独判断边界，其中只显式跳过嵌套的 `AXWebArea`。
+原生实现在 [accessibility.m](../native/accessibility/macos/src/accessibility.m)。词定位先检查命中节点及其子树，未命中时最多向上检查两层祖先及其尚未搜索的子树。遇到 `AXWebArea`、`AXScrollArea`、`AXWindow` 或 `AXApplication` 时停止当前尝试并返回 `<角色>: search-boundary`；子树遍历会跳过嵌套的 `AXWebArea`。
 
 ### 直接定位字符
 
-对于 `title` 或 `value` 非空的当前节点，先尝试：
+命中节点和通过矩形筛选的子节点使用同一个单节点定位函数。对于 `value` 非空的节点，先尝试：
 
 1. 使用 `AXRangeForPosition` 取得光标位置对应的字符范围。
-2. 读取该字符附近的文本，用 `NLTokenizer` 找词；对于常见 ASCII 复合词字符，再扩展并修整词范围。
+2. 在已读取的节点 `AXValue` 中，用字符偏移和 `NLTokenizer` 找词；对于常见 ASCII 复合词字符，再扩展并修整词范围。
 3. 使用 `AXBoundsForRange` 获取词框，验证光标是否命中。
 
 词框判断向四周扩展 6 个 AX 坐标单位。对于跨行的词，会尝试检查字符矩形，避免把跨行包围框中的空白当作命中。
 
-直接定位路径最多截取约 8192 个 UTF-16 代码单元的文本窗口；如果只能通过 `AXValue` 获取文本，可能先读取整个 value 再在本地截取。普通查词虽然不返回上下文，原生层仍需要读取文本来确定单词。
+直接定位使用完整的 `AXValue` 分词；没有文本时返回 `text-unavailable`，字符偏移超出文本时返回 `invalid-character-range`。普通查词只返回词和词框。AI 模式在词和词框命中后，才从同一 `AXValue` 截取最多 8192 个 UTF-16 代码单元的上下文。
 
 ### 向内搜索子节点
 
-直接定位失败后，先在当前节点尝试逐词回退（仅限有文本的 `AXStaticText` 和 `AXTextArea`），再按层遍历 `AXChildren`。子树中发现的文本节点直接走逐词查找，不再调用 `AXRangeForPosition`。若当前节点的 `AXRangeForPosition` 返回 `kAXErrorCannotComplete`，则本层跳过整个回退步骤，按祖先链的停止条件决定是否继续向上。
+直接定位失败后，先在当前文本角色节点尝试逐词回退，再按层遍历 `AXChildren`。子树中发现的候选节点同样先调用 `AXRangeForPosition`，失败后才尝试适用的逐词回退。因此，超过 8192 个 UTF-16 代码单元的子节点仍可以通过直接定位命中。若 `AXRangeForPosition` 返回 `kAXErrorCannotComplete`，则跳过该节点的逐词回退和子树；子树搜索继续检查其他分支。
 
 同一次命中测试中的各层子树搜索共用去重集合。对子节点的筛选规则如下。
 
-- 节点的 `title` 和 `value` 都为空或不可用时，跳过节点自身取词和矩形检查，继续检查其子节点。
+- 节点的 `value` 为空或不可用时，若矩形不可用、高度为 1 或包含光标，则继续检查其子节点；否则跳过该子树。
 - 节点有文本时，读取 `AXPosition` 和 `AXSize`；矩形不可用或不包含光标时，跳过该子树。
-- 通过矩形筛选的 `AXStaticText` 和 `AXTextArea` 立即尝试逐词查找，成功则立即返回；未命中时仍可继续搜索其子节点和其他分支。
-- 其他通过筛选的节点进入队列，继续逐层搜索。
+- 通过矩形筛选的有文本节点立即尝试直接字符定位；`AXStaticText` 和 `AXTextArea` 还可以逐词回退，成功则立即返回。
+- 未命中且未发生上述通信失败的候选节点进入队列，继续逐层搜索。已尝试过的根节点不在子树入口再次定位。
 
-命中输入框（`AXTextArea`）或从其内部上溯到输入框时，先在控件自身和子节点内定位词。如果仍未找到，结束 Accessibility 查找并回退 OCR。
+命中输入框（`AXTextArea`）时，在控件自身和子节点内定位词。如果仍未找到，结束 Accessibility 查找并回退 OCR。
 
-逐词回退使用 `NLTokenizer` 分词，从头逐个查询 token 的 `AXBoundsForRange`。token 框向四周扩展 3 个 AX 坐标单位用于筛选，最终词框仍需通过 6 单位容差的验证。该回退不处理超过 8192 个 UTF-16 代码单元的单节点文本。
+逐词回退使用 `NLTokenizer` 分词，从头逐个查询 token 的 `AXBoundsForRange`。token 框向四周扩展 3 个 AX 坐标单位用于筛选，最终词框仍需通过 6 单位容差的验证。该回退仍不处理超过 8192 个 UTF-16 代码单元的单节点文本。
+
+同一候选节点的 `AXValue` 在直接定位、逐词回退和命中后的上下文扩展之间复用。token 与扩展后的词范围相同时，复用 token 矩形；只有范围发生变化才再次查询词框。直接定位和逐词回退共用词框读取与验证代码，直接定位的错误码仍保留。
 
 **词定位的停止条件**
 
 - 子树遍历读到一个节点有超过 100 个直接子节点时，跳过该节点的子树并继续搜索其他分支，不会因此结束整次词定位。恰好 100 个仍可搜索。
-- 祖先链允许向上移动 10 次。深度 10 的节点仍可命中，常规搜索在这一层用尽时记录 `ancestor-depth-limit`。
-- 首次命中、重试、祖先、子树及 AI 内联扩展共用 500 个不同节点的额度。子节点在角色和矩形筛选**之前**计数，包括随后被跳过的节点。定位词时遇到第 501 个不同节点，记录 `node-limit:500` 并回退 OCR。若只在 AI 扩展上下文时触及上限，则保留已命中的词和原节点文本。
-- 单个节点可连续查询多个 token 或字符的矩形。代码在系统 AX 元素和祖先循环中的当前元素上设置 0.3 秒消息超时，整次查询没有总 deadline。
+- 首次命中、重试、祖先和子树搜索共用 100 个不同节点的词定位额度：仅对 `AXValue` 非空、需要执行词定位的节点计数。空节点和筛选时被剪掉的节点不占额度。遇到第 101 个需要词定位的不同节点时，记录 `node-limit:100` 并回退 OCR。命中后的 AI 内联扩展使用独立限制，不占用此额度。
+- 单个节点可连续查询多个 token 或字符的矩形。代码在系统 AX 元素和命中元素上设置 0.3 秒消息超时，整次查询没有总 deadline。
 
 ## 4. 原生返回值和上下文
 
@@ -98,6 +91,8 @@ Node 原生模块通常在工作线程执行 Accessibility 查询；如果坐标
 ```
 
 AI 模式额外返回 `text` 和 `offset`，其中 `offset` 是 `text` 内的 UTF-16 偏移。逐词回退返回的 offset 是命中 token 的起点，不一定是光标下的精确字符位置。
+
+搜索阶段只生成内部命中记录，持有命中节点、节点角色、已读取文本、词范围、偏移和词框。所有命中路径都交给 `finish_text_match()` 统一组装返回值；仅在 AI 模式下执行上下文归一化和内联扩展。
 
 AI 模式命中 `AXStaticText` 时，原生层会尝试合并相邻内联文本，以处理链接、样式等造成的节点拆分：
 
@@ -124,7 +119,9 @@ Accessibility 不可用时，[mac-ocr.ts](../src/main/ocr/mac-ocr.ts) 重新读�
 3. 首次使用 Vision `accurate` 识别，语言列表包含英语、简体中文、繁体中文和日语。
 4. AI 模式没有命中，或上下文不完整且触及截图边缘时，还可能扩大到约 `1280 × 650` DIP 并执行一次 `accurate` 识别。
 
-单次 OCR 识别日志中的 `elapsedMs` 不包含完整的截图、可能的重试和弹窗流程。
+截图和首次识别在同一原生任务中执行，Vision 直接使用 `CGImage`；AI 扩大区域时复用同一原生图像。原生截图失败时，主进程用 Electron 截图并将 PNG 交给原生 OCR；识别失败不会触发截图回退。AI 加载窗口在取词完成后显示。
+
+`[Native OCR] capture` 和 `[Native OCR] recognition` 分别记录原生截图及识别的耗时；同帧重试和 PNG 识别分别使用 `snapshot recognition`、`PNG recognition` 日志。各次计时不包含主进程请求排队、后续断句或弹窗流程。
 
 ## 7. OCR 取词与显示
 
@@ -136,7 +133,7 @@ Accessibility 不可用时，[mac-ocr.ts](../src/main/ocr/mac-ocr.ts) 重新读�
 
 ## 日志与验证
 
-每次坐标命中成功都会打印 `initial hit`。同一次查词如果发生重试，会依次看到第一次命中、`initial hit retry reason`、`delayMs=20` 和第二次命中。原生失败串记录最后一次尝试沿祖先链遇到的失败与停止原因；`descendant-word-bounds-miss` 表示本层的子树查找没有返回词，不能据此还原逐个节点的访问记录。
+原生失败串记录最后一次尝试沿祖先链遇到的失败与停止原因；`descendant-word-bounds-miss` 表示本层的子树查找没有返回词。
 
 主进程在原生 Promise 返回后打印 `[Accessibility] read Text Via macOS Accessibility API`。其中 `elapsedMs` 从调用原生模块前开始计时，包含排队、原生查找和实际发生的 20 ms 等待；后续断句、OCR 与弹窗耗时另计。见 [macos.ts](../src/main/accessibility/platforms/macos.ts)。
 

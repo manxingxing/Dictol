@@ -122,7 +122,11 @@ export class SelectionToolbarController extends BaseController {
       this.runtime.windowManager.hideOcrHighlight()
       this.dismissForMainExplanation()
       if (mode === 'ai') this.explanation.prewarmExplanationWindow()
-      const capture = await captureTextUnderCursor(mode, onCaptureReady)
+      const capture = await captureTextUnderCursor(
+        mode,
+        onCaptureReady,
+        this.runtime.appConfig.load().ocrEngine
+      )
       if (!isCurrent()) return
       this.explanation.setAnchor(anchor)
       if (!capture) {
@@ -211,7 +215,7 @@ export class SelectionToolbarController extends BaseController {
       this.anchor = toDisplayAnchor(capture)
       this.explanation.setAnchor(this.anchor)
       this.hideToolbar()
-      void this.explanation.showExplanation(word)
+      void this.explanation.showExplanation(word, undefined, undefined, true, capture.context)
       return
     }
     // 在应用内部选择文本，不触发toolbar
@@ -256,7 +260,13 @@ export class SelectionToolbarController extends BaseController {
     if (!this.acceptsToolbarSender(event) || !this.currentCapture) return
     const word = this.currentCapture.selection.text.trim()
     this.hideToolbar()
-    void this.explanation.showExplanation(word)
+    void this.explanation.showExplanation(
+      word,
+      undefined,
+      undefined,
+      true,
+      this.currentCapture.context
+    )
   }
 
   private readonly translate = (event: IpcMainEvent): void => {

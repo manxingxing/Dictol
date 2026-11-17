@@ -1,11 +1,11 @@
 {
-  "name": "@dictol/ocr-windows-build",
+  "name": "@dictol/screen-capture-windows-build",
   "private": true,
   "scripts": {
     "build": "napi build --platform --release --no-js"
   },
   "napi": {
-    "binaryName": "dictol-ocr",
+    "binaryName": "dictol-screen-capture",
     "targets": [
       "x86_64-pc-windows-msvc"
     ]

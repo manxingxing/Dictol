@@ -16,6 +16,7 @@ import type { MainWindowSearchRequest } from '../shared/search-request'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
 import type { EmbedBrowserHistoryNavigationRequest } from '../shared/embed-browser'
+import type { OcrEngine } from '../shared/ocr'
 import type { ThemeMode } from '../shared/theme-mode'
 import type {
   CustomCssEditorBounds,
@@ -415,6 +416,8 @@ declare global {
         delete: (noteId: string) => Promise<void>
       }
       app: {
+        getOcrEngine: () => Promise<OcrEngine | null>
+        saveOcrEngine: (engine: OcrEngine) => Promise<OcrEngine | null>
         getVersion: () => Promise<string | null>
         isMainWindowFocused: () => Promise<boolean>
         getAggregateLayout: () => Promise<'vertical' | 'horizontal' | null>

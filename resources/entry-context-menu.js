@@ -157,7 +157,7 @@
       waiting:
         '<svg data-state="waiting" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" opacity=".28"></circle><path d="M12 4a8 8 0 0 1 8 8"></path></svg>',
       playing:
-        '<svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1"></rect></svg>'
+        '<svg viewBox="0 0 24 24" style="stroke-width:2"><rect x="14" y="3" width="5" height="18" rx="1"></rect><rect x="5" y="3" width="5" height="18" rx="1"></rect></svg>'
     }
     const readAloudButton = createMenuButton(
       '朗读',

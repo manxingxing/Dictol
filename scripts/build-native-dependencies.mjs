@@ -46,10 +46,10 @@ if (platform === 'mac' && ['x64', 'arm64'].includes(arch)) {
   const target = arch === 'x64' ? 'x86_64-apple-darwin' : 'aarch64-apple-darwin'
   runNpm('native:build', [], {
     DICTOL_NATIVE_TARGET: target,
-    MACOSX_DEPLOYMENT_TARGET: '14.0'
+    MACOSX_DEPLOYMENT_TARGET: '13.0'
   })
   runNpm('system-translation:build', ['--arch', arch])
-  runNpm('adblock:build', ['--target', target])
+  runNpm('adblock:build', ['--target', target], { MACOSX_DEPLOYMENT_TARGET: '13.0' })
 } else if (platform === 'win' && arch === 'x64') {
   runNpm('win:signing:check')
   runNpm('native:build:win-x64')

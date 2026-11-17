@@ -8,6 +8,101 @@ pub struct AccessibleText {
     pub height: f64,
 }
 
+pub struct AccessibleSelection {
+    pub selected_text: String,
+    pub text: Option<String>,
+    pub offset: Option<u32>,
+}
+
+pub fn read_accessible_selection(
+    include_context: bool,
+) -> Result<Option<AccessibleSelection>, String> {
+    read_accessible_selection_impl(include_context).map_err(|error| error.to_string())
+}
+
+fn read_accessible_selection_impl(
+    include_context: bool,
+) -> windows::core::Result<Option<AccessibleSelection>> {
+    use windows::Win32::System::Com::{
+        CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
+        CoUninitialize,
+    };
+    use windows::Win32::UI::Accessibility::{
+        CUIAutomation, IUIAutomation, IUIAutomationTextPattern, TextPatternRangeEndpoint_End,
+        TextPatternRangeEndpoint_Start, TextUnit_Paragraph, UIA_TextPatternId,
+    };
+
+    struct Apartment;
+    impl Drop for Apartment {
+        fn drop(&mut self) {
+            unsafe { CoUninitialize() };
+        }
+    }
+
+    unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()? };
+    let _apartment = Apartment;
+    let automation: IUIAutomation =
+        unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)? };
+    let mut element = unsafe { automation.GetFocusedElement()? };
+    let walker = unsafe { automation.ControlViewWalker()? };
+    for _ in 0..8 {
+        if let Ok(pattern) =
+            unsafe { element.GetCurrentPatternAs::<IUIAutomationTextPattern>(UIA_TextPatternId) }
+        {
+            let ranges = unsafe { pattern.GetSelection()? };
+            for index in 0..unsafe { ranges.Length()? } {
+                let range = unsafe { ranges.GetElement(index)? };
+                let selected_text = unsafe { range.GetText(-1)? }.to_string();
+                if selected_text.is_empty() {
+                    continue;
+                }
+                let context = if include_context {
+                    (|| -> windows::core::Result<Option<(String, u32)>> {
+                        let paragraph = unsafe { range.Clone()? };
+                        unsafe { paragraph.ExpandToEnclosingUnit(TextUnit_Paragraph)? };
+                        let prefix = unsafe { paragraph.Clone()? };
+                        unsafe {
+                            prefix.MoveEndpointByRange(
+                                TextPatternRangeEndpoint_End,
+                                &range,
+                                TextPatternRangeEndpoint_Start,
+                            )?;
+                        }
+                        let offset = unsafe { prefix.GetText(16_384)? }
+                            .to_string()
+                            .encode_utf16()
+                            .count();
+                        let text = unsafe { paragraph.GetText(16_384)? }.to_string();
+                        if offset >= text.encode_utf16().count() {
+                            return Ok(None);
+                        }
+                        Ok(Some((text, offset as u32)))
+                    })()
+                    .ok()
+                    .flatten()
+                } else {
+                    None
+                };
+                let (text, offset) = match context {
+                    Some((text, offset)) => (Some(text), Some(offset)),
+                    None => (None, None),
+                };
+                return Ok(Some(AccessibleSelection {
+                    selected_text,
+                    text,
+                    offset,
+                }));
+            }
+            return Ok(None);
+        }
+        let Ok(parent) = (unsafe { walker.GetParentElement(&element) }) else {
+            break;
+        };
+        element = parent;
+    }
+    Ok(None)
+}
+
 #[cfg(windows)]
 pub fn read_accessible_text(
     x: i32,

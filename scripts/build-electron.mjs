@@ -66,6 +66,7 @@ const runBinary = (name, commandArgs) => {
 }
 
 if (platform === 'win') runNpm('win:signing:check')
+runNpm('rapidocr:prepare')
 runNpm('typecheck')
 runBinary('electron-vite', ['build'])
 if (platform === 'mac') runNpm('system-translation:stage', ['--arch', arch])

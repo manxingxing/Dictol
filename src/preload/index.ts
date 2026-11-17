@@ -22,6 +22,7 @@ import type { ToastPayload } from '../shared/notification'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
 import type { EmbedBrowserHistoryNavigationRequest } from '../shared/embed-browser'
+import type { OcrEngine } from '../shared/ocr'
 import type { ThemeMode } from '../shared/theme-mode'
 import type {
   DictionarySearchScopeChange,
@@ -451,6 +452,9 @@ const api = Object.freeze({
     saveDictionaryDisplay: (display: DictionaryDisplay): Promise<DictionaryDisplay | null> =>
       ipcRenderer.invoke('app:save-dictionary-display', display),
     getThemeMode: (): Promise<ThemeMode | null> => ipcRenderer.invoke('app:get-theme-mode'),
+    getOcrEngine: (): Promise<OcrEngine | null> => ipcRenderer.invoke('app:get-ocr-engine'),
+    saveOcrEngine: (engine: OcrEngine): Promise<OcrEngine | null> =>
+      ipcRenderer.invoke('app:save-ocr-engine', engine),
     saveThemeMode: (themeMode: ThemeMode): Promise<ThemeMode | null> =>
       ipcRenderer.invoke('app:save-theme-mode', themeMode),
     getResourceCacheSize: (): Promise<number> => ipcRenderer.invoke('app:get-resource-cache-size'),
@@ -564,9 +568,7 @@ const api = Object.freeze({
       ipcRenderer.invoke('screenshot-translation:set-shortcut', shortcut),
     getClipboardShortcutStatus: (): Promise<ClipboardTranslationStatus | null> =>
       ipcRenderer.invoke('translation:clipboard-shortcut-status'),
-    setClipboardShortcut: (
-      shortcut: string
-    ): Promise<ClipboardTranslationSettingResult | null> =>
+    setClipboardShortcut: (shortcut: string): Promise<ClipboardTranslationSettingResult | null> =>
       ipcRenderer.invoke('translation:set-clipboard-shortcut', shortcut),
     getConfig: (): Promise<TranslationPublicConfig | null> =>
       ipcRenderer.invoke('translation:get-config'),

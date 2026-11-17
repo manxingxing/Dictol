@@ -15,6 +15,7 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),
+          'rapid-ocr-worker': resolve('src/main/ocr/rapid-ocr-worker.ts'),
           'dictionary-import-worker': resolve('src/main/dictionary-import-worker.ts'),
           'wordbook-export-worker': resolve('src/main/wordbook-export-worker.ts')
         }
@@ -24,7 +25,7 @@ export default defineConfig({
   preload: {
     plugins: [
       {
-        name: 'inline-tts-in-sandboxed-preloads',
+        name: 'inline-shared-modules-in-sandboxed-preloads',
         enforce: 'pre',
         resolveId(source, importer) {
           // Sandboxed Electron preloads cannot require a Rollup shared chunk.
@@ -33,6 +34,13 @@ export default defineConfig({
           const importerPath = importer?.replaceAll('\\', '/').toLowerCase()
           if (source === './tts' && importer && importerPath?.startsWith(`${preloadRoot}/`)) {
             return `${resolve('src/preload/tts.ts')}?preload=${basename(importer)}`
+          }
+          if (
+            source === '../shared/window-chrome' &&
+            importer &&
+            importerPath?.startsWith(`${preloadRoot}/`)
+          ) {
+            return `${resolve('src/shared/window-chrome.ts')}?preload=${basename(importer)}`
           }
           if (
             source === '../shared/tts' &&

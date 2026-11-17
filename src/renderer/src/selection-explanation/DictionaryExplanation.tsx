@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { LoaderCircle } from 'lucide-react'
+import { LoaderCircle, MessageSquareText } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
@@ -39,6 +39,19 @@ export function DictionaryExplanation({ payload }: Props): React.JSX.Element {
           variant="ghost"
         >
           AI
+        </Button>
+      )}
+      {payload.selectionContext && (
+        <Button
+          aria-label="AI 语境查词"
+          className="no-drag size-7 shrink-0"
+          onClick={() => window.dictolSelectionExplanation.showContext()}
+          size="icon"
+          title="AI 语境查词"
+          type="button"
+          variant="ghost"
+        >
+          <MessageSquareText />
         </Button>
       )}
       <ExplanationWordActions payload={payload} />

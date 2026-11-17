@@ -1,3 +1,5 @@
+export type OcrEngine = 'system' | 'paddle'
+
 export const OCR_SUPPORTED = process.platform === 'darwin' || process.platform === 'win32'
 
 export type OcrAiExplanation = {

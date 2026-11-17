@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { createTtsPlayback } from './tts'
+import { getMainWindowChromeMaterial } from '../shared/window-chrome'
 
 import type { SelectionExplanationPayload } from '../shared/selection-explanation'
 
@@ -20,6 +21,7 @@ contextBridge.exposeInMainWorld(
   Object.freeze({
     tts: createTtsPlayback(),
     nativeRoundedWindow: process.platform === 'darwin',
+    chromeMaterial: getMainWindowChromeMaterial(process.platform, process.getSystemVersion()),
     onUpdate: (callback: Subscriber): (() => void) => {
       subscribers.add(callback)
       if (latestPayload) callback(latestPayload)
@@ -29,6 +31,8 @@ contextBridge.exposeInMainWorld(
       ipcRenderer.send('selection-explanation:loading-ready', requestId),
     lookupWord: (word: string): void => ipcRenderer.send('selection-explanation:lookup-word', word),
     showAi: (): void => ipcRenderer.send('selection-explanation:show-ai'),
+    showContext: (): void => ipcRenderer.send('selection-explanation:show-context'),
+    returnToDictionary: (): void => ipcRenderer.send('selection-explanation:return-to-dictionary'),
     selectDictionary: (dictionaryId: string): void =>
       ipcRenderer.send('selection-explanation:select-dictionary', dictionaryId),
     close: (): void => ipcRenderer.send('selection-explanation:close'),

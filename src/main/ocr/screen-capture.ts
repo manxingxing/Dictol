@@ -1,10 +1,9 @@
 import {
   captureScreenRegion,
-  captureWindowsDisplayAtPoint,
-  captureWindowsScreenRegion,
+  captureDisplay,
   getWindowsDisplayBoundsAtPoint,
   getPermissionStatus
-} from '@dictol/screen-capture-native'
+} from '@dictol/ocr-native'
 import { desktopCapturer, screen, type Display, type Rectangle } from 'electron'
 import { mapWindowsCaptureRegion } from './windows-capture-geometry'
 
@@ -14,7 +13,7 @@ export type Screenshot = {
   pixelSize: { width: number; height: number }
   bounds: Rectangle
   displayId: number
-  backend: 'screencapturekit' | 'windows-wgc' | 'windows-gdi' | 'electron-fallback'
+  backend: 'screencapturekit' | 'windows-wgc' | 'electron-fallback'
 }
 
 export type CaptureRequest = {
@@ -43,7 +42,10 @@ function validateRegion(display: Display, region: Rectangle): void {
   }
 }
 
-async function captureElectronFallback(display: Display, bounds: Rectangle): Promise<Screenshot> {
+export async function captureElectronFallback(
+  display: Display,
+  bounds: Rectangle
+): Promise<Screenshot> {
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
     thumbnailSize: {
@@ -56,6 +58,10 @@ async function captureElectronFallback(display: Display, bounds: Rectangle): Pro
     throw new Error('无法捕获当前屏幕，请重试。')
   }
   const fullSize = source.thumbnail.getSize()
+  console.info('[ScreenCapture] Electron display captured', {
+    sizeDip: { width: display.bounds.width, height: display.bounds.height },
+    sizePixels: fullSize
+  })
   const left = Math.round(((bounds.x - display.bounds.x) / display.bounds.width) * fullSize.width)
   const top = Math.round(((bounds.y - display.bounds.y) / display.bounds.height) * fullSize.height)
   const right = Math.round(
@@ -91,13 +97,9 @@ export async function captureScreen(request: CaptureRequest): Promise<Screenshot
   if (process.platform === 'darwin') {
     if (supportsMacNativeCapture()) {
       try {
-        const image = await captureScreenRegion(
-          display.id,
-          bounds.x,
-          bounds.y,
-          bounds.width,
-          bounds.height
-        )
+        const image = request.region
+          ? await captureScreenRegion(display.id, bounds.x, bounds.y, bounds.width, bounds.height)
+          : await captureDisplay(display.id)
         return {
           data: image.png,
           mimeType: 'image/png',
@@ -133,20 +135,21 @@ export async function captureScreen(request: CaptureRequest): Promise<Screenshot
         bounds.y === display.bounds.y &&
         bounds.width === display.bounds.width &&
         bounds.height === display.bounds.height
+      const physicalDisplay = getWindowsDisplayBoundsAtPoint(center.x, center.y)
       if (wholeDisplay) {
-        const image = await captureWindowsDisplayAtPoint(center.x, center.y)
+        const image = await captureDisplay(physicalDisplay.id)
         return {
           data: image.png,
           mimeType: 'image/png',
           pixelSize: { width: image.width, height: image.height },
           bounds: display.bounds,
           displayId: display.id,
-          backend: image.backend === 'gdi' ? 'windows-gdi' : 'windows-wgc'
+          backend: 'windows-wgc'
         }
       }
-      const physicalDisplay = getWindowsDisplayBoundsAtPoint(center.x, center.y)
       const mapped = mapWindowsCaptureRegion(display.bounds, physicalDisplay, bounds)
-      const image = await captureWindowsScreenRegion(
+      const image = await captureScreenRegion(
+        physicalDisplay.id,
         mapped.physical.x,
         mapped.physical.y,
         mapped.physical.width,
@@ -158,7 +161,7 @@ export async function captureScreen(request: CaptureRequest): Promise<Screenshot
         pixelSize: { width: image.width, height: image.height },
         bounds: mapped.bounds,
         displayId: display.id,
-        backend: image.backend === 'gdi' ? 'windows-gdi' : 'windows-wgc'
+        backend: 'windows-wgc'
       }
     } catch (error) {
       console.warn(

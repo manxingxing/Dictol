@@ -26,7 +26,10 @@ export interface AccessibleSelection {
   offset?: number
 }
 
-/** macOS only. Context fields are omitted if the focused element cannot provide them. */
+/** Resolves the selected text's node for context; context fields are omitted when unavailable. */
 export declare function readAccessibleSelection(
   includeContext?: boolean
-): Promise<{ result: AccessibleSelection | null; failure: string | null }>
+): Promise<{
+  result: AccessibleSelection | null
+  failure: string | null
+}>

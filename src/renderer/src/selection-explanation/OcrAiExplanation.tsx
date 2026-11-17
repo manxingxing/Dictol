@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, LoaderCircle, Quote } from 'lucide-react'
+import { BookOpen, Check, LoaderCircle, Quote } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import type { SelectionExplanationPayload } from '../../../shared/selection-explanation'
@@ -33,6 +33,19 @@ export function OcrAiExplanation({
   return (
     <>
       <SelectionExplanationHeader title="AI 语境查词" pinned={payload.pinned}>
+        {payload.selectionContext && (
+          <Button
+            aria-label="返回词典解释"
+            className="no-drag size-7 shrink-0"
+            onClick={() => window.dictolSelectionExplanation.returnToDictionary()}
+            size="icon"
+            title="返回词典解释"
+            type="button"
+            variant="ghost"
+          >
+            <BookOpen />
+          </Button>
+        )}
         <PronunciationButton word={payload.word} />
         <Button
           aria-label={saveState === 'saved' ? '已保存到摘抄与笔记' : '保存到摘抄与笔记'}
@@ -87,6 +100,11 @@ export function OcrAiExplanation({
           <section className="border-t border-border px-5 pb-5 pt-3.5">
             <p className="select-text break-words text-[13px] leading-[1.6] text-muted-foreground">
               {payload.ocrSentence}
+              <PronunciationButton
+                className="ml-1 size-5 cursor-pointer rounded-full bg-neutral-400/70 align-middle text-white hover:bg-neutral-400 hover:text-white active:bg-neutral-500 [&_svg]:size-3"
+                label="朗读原句"
+                word={payload.ocrSentence ?? ''}
+              />
             </p>
             {payload.state === 'content' && explanation && (
               <p className="mt-2 select-text text-sm leading-6">{explanation.sentenceMeaning}</p>

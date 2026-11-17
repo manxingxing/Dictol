@@ -60,6 +60,9 @@ export class SelectionExplanationController extends BaseController {
   private preferredOcrAiSize: ExplanationSize = { width: 520, height: 320 }
   private appliedExplanationSize: ExplanationSize | undefined
   private activeAiRequestId: string | undefined
+  private selectionContext: OcrSelection | undefined
+  private selectionContextRequest: Promise<OcrSelection | null> | undefined
+  private selectionContextDictionaryId: string | undefined
   private onVisibilityChange: (() => void) | undefined
 
   setOnVisibilityChange(callback: () => void): void {
@@ -70,6 +73,8 @@ export class SelectionExplanationController extends BaseController {
     ipcMain.on('selection-explanation:select-dictionary', this.selectExplanationDictionary)
     ipcMain.on('selection-explanation:lookup-word', this.lookupFromExplanation)
     ipcMain.on('selection-explanation:show-ai', this.showAiFromExplanation)
+    ipcMain.on('selection-explanation:show-context', this.showContextFromExplanation)
+    ipcMain.on('selection-explanation:return-to-dictionary', this.returnToDictionary)
     ipcMain.handle('selection-explanation:copy-text', this.copyFromExplanation)
     ipcMain.on('selection-explanation:create-note', this.createNote)
     ipcMain.handle('selection-explanation:is-starred', this.isWordStarred)
@@ -104,6 +109,7 @@ export class SelectionExplanationController extends BaseController {
   }
 
   prepareForOcrCapture(): number {
+    this.selectionContextRequest = undefined
     this.lookupVersion += 1
     this.cancelAiExplanation()
     this.resolvePendingExplanationLoading()
@@ -136,6 +142,29 @@ export class SelectionExplanationController extends BaseController {
       return
     }
     this.showAiExplanation(payload.word)
+  }
+
+  private readonly showContextFromExplanation = (event: IpcMainEvent): void => {
+    if (!this.acceptsExplanationSender(event) || this.explanationPayload?.mode !== 'dictionary')
+      return
+    const selection = this.selectionContext
+    if (!selection || selection.word !== this.explanationPayload.word) return
+    this.selectionContextDictionaryId = this.explanationPayload.activeDictionaryId
+    const version = this.beginOcrAiRecognition(false)
+    void this.showOcrAiExplanation(selection, version)
+  }
+
+  private readonly returnToDictionary = (event: IpcMainEvent): void => {
+    if (!this.acceptsExplanationSender(event) || this.explanationPayload?.mode !== 'ocr-ai') return
+    const selection = this.selectionContext
+    if (!selection || selection.word !== this.explanationPayload.word) return
+    void this.showExplanation(
+      selection.word,
+      this.selectionContextDictionaryId,
+      undefined,
+      false,
+      Promise.resolve(selection)
+    )
   }
 
   private readonly saveAiExplanationAsNote = async (
@@ -565,10 +594,14 @@ export class SelectionExplanationController extends BaseController {
     word: string,
     sourceDictionaryId?: string,
     anchor?: string,
-    positionWindow = true
+    positionWindow = true,
+    contextRequest?: Promise<OcrSelection | null>
   ): Promise<void> {
     const normalizedWord = word.trim()
     if (!normalizedWord || normalizedWord.length > MAX_SELECTION_LENGTH) return
+
+    this.selectionContext = undefined
+    this.selectionContextRequest = contextRequest
 
     this.runtime.windowManager.hideOcrHighlight()
     this.cancelAiExplanation()
@@ -587,13 +620,34 @@ export class SelectionExplanationController extends BaseController {
       word: normalizedWord,
       state: 'loading'
     })
+    if (contextRequest) {
+      void contextRequest.then((context) => {
+        if (
+          this.selectionContextRequest !== contextRequest ||
+          !context ||
+          context.word !== normalizedWord ||
+          !context.context.trim()
+        )
+          return
+        this.selectionContext = context
+        const payload = this.explanationPayload
+        if (payload?.mode === 'dictionary' && payload.word === normalizedWord) {
+          this.updateExplanation(payload)
+        }
+      })
+    }
     if (positionWindow) this.positionExplanation(window)
 
     try {
-      const lookupPromise = this.db.lookupDictionaryEntryGroup(
-        normalizedWord,
-        this.runtime.selectionDictionaryGroupId
-      )
+      const lookupStartedAt = performance.now()
+      const lookupPromise = this.db
+        .lookupDictionaryEntryGroup(normalizedWord, this.runtime.selectionDictionaryGroupId)
+        .finally(() => {
+          console.debug('[DictionaryLookup] selection explanation', {
+            term: normalizedWord,
+            takeMs: performance.now() - lookupStartedAt
+          })
+        })
       await loadingReady
       if (version !== this.lookupVersion) return
       if (!keepWindowVisible) this.showExplanationWindow(window)
@@ -730,6 +784,7 @@ export class SelectionExplanationController extends BaseController {
   }
 
   showOcrError(mode: 'dictionary' | 'ai', message: string): void {
+    this.selectionContext = undefined
     this.runtime.windowManager.hideOcrHighlight()
     this.resolvePendingExplanationLoading()
     this.cancelAiExplanation()
@@ -750,7 +805,8 @@ export class SelectionExplanationController extends BaseController {
     if (this.explanationLoaded) this.showExplanationWindow(window)
   }
 
-  beginOcrAiRecognition(): number {
+  beginOcrAiRecognition(positionWindow = true): number {
+    if (positionWindow) this.selectionContext = undefined
     this.runtime.windowManager.hideOcrHighlight()
     this.resolvePendingExplanationLoading()
     this.cancelAiExplanation()
@@ -766,7 +822,7 @@ export class SelectionExplanationController extends BaseController {
       word: '',
       state: 'loading'
     })
-    this.positionExplanation(window)
+    if (positionWindow) this.positionExplanation(window)
     if (this.explanationLoaded) this.showExplanationWindow(window)
     return version
   }
@@ -953,11 +1009,19 @@ export class SelectionExplanationController extends BaseController {
   }
 
   private updateExplanation(payload: SelectionExplanationPayload): void {
+    const selectionContext =
+      this.selectionContext?.word === payload.word ? this.selectionContext : undefined
     this.explanationPayload = {
       ...payload,
+      selectionContext,
       aiEnabled:
         payload.mode === 'dictionary' ? this.runtime.appConfig.load().aiLookup.enabled : undefined,
       pinned: this.runtime.windowManager.isSelectionExplanationPinned()
+    }
+    if (payload.mode === 'dictionary') {
+      this.runtime.windowManager.setSelectionExplanationSwitcherVisible(
+        (payload.dictionaries?.length ?? 0) > 1
+      )
     }
     this.flushExplanationPayload()
   }
@@ -1010,6 +1074,8 @@ export class SelectionExplanationController extends BaseController {
   }
 
   hideExplanation(): void {
+    this.selectionContext = undefined
+    this.selectionContextRequest = undefined
     this.runtime.windowManager.hideOcrHighlight()
     this.lookupVersion += 1
     this.cancelAiExplanation()

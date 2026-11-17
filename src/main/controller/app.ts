@@ -28,6 +28,15 @@ const VIEW_SESSION_PARTITIONS = [
 export class AppController extends BaseController {
   override mount(): void {
     // Keep app metadata behind the same sender boundary as the other renderer APIs.
+    ipcMain.handle('app:get-ocr-engine', (event) =>
+      this.acceptsSender(event.sender) ? this.runtime.appConfig.load().ocrEngine : null
+    )
+    ipcMain.handle('app:save-ocr-engine', (event, engine: unknown) => {
+      if (!this.acceptsSender(event.sender)) return null
+      if (engine !== 'system' && engine !== 'paddle') throw new Error('无效的 OCR 引擎。')
+      this.runtime.appConfig.save({ ...this.runtime.appConfig.load(), ocrEngine: engine })
+      return engine
+    })
     ipcMain.handle('app:get-version', this.getVersion)
     ipcMain.handle('app:is-main-window-focused', this.isMainWindowFocused)
     ipcMain.handle('app:get-aggregate-layout', (event) => {

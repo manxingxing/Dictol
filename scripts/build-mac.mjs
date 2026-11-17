@@ -42,11 +42,14 @@ let buildError
 try {
   runNpm(['run', 'native:build'], {
     DICTOL_NATIVE_TARGET: target.native,
-    MACOSX_DEPLOYMENT_TARGET: '14.0'
+    MACOSX_DEPLOYMENT_TARGET: '13.0'
   })
   runNpm(['run', 'system-translation:build', '--', '--arch', arch])
   runNpm(['run', 'system-translation:stage', '--', '--arch', arch])
-  runNpm(['run', 'adblock:build', '--', '--target', target.native])
+  runNpm(['run', 'adblock:build', '--', '--target', target.native], {
+    MACOSX_DEPLOYMENT_TARGET: '13.0'
+  })
+  runNpm(['run', 'rapidocr:prepare'])
   runNpm(['run', 'typecheck'])
   runBinary('electron-vite', ['build'])
   runBinary('electron-builder', ['--mac', target.builder, ...process.argv.slice(3)])

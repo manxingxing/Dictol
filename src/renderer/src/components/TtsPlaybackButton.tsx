@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { LoaderCircle, Play, Square } from 'lucide-react'
+import { LoaderCircle, Pause, Play } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -38,7 +38,7 @@ export function TtsPlaybackButton({ disabled }: { disabled: boolean }): React.JS
       {playback === 'waiting' ? (
         <LoaderCircle className="size-4 animate-spin" />
       ) : playback === 'playing' ? (
-        <Square className="size-3.5" />
+        <Pause className="size-3.5" />
       ) : (
         <Play className="size-4" />
       )}

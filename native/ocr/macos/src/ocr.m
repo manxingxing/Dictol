@@ -27,20 +27,15 @@ static NSDictionary *top_left_point_json(CGPoint point) {
     return @{@"x": @(point.x), @"y": @(1 - point.y)};
 }
 
-int dictol_recognize_mac_text(const uint8_t *png, size_t png_length,
-                             const char *language_list, int accurate, int auto_detect_language,
-                             uint8_t **output, size_t *output_length) {
+// The same recognition path accepts an existing screenshot or a decoded PNG.
+// The caller retains ownership of the image for the duration of this call.
+int dictol_recognize_mac_image(CGImageRef image, const char *language_list,
+                              int auto_detect_language, uint8_t **output,
+                              size_t *output_length) {
     @autoreleasepool {
-        if (!png || !png_length || !language_list || !output || !output_length) return 0;
+        if (!image || !language_list || !output || !output_length) return 0;
         *output = NULL;
         *output_length = 0;
-
-        NSData *data = [NSData dataWithBytesNoCopy:(void *)png length:png_length freeWhenDone:NO];
-        CGImageSourceRef source = CGImageSourceCreateWithData((__bridge CFDataRef)data, NULL);
-        if (!source) return copy_json(@{@"error": @"无法读取 OCR 截图"}, output, output_length);
-        CGImageRef image = CGImageSourceCreateImageAtIndex(source, 0, NULL);
-        CFRelease(source);
-        if (!image) return copy_json(@{@"error": @"无法解码 OCR 截图"}, output, output_length);
 
         NSMutableArray<NSString *> *languages = [NSMutableArray array];
         NSString *list = [NSString stringWithUTF8String:language_list];
@@ -49,8 +44,7 @@ int dictol_recognize_mac_text(const uint8_t *png, size_t png_length,
             if (language.length) [languages addObject:language];
         }
         VNRecognizeTextRequest *request = [[VNRecognizeTextRequest alloc] init];
-        request.recognitionLevel = accurate ? VNRequestTextRecognitionLevelAccurate
-                                            : VNRequestTextRecognitionLevelFast;
+        request.recognitionLevel = VNRequestTextRecognitionLevelAccurate;
         request.recognitionLanguages = languages;
         if (@available(macOS 13.0, *)) {
             request.automaticallyDetectsLanguage = auto_detect_language ? YES : NO;
@@ -59,7 +53,6 @@ int dictol_recognize_mac_text(const uint8_t *png, size_t png_length,
         VNImageRequestHandler *handler = [[VNImageRequestHandler alloc] initWithCGImage:image options:@{}];
         NSError *error = nil;
         BOOL recognized = [handler performRequests:@[request] error:&error];
-        CGImageRelease(image);
         if (!recognized) {
             return copy_json(@{@"error": error.localizedDescription ?: @"Vision OCR 识别失败"},
                              output, output_length);
@@ -101,6 +94,26 @@ int dictol_recognize_mac_text(const uint8_t *png, size_t png_length,
             [observations addObject:line];
         }
         return copy_json(@{@"observations": observations}, output, output_length);
+    }
+}
+
+int dictol_recognize_mac_text(const uint8_t *png, size_t png_length,
+                             const char *language_list, int auto_detect_language,
+                             uint8_t **output, size_t *output_length) {
+    @autoreleasepool {
+        if (!png || !png_length || !language_list || !output || !output_length) return 0;
+        *output = NULL;
+        *output_length = 0;
+        NSData *data = [NSData dataWithBytesNoCopy:(void *)png length:png_length freeWhenDone:NO];
+        CGImageSourceRef source = CGImageSourceCreateWithData((__bridge CFDataRef)data, NULL);
+        if (!source) return copy_json(@{@"error": @"无法读取 OCR 截图"}, output, output_length);
+        CGImageRef image = CGImageSourceCreateImageAtIndex(source, 0, NULL);
+        CFRelease(source);
+        if (!image) return copy_json(@{@"error": @"无法解码 OCR 截图"}, output, output_length);
+        int result = dictol_recognize_mac_image(image, language_list, auto_detect_language,
+                                                output, output_length);
+        CGImageRelease(image);
+        return result;
     }
 }
 

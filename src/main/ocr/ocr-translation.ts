@@ -17,11 +17,11 @@ export function screenshotTranslationText(observations: OcrObservation[]): strin
   if (!lines.length) return ''
 
   // A selected region may contain two PDF columns. Only split when both sides
-  // have several lines, a real gutter, and overlap vertically.
+  // have multiple distinct rows, a real gutter, and overlap vertically.
   const byCenter = [...lines].sort((a, b) => (a.x + a.right) / 2 - (b.x + b.right) / 2)
   let split = -1
   let largestGap = 0
-  for (let index = 3; index <= byCenter.length - 3; index++) {
+  for (let index = 2; index <= byCenter.length - 2; index++) {
     const left = byCenter.slice(0, index)
     const right = byCenter.slice(index)
     const gutter =
@@ -35,7 +35,23 @@ export function screenshotTranslationText(observations: OcrObservation[]): strin
         Math.min(...left.map((line) => line.top)),
         Math.min(...right.map((line) => line.top))
       )
-    if (gutter > 0.04 && gutter > largestGap && overlap > 0.1) {
+    const hasMultipleRows = (column: typeof lines): boolean => {
+      const span =
+        Math.max(...column.map((line) => line.bottom)) - Math.min(...column.map((line) => line.top))
+      const maxHeight = Math.max(...column.map((line) => line.height))
+      return span > maxHeight * 1.5
+    }
+    const rowHeight = Math.max(
+      ...left.map((line) => line.height),
+      ...right.map((line) => line.height)
+    )
+    if (
+      gutter > 0.04 &&
+      gutter > largestGap &&
+      overlap > rowHeight &&
+      hasMultipleRows(left) &&
+      hasMultipleRows(right)
+    ) {
       largestGap = gutter
       split = index
     }
@@ -54,9 +70,22 @@ export function screenshotTranslationText(observations: OcrObservation[]): strin
 function normalizeScreenshotTranslationLineBreaks(text: string): string {
   return text
     .replace(/\r\n?/g, '\n')
-    .replace(/(?:[ \t]*\n)+[ \t]*/g, (breaks) =>
-      breaks.indexOf('\n') === breaks.lastIndexOf('\n') ? ' ' : '\n'
-    )
+    .replace(/(\S)(?:[ \t]*\n)+[ \t]*(?=\S)/gu, (match, left: string, offset, input) => {
+      if (match.indexOf('\n') !== match.lastIndexOf('\n')) return `${left}\n`
+      return (
+        left + textSeparator(left, String.fromCodePoint(input.codePointAt(offset + match.length)!))
+      )
+    })
+}
+
+/** East Asian text and adjacent punctuation do not need word separators. */
+function textSeparator(left: string, right: string): string {
+  const cjk = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u
+  const punctuation = /\p{P}/u
+  return (cjk.test(left) && (cjk.test(right) || punctuation.test(right))) ||
+    (cjk.test(right) && punctuation.test(left))
+    ? ''
+    : ' '
 }
 
 /** Repair obvious missing spaces in long English OCR runs using the bundled lexicon. */
@@ -97,7 +126,14 @@ export function repairMergedEnglishWords(
 }
 
 function joinLines(
-  lines: Array<{ text: string; x: number; top: number; bottom: number; height: number }>
+  lines: Array<{
+    text: string
+    x: number
+    right: number
+    top: number
+    bottom: number
+    height: number
+  }>
 ): string {
   const ordered = [...lines].sort((a, b) => a.top - b.top || a.x - b.x)
   const rows: (typeof ordered)[] = []
@@ -116,8 +152,17 @@ function joinLines(
   const assembled = rows.map((row) => ({
     text: row
       .sort((a, b) => a.x - b.x)
-      .map((line) => line.text)
-      .join(' '),
+      .reduce((text, line, index, orderedRow) => {
+        if (!index) return line.text
+        const previous = orderedRow[index - 1]
+        const previousCharWidth = (previous.right - previous.x) / Array.from(previous.text).length
+        const currentCharWidth = (line.right - line.x) / Array.from(line.text).length
+        const separated = line.x - previous.right > Math.min(previousCharWidth, currentCharWidth)
+        const separator = separated
+          ? ' '
+          : textSeparator(Array.from(text).at(-1)!, String.fromCodePoint(line.text.codePointAt(0)!))
+        return text + separator + line.text
+      }, ''),
     top: Math.min(...row.map((line) => line.top)),
     bottom: Math.max(...row.map((line) => line.bottom)),
     height: Math.max(...row.map((line) => line.height))

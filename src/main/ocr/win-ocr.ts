@@ -1,13 +1,15 @@
-import { recognizeWindowsText, type WindowsOcrResult } from '@dictol/ocr-native'
+import type { WindowsOcrResult } from '@dictol/ocr-native'
 import { screen } from 'electron'
 import type { OcrLookupMode } from '../app-runtime'
 import { contextTouchesCropEdge, mapOcrQuadToRegion } from './ocr-crop'
 import {
-  captureOcrDisplay,
-  captureOcrImage,
-  cropOcrDisplay,
-  type CapturedImage
-} from './ocr-screen-capture'
+  captureAndRecognize,
+  captureBounds,
+  recognizeSnapshot,
+  releaseSnapshot,
+  type CaptureSize,
+  type OcrFrame
+} from './native-ocr-capture'
 import { selectOcrTextHit, type OcrTextHit } from './ocr-text'
 import type { OcrCapture } from './ocr-capture-types'
 
@@ -21,7 +23,7 @@ type Recognition = {
   hit: OcrTextHit | null
 }
 
-function selectHit(result: WindowsOcrResult, captured: CapturedImage): OcrTextHit | null {
+function selectHit(result: WindowsOcrResult, captured: OcrFrame): OcrTextHit | null {
   return selectOcrTextHit(
     result.observations,
     captured.pointer,
@@ -44,11 +46,13 @@ function isLatinWord(text: string): boolean {
 }
 
 async function recognize(
-  captured: CapturedImage,
+  captured: OcrFrame,
   mode: OcrLookupMode,
-  retryEnglishOnMiss = false
+  retryEnglishOnMiss: boolean,
+  initial: WindowsOcrResult,
+  retryEnglish: () => Promise<WindowsOcrResult>
 ): Promise<Recognition> {
-  let result = await recognizeWindowsText(captured.buffer, mode === 'ai' ? 'en-US' : undefined)
+  let result = initial
   const profileLanguage = result.recognizerLanguage
   let hit = selectHit(result, captured)
 
@@ -63,7 +67,7 @@ async function recognize(
         result.observations.some((observation) => /[A-Za-z]{2}/u.test(observation.text)))
   ) {
     try {
-      const english = await recognizeWindowsText(captured.buffer, 'en-US')
+      const english = await retryEnglish()
       const englishHit = selectHit(english, captured)
       if (englishHit && isLatinWord(englishHit.selection.word)) {
         result = english
@@ -77,8 +81,8 @@ async function recognize(
 }
 
 function contextExtendsBeyondCrop(
-  original: CapturedImage['region'],
-  expanded: CapturedImage['region'],
+  original: OcrFrame['region'],
+  expanded: OcrFrame['region'],
   context: OcrTextHit['contextBounds']
 ): boolean {
   const left = expanded.x + context.x * expanded.width
@@ -99,74 +103,112 @@ export async function captureWindowsTextUnderCursor(
 ): Promise<OcrCapture | null> {
   const pointer = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(pointer)
-  const snapshot = mode === 'ai' ? await captureOcrDisplay(display) : null
-  let captured = snapshot
-    ? cropOcrDisplay(snapshot, pointer, aiCaptureSize)
-    : await captureOcrImage(display, pointer, dictionaryCaptureSize)
-  if (snapshot) onCaptureReady?.()
-  const recognition = await recognize(captured, mode)
-  let { hit } = recognition
-  let selectedResult = recognition.result
-  if (!hit) {
-    // Windows OCR chooses one dominant text angle per image. A tighter crop
-    // can make the line under the pointer dominant when nearby UI text is level.
-    const retryCapture = snapshot
-      ? cropOcrDisplay(snapshot, pointer, angledRetryCaptureSize)
-      : await captureOcrImage(display, pointer, angledRetryCaptureSize)
-    if (
-      retryCapture.region.width < captured.region.width ||
-      retryCapture.region.height < captured.region.height
-    ) {
-      const retry = await recognize(retryCapture, mode, true)
-      if (retry.hit) {
-        captured = retryCapture
-        hit = retry.hit
-        selectedResult = retry.result
+  const bounds =
+    mode === 'ai' ? display.bounds : captureBounds(display, pointer, dictionaryCaptureSize)
+  const size = mode === 'ai' ? aiCaptureSize : null
+  const language = mode === 'ai' ? 'en-US' : undefined
+  const initial = await captureAndRecognize(display, bounds, pointer, size, { language })
+  try {
+    let captured = initial.frame
+    const snapshot = mode === 'ai' ? initial.snapshot : null
+    const recognizeFrame = async (
+      capture: typeof initial,
+      cropSize: CaptureSize | null,
+      retryEnglishOnMiss = false
+    ): Promise<Recognition> =>
+      recognize(
+        capture.frame,
+        mode,
+        retryEnglishOnMiss,
+        capture.result as WindowsOcrResult,
+        async () =>
+          (await recognizeSnapshot(capture.snapshot, pointer, cropSize, { language: 'en-US' }))
+            .result as WindowsOcrResult
+      )
+    const recognition = await recognizeFrame(initial, size)
+    let { hit } = recognition
+    let selectedResult = recognition.result
+    if (!hit) {
+      // Windows OCR chooses one dominant text angle per image. A tighter crop
+      // can make the line under the pointer dominant when nearby UI text is level.
+      const retryBounds = captureBounds(display, pointer, angledRetryCaptureSize)
+      if (
+        retryBounds.width < captured.region.width ||
+        retryBounds.height < captured.region.height
+      ) {
+        const retryInitial = snapshot
+          ? {
+              snapshot,
+              ...(await recognizeSnapshot(snapshot, pointer, angledRetryCaptureSize, { language }))
+            }
+          : await captureAndRecognize(display, retryBounds, pointer, null, { language })
+        try {
+          const retryCapture = retryInitial.frame
+          const retry = await recognizeFrame(
+            retryInitial,
+            snapshot ? angledRetryCaptureSize : null,
+            true
+          )
+          if (retry.hit) {
+            captured = retryCapture
+            hit = retry.hit
+            selectedResult = retry.result
+          }
+        } finally {
+          if (!snapshot) releaseSnapshot(retryInitial.snapshot)
+        }
       }
     }
-  }
-  const expandedSize = snapshot
-    ? {
-        width: Math.min(display.bounds.width, expandedAiCaptureSize.width),
-        height: Math.min(display.bounds.height, expandedAiCaptureSize.height)
-      }
-    : null
-  if (
-    snapshot &&
-    expandedSize &&
-    (captured.region.width < display.bounds.width ||
-      captured.region.height < display.bounds.height) &&
-    (!hit || contextTouchesCropEdge(display.bounds, captured.region, hit.contextBounds)) &&
-    (expandedSize.width > captured.region.width || expandedSize.height > captured.region.height)
-  ) {
-    const expandedCapture = cropOcrDisplay(snapshot, pointer, expandedSize)
-    const expandedRecognition = await recognize(expandedCapture, mode)
-    const sameWord = expandedRecognition.hit?.selection.word === hit?.selection.word
-    if (
-      expandedRecognition.hit &&
-      (!hit ||
-        (sameWord &&
-          (expandedRecognition.hit.selection.context.length > hit.selection.context.length ||
-            contextExtendsBeyondCrop(
-              captured.region,
-              expandedCapture.region,
-              expandedRecognition.hit.contextBounds
-            ))))
-    ) {
-      captured = expandedCapture
-      hit = expandedRecognition.hit
-      selectedResult = expandedRecognition.result
-    }
-  }
-  if (!hit) return null
-  const padding = { horizontal: 1, vertical: 0 }
-  const highlight =
-    Math.abs(selectedResult.textAngle ?? 0) >= 1 && hit.wordQuad
-      ? mapOcrQuadToRegion(captured.region, hit.wordQuad, padding)
+    const expandedSize = snapshot
+      ? {
+          width: Math.min(display.bounds.width, expandedAiCaptureSize.width),
+          height: Math.min(display.bounds.height, expandedAiCaptureSize.height)
+        }
       : null
-  return {
-    selection: hit.selection,
-    wordBounds: highlight?.bounds ?? captured.mapBounds(hit.bounds, padding),
-    wordQuad: highlight?.quad
+    if (
+      snapshot &&
+      expandedSize &&
+      (captured.region.width < display.bounds.width ||
+        captured.region.height < display.bounds.height) &&
+      (!hit || contextTouchesCropEdge(display.bounds, captured.region, hit.contextBounds)) &&
+      (expandedSize.width > captured.region.width || expandedSize.height > captured.region.height)
+    ) {
+      const expanded = {
+        snapshot,
+        ...(await recognizeSnapshot(snapshot, pointer, expandedSize, { language }))
+      }
+      const expandedCapture = expanded.frame
+      const expandedRecognition = await recognizeFrame(expanded, expandedSize)
+      const sameWord = expandedRecognition.hit?.selection.word === hit?.selection.word
+      if (
+        expandedRecognition.hit &&
+        (!hit ||
+          (sameWord &&
+            (expandedRecognition.hit.selection.context.length > hit.selection.context.length ||
+              contextExtendsBeyondCrop(
+                captured.region,
+                expandedCapture.region,
+                expandedRecognition.hit.contextBounds
+              ))))
+      ) {
+        captured = expandedCapture
+        hit = expandedRecognition.hit
+        selectedResult = expandedRecognition.result
+      }
+    }
+    onCaptureReady?.()
+    if (!hit) return null
+    const padding = { horizontal: 1, vertical: 0 }
+    const highlight =
+      Math.abs(selectedResult.textAngle ?? 0) >= 1 && hit.wordQuad
+        ? mapOcrQuadToRegion(captured.region, hit.wordQuad, padding)
+        : null
+    return {
+      selection: hit.selection,
+      wordBounds: highlight?.bounds ?? captured.mapBounds(hit.bounds, padding),
+      wordQuad: highlight?.quad
+    }
+  } finally {
+    releaseSnapshot(initial.snapshot)
   }
 }

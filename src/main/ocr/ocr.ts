@@ -1,3 +1,4 @@
+import type { OcrEngine } from '../../shared/ocr'
 import type { OcrLookupMode } from '../app-runtime'
 import { captureAccessibleText } from './accessibility'
 import type { OcrCapture } from './ocr-capture-types'
@@ -18,7 +19,8 @@ function prepareCapture(mode: OcrLookupMode, capture: OcrCapture | null): OcrCap
 
 export async function captureTextUnderCursor(
   mode: OcrLookupMode,
-  onCaptureReady?: () => void
+  onCaptureReady?: () => void,
+  engine: OcrEngine = 'system'
 ): Promise<OcrCapture | null> {
   try {
     const accessible = await captureAccessibleText(mode)
@@ -29,6 +31,11 @@ export async function captureTextUnderCursor(
     }
   } catch {
     // Fall back to OCR when the target application cannot expose accessible text.
+  }
+
+  if (engine === 'paddle') {
+    const { capturePaddleTextUnderCursor } = await import('./paddle-ocr')
+    return prepareCapture(mode, await capturePaddleTextUnderCursor(mode, onCaptureReady))
   }
 
   if (process.platform === 'darwin') {

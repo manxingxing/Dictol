@@ -1,6 +1,5 @@
 import { nativeTheme } from 'electron'
 import type { BrowserWindow } from 'electron'
-import { stopWindowsScreenCaptureSessions } from '@dictol/screen-capture-native'
 
 import { AppConfigStore, type AppConfig } from './app-config'
 import { TranslationActions } from './action/translation'
@@ -253,9 +252,6 @@ export class AppRuntime {
   restartOcrShortcuts(): void {
     const config = this.appConfig.load()
     this.registerOcrShortcuts(config)
-    if (process.platform === 'win32' && !config.featureFlags.ocrLookup) {
-      stopWindowsScreenCaptureSessions()
-    }
   }
 
   restartScreenshotTranslationShortcut(): void {
@@ -352,7 +348,6 @@ export class AppRuntime {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
-    if (process.platform === 'win32') stopWindowsScreenCaptureSessions()
     this.shortcutRegister.unregisterAll()
     this.mainWindowShortcutRouter?.dispose()
     this.mainWindowShortcutRouter = undefined

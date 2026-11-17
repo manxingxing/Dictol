@@ -1,4 +1,13 @@
-import { Info, Keyboard, Languages, MousePointer2, Sparkles, SunMoon, Volume2 } from 'lucide-react'
+import {
+  Info,
+  Keyboard,
+  Languages,
+  ScanText,
+  MousePointer2,
+  Sparkles,
+  SunMoon,
+  Volume2
+} from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { cn } from '@/lib/utils'
@@ -6,6 +15,7 @@ import { cn } from '@/lib/utils'
 const settingsNavigation = [
   { label: '外观', path: 'appearance', icon: SunMoon },
   { label: '取词', path: 'capture', icon: MousePointer2 },
+  { label: 'OCR', path: 'ocr', icon: ScanText },
   { label: '翻译', path: 'translation', icon: Languages },
   { label: 'AI 增强', path: 'ai', icon: Sparkles },
   { label: '朗读', path: 'tts', icon: Volume2 },
