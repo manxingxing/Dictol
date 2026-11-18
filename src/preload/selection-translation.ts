@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { createTtsPlayback } from './tts'
+import { getMainWindowChromeMaterial } from '../shared/window-chrome'
 import type {
   SelectionTranslationPayload,
   TranslationEvent,
@@ -19,6 +20,7 @@ contextBridge.exposeInMainWorld(
   'dictolSelectionTranslation',
   Object.freeze({
     tts: createTtsPlayback(),
+    chromeMaterial: getMainWindowChromeMaterial(process.platform, process.getSystemVersion()),
     onUpdate: (callback: (payload: SelectionTranslationPayload) => void): (() => void) => {
       subscribers.add(callback)
       if (latestPayload) callback(latestPayload)

@@ -53,6 +53,11 @@ export class TranslationActions {
     if (this.webContentsId !== window.webContents.id) {
       this.webContentsId = window.webContents.id
       this.loaded = false
+      window.webContents.on('before-input-event', (event, input) => {
+        if (input.type !== 'keyDown' || input.key !== 'Escape') return
+        event.preventDefault()
+        this.hide()
+      })
       window.webContents.on('did-finish-load', () => {
         this.loaded = true
         this.flush(window)

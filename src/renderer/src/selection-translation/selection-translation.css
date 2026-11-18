@@ -6,6 +6,10 @@ body,
   min-height: 0;
 }
 
+:root[data-chrome-material] .selection-translation-window {
+  background: var(--window-chrome-background);
+}
+
 .selection-translation-results {
   scrollbar-width: none;
 }

@@ -582,8 +582,20 @@ export class WindowManager {
       maxHeight: SELECTION_TRANSLATION_MAX_HEIGHT,
       show: false,
       frame: false,
-      ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
-      backgroundColor: nativeTheme.shouldUseDarkColors ? '#232323' : '#faf9f7',
+      ...(process.platform === 'darwin'
+        ? {
+            type: 'panel' as const,
+            transparent: true,
+            vibrancy: 'sidebar' as const,
+            visualEffectState: 'followWindow' as const
+          }
+        : this.chromeMaterial === 'mica'
+          ? { backgroundMaterial: 'mica' as const }
+          : {}),
+      backgroundColor: getMainWindowBackgroundColor(
+        nativeTheme.shouldUseDarkColors,
+        this.chromeMaterial !== null
+      ),
       resizable: false,
       minimizable: false,
       maximizable: false,
@@ -598,8 +610,10 @@ export class WindowManager {
         sandbox: true
       }
     })
-    if (process.platform === 'darwin') configureElectronPanel(window.getNativeWindowHandle())
-    else applySelectionWindowBehavior(window)
+    if (process.platform === 'darwin') {
+      configureElectronPanel(window.getNativeWindowHandle())
+      window.setAlwaysOnTop(true, 'floating')
+    } else applySelectionWindowBehavior(window)
     window.on('closed', () => {
       if (this.selectionTranslationWindow === window) this.selectionTranslationWindow = undefined
     })
@@ -861,6 +875,12 @@ export class WindowManager {
     }
     if (this.selectionExplanationView && !this.selectionExplanationView.isDestroyed) {
       this.selectionExplanationView.setBackgroundColor(useDarkColors ? '#232323' : '#ffffff')
+    }
+    const translationWindow = this.selectionTranslationWindow
+    if (translationWindow && !translationWindow.isDestroyed()) {
+      translationWindow.setBackgroundColor(
+        getMainWindowBackgroundColor(useDarkColors, this.chromeMaterial !== null)
+      )
     }
     const customCssEditorWindow = this.customCssEditorWindow
     if (customCssEditorWindow && !customCssEditorWindow.isDestroyed()) {

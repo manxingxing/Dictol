@@ -7,8 +7,8 @@ import {
   Copy,
   Languages,
   LoaderCircle,
+  Pause,
   Pin,
-  Square,
   TextWrap,
   Volume2,
   X
@@ -53,6 +53,8 @@ export function SelectionTranslationWorkbench({
   const [config, setConfig] = useState<TranslationPublicConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [input, setInput] = useState('')
+  const [sourceCopied, setSourceCopied] = useState(false)
+  const [sourceCopyError, setSourceCopyError] = useState(false)
   const speech = useTranslationSpeech(input)
   const [sourceLanguage, setSourceLanguage] = useState<TranslationSourceLanguage>('auto')
   const [targetLanguage, setTargetLanguage] = useState<TranslationLanguage>('zh')
@@ -164,10 +166,21 @@ export function SelectionTranslationWorkbench({
     translateAll(input, source, target, providers)
   }
 
+  const copySource = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(input)
+      setSourceCopyError(false)
+      setSourceCopied(true)
+      setTimeout(() => setSourceCopied(false), 1500)
+    } catch {
+      setSourceCopyError(true)
+    }
+  }
+
   return (
-    <section className="flex h-full min-h-0 flex-col bg-background">
+    <section className="selection-translation-window flex h-full min-h-0 flex-col bg-background">
       <header
-        className="drag-region flex shrink-0 items-center justify-between border-b border-border px-2.5 py-1"
+        className="drag-region flex shrink-0 items-center justify-between px-2.5 py-1"
         ref={headerRef}
       >
         <div className="flex items-center gap-1.5 text-xs font-semibold">
@@ -287,6 +300,17 @@ export function SelectionTranslationWorkbench({
                     <div className="mt-1.5 flex justify-between px-2 pb-1.5">
                       <div className="flex items-center">
                         <Button
+                          aria-label="复制原文"
+                          className="size-7 p-0"
+                          disabled={!input}
+                          onClick={() => void copySource()}
+                          size="xs"
+                          title={sourceCopied ? '已复制原文' : '复制原文'}
+                          variant="ghost"
+                        >
+                          {sourceCopied ? <Check /> : <Copy />}
+                        </Button>
+                        <Button
                           aria-label="将换行符替换为空格"
                           className="size-7 p-0"
                           disabled={!input}
@@ -309,7 +333,7 @@ export function SelectionTranslationWorkbench({
                           {speech.state === 'waiting' ? (
                             <LoaderCircle className="animate-spin" />
                           ) : speech.state === 'playing' ? (
-                            <Square />
+                            <Pause />
                           ) : (
                             <Volume2 />
                           )}
@@ -331,6 +355,11 @@ export function SelectionTranslationWorkbench({
                     {speech.error && (
                       <p className="px-2 pb-1.5 text-xs text-destructive" role="alert">
                         {speech.error.message}
+                      </p>
+                    )}
+                    {sourceCopyError && (
+                      <p className="px-2 pb-1.5 text-xs text-destructive" role="alert">
+                        复制原文失败，请重试。
                       </p>
                     )}
                   </div>
@@ -449,8 +478,8 @@ function ProviderResult({
   }
 
   return (
-    <section className="overflow-hidden rounded-lg border border-border bg-card">
-      <header className="flex items-center justify-between gap-2 border-b border-border px-2 py-1">
+    <section className="overflow-hidden rounded-lg bg-card">
+      <header className="flex items-center justify-between gap-2 border-b border-border/50 px-1.5 py-0.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-xs font-medium">{provider.name}</span>
           {detectedLanguage && (

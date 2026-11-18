@@ -16,6 +16,7 @@ declare global {
   interface Window {
     dictolSelectionTranslation: {
       tts: TtsPlayback
+      chromeMaterial: 'vibrancy' | 'mica' | null
       onUpdate: (callback: (payload: SelectionTranslationPayload) => void) => () => void
       getConfig: () => Promise<TranslationPublicConfig | null>
       start: (request: TranslationRequest) => Promise<string | null>
@@ -31,6 +32,10 @@ declare global {
 const queryClient = new QueryClient({
   defaultOptions: { mutations: { networkMode: 'always' } }
 })
+
+if (window.dictolSelectionTranslation.chromeMaterial) {
+  document.documentElement.dataset.chromeMaterial = window.dictolSelectionTranslation.chromeMaterial
+}
 
 export function SelectionTranslationApp(): React.JSX.Element {
   const [selection, setSelection] = useState<SelectionTranslationPayload>()
