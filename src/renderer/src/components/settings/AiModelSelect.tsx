@@ -53,6 +53,7 @@ export function AiModelSelect({
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <Popover
+          modal
           open={open}
           onOpenChange={(next) => {
             setOpen(next)
