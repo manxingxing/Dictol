@@ -5,14 +5,24 @@ import type { AccessibleTextLookup } from '../accessibility/types'
 
 export type { AccessibleText, AccessibleTextLookup } from '../accessibility/types'
 
-export async function captureAccessibleText(mode: OcrLookupMode): Promise<OcrCapture | null> {
+export const NO_WORD_AT_POINT = 'no-word-at-point'
+
+export async function captureAccessibleText(
+  mode: OcrLookupMode
+): Promise<OcrCapture | typeof NO_WORD_AT_POINT | null> {
   const lookup = await readFromCurrentPlatform(mode)
+  if (lookup.failure === NO_WORD_AT_POINT) return NO_WORD_AT_POINT
   const result = lookup.result
-  const context = result && sentenceContextAt(result.text, result.offset)
-  const matched = Boolean(
-    result && context && (mode === 'dictionary' || context.context !== result.word)
-  )
-  if (!result || !context || !matched) return null
+  if (!result) return null
+  if (mode === 'dictionary') {
+    return {
+      selection: { word: result.word, sentence: '', context: '' },
+      wordBounds: result.bounds
+    }
+  }
+  if (result.text === undefined || result.offset === undefined) return null
+  const context = sentenceContextAt(result.text, result.offset)
+  if (!context || context.context === result.word) return null
 
   return {
     selection: {

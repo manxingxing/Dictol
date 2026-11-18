@@ -1,5 +1,5 @@
 import type { OcrLookupMode } from '../app-runtime'
-import { captureAccessibleText } from './accessibility'
+import { captureAccessibleText, NO_WORD_AT_POINT } from './accessibility'
 import type { OcrCapture } from './ocr-capture-types'
 
 function prepareCapture(mode: OcrLookupMode, capture: OcrCapture | null): OcrCapture | null {
@@ -22,6 +22,7 @@ export async function captureTextUnderCursor(
 ): Promise<OcrCapture | null> {
   try {
     const accessible = await captureAccessibleText(mode)
+    if (accessible === NO_WORD_AT_POINT) return null
     const prepared = prepareCapture(mode, accessible)
     if (prepared) {
       onCaptureReady?.()

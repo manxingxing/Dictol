@@ -8,7 +8,11 @@ export async function readAccessibleTextAtCursor(
   mode: OcrLookupMode
 ): Promise<AccessibleTextLookup> {
   const pointer = screen.getCursorScreenPoint()
+  const startedAt = performance.now()
   const lookup = await readAccessibleText(pointer.x, pointer.y, mode === 'ai')
+  console.info('[Accessibility] read Text Via macOS Accessibility API', lookup, {
+    elapsedMs: Math.round(performance.now() - startedAt)
+  })
   const result = lookup.result
   if (!result) return { failure: lookup.failure }
 
@@ -16,8 +20,9 @@ export async function readAccessibleTextAtCursor(
   const region = display.bounds
   return {
     result: {
-      text: result.text,
-      offset: result.offset,
+      ...(result.text !== undefined && result.offset !== undefined
+        ? { text: result.text, offset: result.offset }
+        : {}),
       word: result.word,
       bounds: mapOcrBoundsToRegion(region, {
         x: (result.x - region.x) / region.width,

@@ -4,10 +4,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+// The Objective-C bridge allocates a UTF-8 JSON buffer; the caller must free it.
 extern "C" int dictol_read_mac_accessible_text(double x, double y, int include_context,
                                                  uint8_t **output, size_t *output_length);
 extern "C" void dictol_free_mac_accessible_text(uint8_t *bytes);
 
+// Shared by the N-API worker and its completion callback until the promise settles.
 struct AccessibilityWork {
     napi_async_work work;
     napi_deferred deferred;
@@ -27,12 +29,14 @@ static napi_value make_error(napi_env env, const char *message) {
     return error;
 }
 
+// Run synchronous Accessibility calls on a worker without using JavaScript APIs.
 static void execute_lookup(napi_env, void *data) {
     auto *work = static_cast<AccessibilityWork *>(data);
-    work->result = dictol_read_mac_accessible_text(
-        work->x, work->y, work->include_context ? 1 : 0, &work->json, &work->json_length);
+    work->result = dictol_read_mac_accessible_text(work->x, work->y, work->include_context ? 1 : 0,
+                                                   &work->json, &work->json_length);
 }
 
+// Back on the JavaScript thread, parse the native JSON and settle the promise.
 static void complete_lookup(napi_env env, napi_status status, void *data) {
     auto *work = static_cast<AccessibilityWork *>(data);
     if (status == napi_ok && work->result && work->json) {
@@ -66,33 +70,12 @@ static void complete_lookup(napi_env env, napi_status status, void *data) {
     delete work;
 }
 
-static napi_value read_accessible_text(napi_env env, napi_callback_info info) {
-    size_t argc = 3;
-    napi_value argv[3];
-    if (napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr) != napi_ok || argc != 3) {
-        napi_throw_type_error(env, nullptr, "readAccessibleText expects x, y, includeContext");
-        return nullptr;
-    }
-
-    auto *work = new AccessibilityWork{};
-    napi_valuetype x_type;
-    napi_valuetype y_type;
-    napi_valuetype context_type;
-    if (napi_typeof(env, argv[0], &x_type) != napi_ok || x_type != napi_number ||
-        napi_typeof(env, argv[1], &y_type) != napi_ok || y_type != napi_number ||
-        napi_typeof(env, argv[2], &context_type) != napi_ok || context_type != napi_boolean ||
-        napi_get_value_double(env, argv[0], &work->x) != napi_ok ||
-        napi_get_value_double(env, argv[1], &work->y) != napi_ok ||
-        napi_get_value_bool(env, argv[2], &work->include_context) != napi_ok) {
-        delete work;
-        napi_throw_type_error(env, nullptr, "readAccessibleText expects (number, number, boolean)");
-        return nullptr;
-    }
-
+// Validate the JavaScript arguments before scheduling any native work.
+static napi_value schedule_lookup(napi_env env, AccessibilityWork *work, const char *name) {
     napi_value promise;
     napi_value resource_name;
     napi_create_promise(env, &work->deferred, &promise);
-    napi_create_string_utf8(env, "readAccessibleText", NAPI_AUTO_LENGTH, &resource_name);
+    napi_create_string_utf8(env, name, NAPI_AUTO_LENGTH, &resource_name);
     napi_status result = napi_create_async_work(
         env, nullptr, resource_name, execute_lookup, complete_lookup, work, &work->work);
     if (result == napi_ok) result = napi_queue_async_work(env, work->work);
@@ -103,6 +86,33 @@ static napi_value read_accessible_text(napi_env env, napi_callback_info info) {
         return nullptr;
     }
     return promise;
+}
+
+static napi_value read_accessible_text(napi_env env, napi_callback_info info) {
+    size_t argc = 3;
+    napi_value argv[3];
+    if (napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr) != napi_ok || argc < 2) {
+        napi_throw_type_error(env, nullptr, "readAccessibleText expects x, y, and optional includeContext");
+        return nullptr;
+    }
+
+    auto *work = new AccessibilityWork{};
+    napi_valuetype x_type;
+    napi_valuetype y_type;
+    napi_valuetype context_type;
+    if (napi_typeof(env, argv[0], &x_type) != napi_ok || x_type != napi_number ||
+        napi_typeof(env, argv[1], &y_type) != napi_ok || y_type != napi_number ||
+        napi_get_value_double(env, argv[0], &work->x) != napi_ok ||
+        napi_get_value_double(env, argv[1], &work->y) != napi_ok ||
+        (argc == 3 && (napi_typeof(env, argv[2], &context_type) != napi_ok ||
+         (context_type != napi_undefined && (context_type != napi_boolean ||
+          napi_get_value_bool(env, argv[2], &work->include_context) != napi_ok))))) {
+        delete work;
+        napi_throw_type_error(env, nullptr, "readAccessibleText expects (number, number, boolean)");
+        return nullptr;
+    }
+
+    return schedule_lookup(env, work, "readAccessibleText");
 }
 
 static napi_value initialize(napi_env env, napi_value exports) {

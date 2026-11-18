@@ -8,8 +8,8 @@ use napi_derive::napi;
 #[cfg(windows)]
 #[napi(object)]
 pub struct AccessibleText {
-    pub text: String,
-    pub offset: u32,
+    pub text: Option<String>,
+    pub offset: Option<u32>,
     pub word: String,
     pub x: f64,
     pub y: f64,
@@ -40,8 +40,8 @@ impl Task for ReadAccessibleTextTask {
         match ui_automation::read_accessible_text(self.x, self.y, self.include_context) {
             Ok(Some(result)) => Ok(AccessibleLookup {
                 result: Some(AccessibleText {
-                    text: result.text,
-                    offset: result.offset,
+                    text: self.include_context.then_some(result.text),
+                    offset: self.include_context.then_some(result.offset),
                     word: result.word,
                     x: result.x,
                     y: result.y,
@@ -74,11 +74,11 @@ impl Task for ReadAccessibleTextTask {
 pub fn read_accessible_text(
     x: f64,
     y: f64,
-    include_context: bool,
+    include_context: Option<bool>,
 ) -> AsyncTask<ReadAccessibleTextTask> {
     AsyncTask::new(ReadAccessibleTextTask {
         x: x.round() as i32,
         y: y.round() as i32,
-        include_context,
+        include_context: include_context.unwrap_or(false),
     })
 }

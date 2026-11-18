@@ -4,8 +4,9 @@ Standalone Node.js native addon for reading text at a physical screen point.
 
 The package exports the same API on macOS and Windows:
 
-- `readAccessibleText(x, y, includeContext)` returns the text, word range, screen
-  bounds, and an optional failure reason.
+- `readAccessibleText(x, y, includeContext = false)` returns a word and its screen bounds,
+  or a failure reason. With `includeContext: true`, the result also contains text
+  and a UTF-16 offset into that text.
 - AI lookups pass `includeContext: true`: macOS can join adjacent inline
   Accessibility text nodes, while Windows returns the containing UI Automation
   paragraph for shared sentence extraction in the main process.

@@ -34,8 +34,9 @@ export async function readAccessibleTextAtCursor(
   })
   return {
     result: {
-      text: result.text.replaceAll('\uFFFC', ' '),
-      offset: result.offset,
+      ...(result.text !== undefined && result.offset !== undefined
+        ? { text: result.text.replaceAll('\uFFFC', ' '), offset: result.offset }
+        : {}),
       word: result.word,
       bounds: {
         x: topLeft.x,

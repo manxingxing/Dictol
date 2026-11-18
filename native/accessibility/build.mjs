@@ -46,7 +46,8 @@ const buildWindows = (targetTriple) => {
   mkdirSync(outputDirectory, { recursive: true })
   const outputPath = join(outputDirectory, 'accessibility.node')
   copyFileSync(libraryPath, outputPath)
-  if (!readFileSync(outputPath).includes(Buffer.from('readAccessibleText'))) {
+  const binary = readFileSync(outputPath)
+  if (!binary.includes(Buffer.from('readAccessibleText'))) {
     throw new Error(`Windows Accessibility addon is missing readAccessibleText: ${outputPath}`)
   }
   console.log(`Built Windows Accessibility addon: ${resolve(outputPath)}`)
