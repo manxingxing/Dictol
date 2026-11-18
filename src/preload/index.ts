@@ -582,6 +582,8 @@ const api = Object.freeze({
       ipcRenderer.invoke('translation:set-target-language', language),
     testProvider: (id: string): Promise<void> =>
       ipcRenderer.invoke('translation:test-provider', id),
+    openLanguageSettings: (): Promise<void> =>
+      ipcRenderer.invoke('translation:open-language-settings'),
     listModels: (input: { id: string; baseUrl: string; apiKey?: string }): Promise<string[]> =>
       ipcRenderer.invoke('translation:list-models', input),
     testDraft: (input: TranslationSaveProviderRequest): Promise<void> =>

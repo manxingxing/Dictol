@@ -1,5 +1,6 @@
 import {
   ipcMain,
+  shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   type Point,
@@ -32,6 +33,7 @@ export class TranslationController extends BaseController {
     ipcMain.handle('translation:reorder-providers', this.reorderProviders)
     ipcMain.handle('translation:set-target-language', this.setTargetLanguage)
     ipcMain.handle('translation:test-provider', this.testProvider)
+    ipcMain.handle('translation:open-language-settings', this.openLanguageSettings)
     ipcMain.handle('translation:list-models', this.listModels)
     ipcMain.handle('translation:test-draft', this.testDraft)
     ipcMain.handle('translation:selection-shortcut-status', this.handleSelectionShortcutStatus)
@@ -217,6 +219,12 @@ export class TranslationController extends BaseController {
   private readonly testProvider = async (event: IpcMainInvokeEvent, id: string): Promise<void> => {
     if (!this.isMainSender(event.sender)) return
     await this.runtime.translationService.testProvider(id)
+  }
+
+  private readonly openLanguageSettings = async (event: IpcMainInvokeEvent): Promise<void> => {
+    if (!this.isMainSender(event.sender)) throw new Error('无权打开系统设置。')
+    if (process.platform !== 'darwin') throw new Error('此设置仅适用于 macOS。')
+    await shell.openExternal('x-apple.systempreferences:com.apple.Localization-Settings.extension')
   }
 
   private readonly listModels = async (

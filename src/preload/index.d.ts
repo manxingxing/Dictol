@@ -508,6 +508,7 @@ declare global {
           language: TranslationLanguage
         ) => Promise<TranslationPublicConfig | null>
         testProvider: (id: string) => Promise<void>
+        openLanguageSettings: () => Promise<void>
         listModels: (input: { id: string; baseUrl: string; apiKey?: string }) => Promise<string[]>
         testDraft: (input: TranslationSaveProviderRequest) => Promise<void>
         start: (request: TranslationRequest) => Promise<string | null>

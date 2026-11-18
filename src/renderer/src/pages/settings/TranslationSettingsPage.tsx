@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AiModelSelect } from '@/components/settings/AiModelSelect'
+import { useOpenTranslationLanguageSettings } from '@/hooks/use-system-translation'
 import {
   Select,
   SelectContent,
@@ -70,6 +71,7 @@ export function TranslationSettingsPage(): React.JSX.Element {
     position: 'before' | 'after'
   } | null>(null)
   const verifyingProviderId = busyOperation?.kind === 'verify' ? busyOperation.id : null
+  const openLanguageSettings = useOpenTranslationLanguageSettings()
   useEffect(() => {
     void window.dictol.translation
       .getConfig()
@@ -245,6 +247,16 @@ export function TranslationSettingsPage(): React.JSX.Element {
               </p>
             </div>
             <div className="flex items-center gap-1">
+              {provider.kind === 'system' && window.dictol.platform === 'darwin' && (
+                <Button
+                  disabled={openLanguageSettings.isPending}
+                  onClick={() => openLanguageSettings.mutate()}
+                  size="sm"
+                  variant="ghost"
+                >
+                  管理语言
+                </Button>
+              )}
               {provider.kind !== 'system' && !webProviderKinds.includes(provider.kind) && (
                 <Button
                   disabled={Boolean(busyOperation)}
