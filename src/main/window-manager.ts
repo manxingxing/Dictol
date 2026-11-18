@@ -320,8 +320,17 @@ export class WindowManager {
       minHeight: 300,
       show: false,
       frame: false,
-      ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
-      backgroundColor: darkMode ? '#232323' : '#faf9f7',
+      ...(process.platform === 'darwin'
+        ? {
+            type: 'panel' as const,
+            transparent: true,
+            vibrancy: 'sidebar' as const,
+            visualEffectState: 'followWindow' as const
+          }
+        : this.chromeMaterial === 'mica'
+          ? { backgroundMaterial: 'mica' as const }
+          : {}),
+      backgroundColor: getMainWindowBackgroundColor(darkMode, this.chromeMaterial !== null),
       resizable: true,
       minimizable: false,
       maximizable: false,
@@ -871,7 +880,9 @@ export class WindowManager {
 
     const explanationWindow = this.selectionExplanationWindow
     if (explanationWindow && !explanationWindow.isDestroyed()) {
-      explanationWindow.setBackgroundColor(useDarkColors ? '#232323' : '#faf9f7')
+      explanationWindow.setBackgroundColor(
+        getMainWindowBackgroundColor(useDarkColors, this.chromeMaterial !== null)
+      )
     }
     if (this.selectionExplanationView && !this.selectionExplanationView.isDestroyed) {
       this.selectionExplanationView.setBackgroundColor(useDarkColors ? '#232323' : '#ffffff')
