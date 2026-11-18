@@ -17,11 +17,11 @@ export async function loadDictionaryResource(
   runtime = getAppRunTime()
 ): Promise<LoadedDictionaryResource | null> {
   const mimeType = getMimeType(resourcePath)
-  console.debug('[DictionaryResource] lookup started', {
-    dictionaryId,
-    resourcePath,
-    mimeType
-  })
+  // console.debug('[DictionaryResource] lookup started', {
+  //   dictionaryId,
+  //   resourcePath,
+  //   mimeType
+  // })
 
   const directory = await runtime.mdictResourceManager.getResourceDirectory(dictionaryId)
 
@@ -30,20 +30,20 @@ export async function loadDictionaryResource(
   // filesystem read instead of an access/stat call followed by another read.
   const local = await readLocalCompanion(directory, resourcePath)
   if (local) {
-    console.debug('[DictionaryResource] local companion hit', {
-      dictionaryId,
-      resourcePath,
-      byteLength: local.length
-    })
+    // console.debug('[DictionaryResource] local companion hit', {
+    //   dictionaryId,
+    //   resourcePath,
+    //   byteLength: local.length
+    // })
     return { bytes: local, mimeType, source: 'local' }
   }
 
   const location = await runtime.mdictResourceManager.findResource(dictionaryId, resourcePath)
   if (!location) {
-    console.debug('[DictionaryResource] lookup miss', {
-      dictionaryId,
-      resourcePath
-    })
+    // console.debug('[DictionaryResource] lookup miss', {
+    //   dictionaryId,
+    //   resourcePath
+    // })
     return null
   }
 
@@ -51,21 +51,21 @@ export async function loadDictionaryResource(
   if (useFileCache) {
     const cached = await runtime.resourceCache.read(dictionaryId, resourcePath, mimeType)
     if (cached) {
-      console.debug('[DictionaryResource] cache hit', {
-        dictionaryId,
-        resourcePath,
-        byteLength: cached.length
-      })
+      // console.debug('[DictionaryResource] cache hit', {
+      //   dictionaryId,
+      //   resourcePath,
+      //   byteLength: cached.length
+      // })
       return { bytes: cached, mimeType, source: 'cache' }
     }
   }
 
   const extracted = await runtime.mdictResourceManager.readResource(dictionaryId, location)
-  console.debug('[DictionaryResource] MDD hit', {
-    dictionaryId,
-    resourcePath,
-    byteLength: extracted.length
-  })
+  // console.debug('[DictionaryResource] MDD hit', {
+  //   dictionaryId,
+  //   resourcePath,
+  //   byteLength: extracted.length
+  // })
 
   if (useFileCache) {
     try {
