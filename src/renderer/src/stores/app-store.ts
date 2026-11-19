@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { DictionaryLayout } from '../../../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../../../shared/dictionary-display'
+import { fillDictionaryUrlTemplate } from '../../../shared/online-dictionary-template'
 
 export const COMPACT_MODE_WIDTH_THRESHOLD = 768
 export const RIGHT_SIDEBAR_DEFAULT_SIZE = '25'
@@ -350,10 +351,6 @@ export const useAppStore = create<AppState>()(
     }
   )
 )
-
-function fillDictionaryUrlTemplate(template: string, term: string): string {
-  return template.split('%s').join(encodeURIComponent(term))
-}
 
 function replaceSearchTerm(url: string, previousTerm: string, nextTerm: string): string {
   if (!previousTerm) return url

@@ -1,4 +1,5 @@
 import { asc, eq, sql } from 'drizzle-orm'
+import { fillDictionaryUrlTemplate } from '../../../shared/online-dictionary-template'
 
 import type { DictolDatabase } from '../drizzle'
 import { onlineDictionary, type OnlineDictionary } from '../schema'
@@ -73,10 +74,9 @@ function normalizeOnlineDictionaryInput(input: OnlineDictionaryInput): {
   const faviconInput = typeof input.faviconUrl === 'string' ? input.faviconUrl.trim() : ''
   if (!name) throw new Error('在线词典名称不能为空')
   if (name.length > 100) throw new Error('在线词典名称不能超过 100 个字符')
-  if (!urlTemplate.includes('%s')) throw new Error('URL 模板必须包含 %s')
   if (urlTemplate.length > 2_000) throw new Error('URL 模板不能超过 2,000 个字符')
 
-  const templateUrl = parseHttpUrl(urlTemplate.split('%s').join('term'))
+  const templateUrl = parseHttpUrl(fillDictionaryUrlTemplate(urlTemplate, 'term'))
   if (!templateUrl) throw new Error('URL 模板必须是有效的 HTTP 或 HTTPS 地址')
 
   const faviconUrl = faviconInput || `${templateUrl.origin}/favicon.ico`
