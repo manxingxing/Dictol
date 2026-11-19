@@ -27,12 +27,16 @@ export function SelectionExplanationHeader({
 
   return (
     <header
-      className="drag-region flex shrink-0 items-center gap-3 border-b border-border bg-sidebar px-3"
+      className="drag-region flex shrink-0 items-center gap-1.5 border-b border-border bg-sidebar px-3"
       style={{ height: SELECTION_EXPLANATION_HEADER_HEIGHT }}
     >
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         {onSearch ? (
-          <form key={title} className="no-drag w-fit max-w-full min-w-0" onSubmit={submitSearch}>
+          <form
+            key={title}
+            className={`no-drag w-fit min-w-0 shrink-0 ${subtitle ? 'max-w-[calc(100%-0.5rem)]' : 'max-w-full'}`}
+            onSubmit={submitSearch}
+          >
             <input
               aria-label="查找词条"
               className="selection-explanation-word-input h-7 max-w-full rounded border border-transparent bg-transparent px-1.5 text-sm font-semibold outline-none transition-colors hover:border-primary/60 hover:bg-primary/5 focus:border-primary focus:bg-primary/5"
@@ -45,7 +49,11 @@ export function SelectionExplanationHeader({
         ) : (
           <p className="truncate text-sm font-semibold">{title}</p>
         )}
-        {subtitle && <p className="truncate text-[11px] text-muted-foreground">{subtitle}</p>}
+        {subtitle && (
+          <p className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground" title={subtitle}>
+            {subtitle}
+          </p>
+        )}
       </div>
       {children}
       <Button

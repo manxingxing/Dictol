@@ -38,6 +38,7 @@ import {
   clamp,
   containsPoint,
   createCursorAnchor,
+  createWordAnchor,
   fitNearSelection,
   insetRectangle,
   toDisplayAnchor,
@@ -77,7 +78,6 @@ export class SelectionToolbarController extends BaseController {
   private nativeMenuOpen = false
   private toolbarDismissSubscriptions: Array<() => void> = []
   private globalMouseDownUnsubscribe: (() => void) | undefined
-  private ocrCaptureVersion = 0
 
   override mount(): void {
     this.explanation.setOnVisibilityChange(this.refreshDismissSubscription)
@@ -103,25 +103,29 @@ export class SelectionToolbarController extends BaseController {
   }
 
   private readonly handleOcrShortcut = async (mode: OcrLookupMode): Promise<void> => {
-    const version = ++this.ocrCaptureVersion
     const anchor = createCursorAnchor()
     let ocrAiVersion: number | undefined
+    let explanationVersion: number | undefined
+    const isCurrent = (): boolean =>
+      explanationVersion !== undefined &&
+      this.explanation.isLookupCurrent(explanationVersion)
     const onCaptureReady =
       mode === 'ai'
         ? (): void => {
-            if (version !== this.ocrCaptureVersion) return
+            if (!isCurrent()) return
             this.explanation.setAnchor(anchor)
             ocrAiVersion = this.explanation.beginOcrAiRecognition()
+            explanationVersion = ocrAiVersion
           }
         : undefined
     try {
+      explanationVersion = this.explanation.prepareForOcrCapture()
       this.runtime.windowManager.hideOcrHighlight()
-      this.explanation.prepareForOcrCapture()
       this.dismissForMainExplanation()
       if (mode === 'ai') this.explanation.prewarmExplanationWindow()
       const capture = await captureTextUnderCursor(mode, onCaptureReady)
-      if (version !== this.ocrCaptureVersion) return
-      this.explanation.setAnchor(anchor)
+      if (!isCurrent()) return
+      this.explanation.setAnchor(capture ? createWordAnchor(capture.wordBounds) : anchor)
       if (!capture) {
         if (mode === 'ai' && ocrAiVersion !== undefined) {
           this.explanation.showOcrAiRecognitionError(ocrAiVersion, '鼠标下没有识别到可解释的文字。')
@@ -136,12 +140,13 @@ export class SelectionToolbarController extends BaseController {
         ocrAiVersion !== undefined &&
         this.explanation.isOcrAiRecognitionCurrent(ocrAiVersion)
       ) {
+        this.explanation.reposition()
         const explanation = this.explanation.showOcrAiExplanation(capture.selection, ocrAiVersion)
         this.showOcrHighlight(capture)
         await explanation
       }
     } catch (error) {
-      if (version !== this.ocrCaptureVersion) return
+      if (explanationVersion !== undefined && !isCurrent()) return
       this.explanation.setAnchor(anchor)
       const message = error instanceof Error ? error.message : '悬停取词失败。'
       if (mode === 'ai' && ocrAiVersion !== undefined) {
@@ -206,7 +211,7 @@ export class SelectionToolbarController extends BaseController {
     if (capture.source === 'shortcut') {
       this.currentCapture = capture
       this.anchor = toDisplayAnchor(capture)
-      this.explanation.setAnchor(this.anchor)
+      this.explanation.setAnchor(this.anchor, { animate: false })
       this.hideToolbar()
       void this.explanation.showExplanation(word)
       return
@@ -223,7 +228,7 @@ export class SelectionToolbarController extends BaseController {
     this.currentCapture = capture
     this.pendingToolbarCapture = capture
     this.anchor = toDisplayAnchor(capture)
-    this.explanation.setAnchor(this.anchor)
+    this.explanation.setAnchor(this.anchor, { animate: false })
 
     const window = this.initializeToolbarWindow()
     const toolbarSize = this.syncToolbarSize(window)

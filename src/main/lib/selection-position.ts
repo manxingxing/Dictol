@@ -23,6 +23,7 @@ export type SelectionAnchor = {
   bottom: number
   gap: number
   posLevel: CapturedSelection['selection']['posLevel']
+  avoidanceBounds?: Rectangle
 }
 
 type ExplanationSize = {
@@ -32,7 +33,6 @@ type ExplanationSize = {
 
 export function toDisplayAnchor(capture: CapturedSelection): SelectionAnchor {
   const selection = capture.selection
-
   switch (selection.posLevel) {
     case POSITION_LEVEL.MOUSE_SINGLE:
     case POSITION_LEVEL.MOUSE_DUAL:
@@ -48,27 +48,58 @@ export function toDisplayAnchor(capture: CapturedSelection): SelectionAnchor {
 
 function createMouseAnchor(selection: CapturedSelection['selection']): SelectionAnchor {
   return isValidPoint(selection.mousePosEnd)
-    ? toDisplayCoordinates(
-        pointToAnchor(selection.mousePosEnd, MOUSE_ANCHOR_GAP, selection.posLevel)
+    ? pointToAnchor(
+        toDisplayPoint(selection.mousePosEnd),
+        MOUSE_ANCHOR_GAP,
+        POSITION_LEVEL.MOUSE_SINGLE
       )
     : createCursorAnchor()
 }
 
 function createSelectionAnchor(selection: CapturedSelection['selection']): SelectionAnchor {
-  if (!isValidPoint(selection.endBottom)) return createMouseAnchor(selection)
+  if (
+    !isValidPoint(selection.startTop) ||
+    !isValidPoint(selection.startBottom) ||
+    !isValidPoint(selection.endTop) ||
+    !isValidPoint(selection.endBottom)
+  ) {
+    return createMouseAnchor(selection)
+  }
 
-  const top = isValidPoint(selection.endTop) ? selection.endTop.y : selection.endBottom.y
-  return toDisplayCoordinates({
-    centerX: selection.endBottom.x,
-    top: Math.min(top, selection.endBottom.y),
-    bottom: Math.max(top, selection.endBottom.y),
+  const startTop = toDisplayPoint(selection.startTop)
+  const startBottom = toDisplayPoint(selection.startBottom)
+  const endTop = toDisplayPoint(selection.endTop)
+  const endBottom = toDisplayPoint(selection.endBottom)
+  const multiline = endTop.y >= startBottom.y || startTop.y >= endBottom.y
+  const workArea = screen.getDisplayNearestPoint(endBottom).workArea
+  const left = multiline ? workArea.x : Math.min(startTop.x, endBottom.x)
+  const right = multiline ? workArea.x + workArea.width : Math.max(startTop.x, endBottom.x)
+  const topY = Math.min(startTop.y, endTop.y)
+  const bottomY = Math.max(startBottom.y, endBottom.y)
+  if (right <= left || bottomY <= topY) return createMouseAnchor(selection)
+  return {
+    centerX: endBottom.x,
+    top: Math.min(endTop.y, endBottom.y),
+    bottom: Math.max(endTop.y, endBottom.y),
     gap: SELECTION_ANCHOR_GAP,
-    posLevel: selection.posLevel
-  })
+    posLevel: selection.posLevel,
+    avoidanceBounds: { x: left, y: topY, width: right - left, height: bottomY - topY }
+  }
 }
 
 export function createCursorAnchor(): SelectionAnchor {
   return pointToAnchor(screen.getCursorScreenPoint(), MOUSE_ANCHOR_GAP, POSITION_LEVEL.NONE)
+}
+
+export function createWordAnchor(wordBounds: Rectangle): SelectionAnchor {
+  return {
+    centerX: wordBounds.x + wordBounds.width / 2,
+    top: wordBounds.y,
+    bottom: wordBounds.y + wordBounds.height,
+    gap: EXPLANATION_SELECTION_GAP,
+    posLevel: POSITION_LEVEL.SEL_FULL,
+    avoidanceBounds: wordBounds
+  }
 }
 
 function isValidPoint(point: Point): boolean {
@@ -78,31 +109,6 @@ function isValidPoint(point: Point): boolean {
     point.x !== INVALID_COORDINATE &&
     point.y !== INVALID_COORDINATE
   )
-}
-
-function toDisplayCoordinates(anchor: SelectionAnchor): SelectionAnchor {
-  if (process.platform === 'darwin') {
-    return {
-      centerX: Math.round(anchor.centerX),
-      top: Math.round(anchor.top),
-      bottom: Math.round(anchor.bottom),
-      gap: anchor.gap,
-      posLevel: anchor.posLevel
-    }
-  }
-
-  const top = screen.screenToDipPoint({ x: Math.round(anchor.centerX), y: Math.round(anchor.top) })
-  const bottom = screen.screenToDipPoint({
-    x: Math.round(anchor.centerX),
-    y: Math.round(anchor.bottom)
-  })
-  return {
-    centerX: bottom.x,
-    top: Math.min(top.y, bottom.y),
-    bottom: Math.max(top.y, bottom.y),
-    gap: anchor.gap,
-    posLevel: anchor.posLevel
-  }
 }
 
 export function toDisplayPoint(point: Point): Point {
@@ -153,12 +159,43 @@ export function fitExplanationNearSelection(
   const availableHeight = Math.max(1, safeBottom - safeTop)
   const width = Math.min(Math.max(preferredSize.width, EXPLANATION_MIN_WIDTH), availableWidth)
   const height = Math.min(Math.max(preferredSize.height, EXPLANATION_MIN_HEIGHT), availableHeight)
+  if (anchor.avoidanceBounds) {
+    const target = anchor.avoidanceBounds
+    const gap = EXPLANATION_SELECTION_GAP
+    const candidates = [
+      { x: target.x, y: target.y + target.height + gap },
+      { x: target.x, y: target.y - height - gap },
+      { x: target.x + target.width + gap, y: target.y },
+      { x: target.x - width - gap, y: target.y }
+    ].map(({ x, y }) => ({
+      x: clamp(Math.round(x), safeLeft, safeRight - width),
+      y: clamp(Math.round(y), safeTop, safeBottom - height),
+      width,
+      height
+    }))
+    const overlap = (candidate: Rectangle): number =>
+      Math.max(
+        0,
+        Math.min(candidate.x + width, target.x + target.width) - Math.max(candidate.x, target.x)
+      ) *
+      Math.max(
+        0,
+        Math.min(candidate.y + height, target.y + target.height) - Math.max(candidate.y, target.y)
+      )
+    return candidates.reduce((best, candidate) =>
+      overlap(candidate) < overlap(best) ? candidate : best
+    )
+  }
   const usesSelectionPosition = hasSelectionPosition(anchor.posLevel)
   const gap = usesSelectionPosition ? EXPLANATION_SELECTION_GAP : MOUSE_ANCHOR_GAP
   const preferredX = Math.round(
     anchor.centerX + (usesSelectionPosition ? 0 : EXPLANATION_POINTER_OFFSET)
   )
-  const preferredY = Math.round(anchor.bottom + gap)
+  const belowY = Math.round(anchor.bottom + gap)
+  const aboveY = Math.round(anchor.top - gap - height)
+  const spaceBelow = safeBottom - belowY
+  const spaceAbove = anchor.top - gap - safeTop
+  const preferredY = spaceBelow >= height || spaceBelow >= spaceAbove ? belowY : aboveY
   const x = clamp(preferredX, safeLeft, safeRight - width)
   const y = clamp(preferredY, safeTop, safeBottom - height)
   return { x, y, width, height }

@@ -187,7 +187,7 @@ export function SelectionTranslationWorkbench({
           <Languages className="size-3.5" />
           翻译
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <Button
             aria-label={pinned ? '取消置顶' : '置顶窗口'}
             aria-pressed={pinned}

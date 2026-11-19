@@ -43,12 +43,15 @@ import { BaseController } from './base-controller'
 const MAX_SELECTION_LENGTH = 200
 const EXPLANATION_MIN_WIDTH = 360
 const EXPLANATION_MIN_HEIGHT = 300
+const EXPLANATION_MOVE_DURATION = 220
+const EXPLANATION_MOVE_FRAME = 16
 
 type ExplanationSize = { width: number; height: number }
 type PendingExplanationLoading = { requestId: number; resolve: () => void }
 
 export class SelectionExplanationController extends BaseController {
   private anchor: SelectionAnchor | undefined
+  private animateMovement = true
   private explanationWebContentsId: number | undefined
   private explanationLoaded = false
   private explanationPayload: SelectionExplanationPayload | undefined
@@ -61,6 +64,7 @@ export class SelectionExplanationController extends BaseController {
   private appliedExplanationSize: ExplanationSize | undefined
   private activeAiRequestId: string | undefined
   private onVisibilityChange: (() => void) | undefined
+  private moveTimer: ReturnType<typeof setTimeout> | undefined
 
   setOnVisibilityChange(callback: () => void): void {
     this.onVisibilityChange = callback
@@ -78,8 +82,14 @@ export class SelectionExplanationController extends BaseController {
     ipcMain.handle('selection-explanation:save-ocr-explanation', this.saveOcrExplanationAsExcerpt)
   }
 
-  setAnchor(anchor: SelectionAnchor): void {
+  setAnchor(anchor: SelectionAnchor, options: { animate?: boolean } = {}): void {
     this.anchor = anchor
+    this.animateMovement = options.animate ?? true
+  }
+
+  reposition(): void {
+    const window = this.currentWindow
+    if (window) this.positionExplanation(window)
   }
 
   get isVisible(): boolean {
@@ -98,17 +108,21 @@ export class SelectionExplanationController extends BaseController {
   }
 
   setPinned(pinned: boolean): void {
+    if (pinned) this.cancelExplanationMove()
     if (!this.explanationPayload) return
     this.explanationPayload = { ...this.explanationPayload, pinned }
     this.flushExplanationPayload()
   }
 
-  prepareForOcrCapture(): void {
+  prepareForOcrCapture(): number {
     this.lookupVersion += 1
     this.cancelAiExplanation()
     this.resolvePendingExplanationLoading()
-    const window = this.currentWindow
-    if (window?.isVisible()) hideSelectionWindow(window)
+    return this.lookupVersion
+  }
+
+  isLookupCurrent(version: number): boolean {
+    return version === this.lookupVersion
   }
 
   hideIfOutside(point: Point): void {
@@ -454,11 +468,14 @@ export class SelectionExplanationController extends BaseController {
       this.hideExplanation()
     })
     window.on('resize', () => this.rememberExplanationSize(window))
+    window.on('will-move', () => this.cancelExplanationMove())
     window.on('hide', () => {
+      this.cancelExplanationMove()
       this.runtime.windowManager.hideOcrHighlight()
       this.onVisibilityChange?.()
     })
     window.on('closed', () => {
+      this.cancelExplanationMove()
       this.runtime.windowManager.hideOcrHighlight()
       this.onVisibilityChange?.()
     })
@@ -978,6 +995,7 @@ export class SelectionExplanationController extends BaseController {
   }
 
   private positionExplanation(window: SelectionSurfaceWindow): void {
+    this.cancelExplanationMove()
     if (this.runtime.windowManager.isSelectionExplanationPinned()) return
     const anchor = this.anchor ?? createCursorAnchor()
     const preferredSize =
@@ -986,7 +1004,40 @@ export class SelectionExplanationController extends BaseController {
         : this.preferredExplanationSize
     const bounds = fitExplanationNearSelection(anchor, preferredSize)
     this.appliedExplanationSize = { width: bounds.width, height: bounds.height }
-    window.setBounds(bounds, false)
+    if (!window.isVisible() || !this.animateMovement) {
+      window.setBounds(bounds, false)
+      return
+    }
+
+    const start = window.getBounds()
+    window.setBounds({ ...start, width: bounds.width, height: bounds.height }, false)
+    if (start.x === bounds.x && start.y === bounds.y) return
+
+    const startedAt = performance.now()
+    const move = (): void => {
+      if (window.isDestroyed() || !window.isVisible()) {
+        this.cancelExplanationMove()
+        return
+      }
+      const progress = Math.min((performance.now() - startedAt) / EXPLANATION_MOVE_DURATION, 1)
+      const eased = 1 - (1 - progress) ** 3
+      const current = window.getBounds()
+      window.setBounds(
+        {
+          ...current,
+          x: Math.round(start.x + (bounds.x - start.x) * eased),
+          y: Math.round(start.y + (bounds.y - start.y) * eased)
+        },
+        false
+      )
+      this.moveTimer = progress < 1 ? setTimeout(move, EXPLANATION_MOVE_FRAME) : undefined
+    }
+    this.moveTimer = setTimeout(move, EXPLANATION_MOVE_FRAME)
+  }
+
+  private cancelExplanationMove(): void {
+    if (this.moveTimer) clearTimeout(this.moveTimer)
+    this.moveTimer = undefined
   }
 
   private rememberExplanationSize(window: SelectionSurfaceWindow): void {
