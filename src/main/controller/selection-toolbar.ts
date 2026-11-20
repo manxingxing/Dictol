@@ -107,8 +107,7 @@ export class SelectionToolbarController extends BaseController {
     let ocrAiVersion: number | undefined
     let explanationVersion: number | undefined
     const isCurrent = (): boolean =>
-      explanationVersion !== undefined &&
-      this.explanation.isLookupCurrent(explanationVersion)
+      explanationVersion !== undefined && this.explanation.isLookupCurrent(explanationVersion)
     const onCaptureReady =
       mode === 'ai'
         ? (): void => {

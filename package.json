@@ -45,9 +45,8 @@
     "build:linux": "node scripts/build-linux.mjs"
   },
   "dependencies": {
-    "@dictol/mdict-native": "file:native/mdict-node",
     "@dictol/accessibility-native": "file:native/accessibility",
-    "@dictol/screen-capture-native": "file:native/screen-capture",
+    "@dictol/mdict-native": "file:native/mdict-node",
     "@dictol/ocr-native": "file:native/ocr",
     "@electron-toolkit/utils": "^4.0.0",
     "@radix-ui/react-popover": "^1.1.23",
@@ -68,7 +67,7 @@
     "postcss": "^8.5.25",
     "postcss-selector-parser": "^7.1.6",
     "postcss-value-parser": "^4.2.0",
-    "selection-hook": "^2.1.1",
+    "selection-hook": "^2.1.2",
     "sharp": "0.35.5"
   },
   "devDependencies": {
@@ -147,7 +146,7 @@
     "fsevents@2.3.3": true,
     "electron-winstaller@5.4.0": true,
     "better-sqlite3@13.0.2": true,
-    "selection-hook@2.1.1": true,
+    "selection-hook@2.1.2": true,
     "adblock-rs@0.13.2": true,
     "esbuild@0.18.20": true,
     "esbuild@0.25.12": true

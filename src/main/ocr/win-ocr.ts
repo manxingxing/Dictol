@@ -11,7 +11,7 @@ import {
 import { selectOcrTextHit, type OcrTextHit } from './ocr-text'
 import type { OcrCapture } from './ocr-capture-types'
 
-const dictionaryCaptureSize = { width: 850, height: 320 }
+const dictionaryCaptureSize = { width: 1000, height: 300 }
 const aiCaptureSize = { width: 1024, height: 500 }
 const expandedAiCaptureSize = { width: 1434, height: 800 }
 const angledRetryCaptureSize = { width: 550, height: 290 }

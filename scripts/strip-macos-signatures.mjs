@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+
 import { execFileSync } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -158,14 +160,6 @@ function pruneAndVerifyNativeModules(appPath, arch) {
       `darwin-${arch}`,
       'accessibility.node'
     ),
-    join(
-      unpacked,
-      '@dictol',
-      'screen-capture-native',
-      'prebuilds',
-      `darwin-${arch}`,
-      'screen-capture.node'
-    ),
     join(unpacked, '@dictol', 'ocr-native', 'prebuilds', `darwin-${arch}`, 'ocr.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', `darwin-${arch}.node`),
     join(unpacked, 'selection-hook', 'prebuilds', `darwin-${arch}`, 'selection-hook.node'),
@@ -193,14 +187,6 @@ function pruneAndVerifyNativeModules(appPath, arch) {
       'prebuilds',
       `darwin-${otherArch}`,
       'accessibility.node'
-    ),
-    join(
-      unpacked,
-      '@dictol',
-      'screen-capture-native',
-      'prebuilds',
-      `darwin-${otherArch}`,
-      'screen-capture.node'
     ),
     join(unpacked, '@dictol', 'ocr-native', 'prebuilds', `darwin-${otherArch}`, 'ocr.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', `darwin-${otherArch}.node`),
@@ -240,6 +226,27 @@ function pruneAndVerifyNativeModules(appPath, arch) {
     }
   }
 
+  const screenCaptureBinary = readFileSync(expected[2])
+  const screenCaptureExports = [
+    'captureScreenRegion',
+    'captureDisplay',
+    'captureWindow',
+    'listShareableDisplays',
+    'listShareableWindows',
+    'hasScreenCapturePermission',
+    'recognizeMacPng',
+    'captureAndRecognizeMacText',
+    'chineseWordRange'
+  ]
+  const missingCaptureExports = screenCaptureExports.filter(
+    (name) => !screenCaptureBinary.includes(Buffer.from(name))
+  )
+  if (missingCaptureExports.length > 0) {
+    throw new Error(
+      `Packaged macOS screen capture binding is missing exports: ${missingCaptureExports.join(', ')}`
+    )
+  }
+
   console.log(`  • verified macOS native modules arch=${arch} count=${expected.length}`)
 }
 
@@ -267,14 +274,6 @@ function verifyWindowsNativeModules(appOutDir, arch) {
       'win32-x64',
       'accessibility.node'
     ),
-    join(
-      unpacked,
-      '@dictol',
-      'screen-capture-native',
-      'prebuilds',
-      'win32-x64',
-      'screen-capture.node'
-    ),
     join(unpacked, '@dictol', 'ocr-native', 'prebuilds', 'win32-x64', 'ocr.node'),
     join(unpacked, 'adblock-rs', 'js', 'index.node'),
     join(unpacked, 'better-sqlite3', 'prebuilds', 'win32-x64.node'),
@@ -285,7 +284,6 @@ function verifyWindowsNativeModules(appOutDir, arch) {
   const nativePackageRoots = [
     join(unpacked, '@dictol', 'mdict-native'),
     join(unpacked, '@dictol', 'accessibility-native'),
-    join(unpacked, '@dictol', 'screen-capture-native'),
     join(unpacked, '@dictol', 'ocr-native'),
     join(unpacked, 'adblock-rs'),
     join(unpacked, 'better-sqlite3'),
@@ -341,10 +339,13 @@ function verifyWindowsNativeModules(appOutDir, arch) {
 
   const screenCaptureBinary = readFileSync(expected[2])
   const screenCaptureExports = [
-    'captureWindowsDisplayAtPoint',
-    'captureWindowsScreenRegion',
+    'captureScreenRegion',
+    'captureDisplay',
+    'captureWindow',
+    'listShareableDisplays',
+    'listShareableWindows',
     'getWindowsDisplayBoundsAtPoint',
-    'stopWindowsScreenCaptureSessions'
+    'recognizeWindowsText'
   ]
   const missingCaptureExports = screenCaptureExports.filter(
     (name) => !screenCaptureBinary.includes(Buffer.from(name))
@@ -353,10 +354,6 @@ function verifyWindowsNativeModules(appOutDir, arch) {
     throw new Error(
       `Packaged Windows screen capture binding is missing exports: ${missingCaptureExports.join(', ')}`
     )
-  }
-
-  if (!readFileSync(expected[3]).includes(Buffer.from('recognizeWindowsText'))) {
-    throw new Error('Packaged Windows OCR binding is missing recognizeWindowsText')
   }
 
   console.log(`  • verified Windows native modules arch=${arch} count=${expected.length}`)

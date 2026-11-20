@@ -10,6 +10,7 @@
     "prebuilds/**/*.node"
   ],
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "test": "node --test ../../tests/native/ocr/*.test.cjs"
   }
 }

@@ -219,14 +219,23 @@ export function selectOcrTextHit(
 
   let text = ''
   let targetOffset = 0
-  let targetStart = 0
   const lineRanges: { line: Line; start: number; end: number }[] = []
   for (const row of paragraphRows) {
-    for (const { line } of row.lines) {
-      if (text && line === row.lines[0].line && needsSpace(text, line.text)) text += ' '
+    for (const [index, item] of row.lines.entries()) {
+      const { line } = item
+      const previous = row.lines[index - 1]
+      const gap = previous ? item.inline.start - previous.inline.end : 0
+      const characterWidth = previous
+        ? Math.min(
+            (previous.inline.end - previous.inline.start) / Array.from(previous.line.text).length,
+            (item.inline.end - item.inline.start) / Array.from(line.text).length
+          )
+        : 0
+      if (text && needsSpace(text, line.text) && (!previous || gap > characterWidth * 0.3)) {
+        text += ' '
+      }
       const start = text.length
       if (line === target) {
-        targetStart = text.length
         targetOffset = text.length + characterOffset
       }
       text += line.text
@@ -267,23 +276,32 @@ export function selectOcrTextHit(
   const contextTop = Math.min(...contextLines.map((line) => line.top))
   const contextRight = Math.max(...contextLines.map((line) => line.x + line.width))
   const contextBottom = Math.max(...contextLines.map((line) => line.bottom))
-  const targetLength = target.text.length
-  const wordStart = Math.max(0, Math.min(targetLength, word.index - targetStart))
-  const wordEnd = Math.max(
-    wordStart,
-    Math.min(targetLength, word.index + word.text.length - targetStart)
-  )
-  const targetText = target.text
-  const targetTextVisualWidth = visualWidth(targetText, mixedCjkLatin)
-  const wordLeft = visualWidth(targetText.slice(0, wordStart), mixedCjkLatin)
-  const wordRight = visualWidth(targetText.slice(0, wordEnd), mixedCjkLatin)
-  const measuredBounds = wordBoundsFromBoxes(target, wordStart, wordEnd)
-  const bounds = measuredBounds ?? {
-    x: target.x + (wordLeft / targetTextVisualWidth) * target.width,
-    y: target.top,
-    width: ((wordRight - wordLeft) / targetTextVisualWidth) * target.width,
-    height: target.height
-  }
+  const wordParts = lineRanges
+    .filter(({ start, end }) => start < word.index + word.text.length && end > word.index)
+    .map(({ line, start }) => {
+      const partStart = Math.max(0, word.index - start)
+      const partEnd = Math.min(line.text.length, word.index + word.text.length - start)
+      const mixed = hasMixedCjkLatin(line.text)
+      const total = visualWidth(line.text, mixed)
+      const left = visualWidth(line.text.slice(0, partStart), mixed)
+      const right = visualWidth(line.text.slice(0, partEnd), mixed)
+      const bounds = wordBoundsFromBoxes(line, partStart, partEnd) ?? {
+        x: line.x + (left / total) * line.width,
+        y: line.top,
+        width: ((right - left) / total) * line.width,
+        height: line.height
+      }
+      return { line, partStart, partEnd, bounds }
+    })
+  const left = Math.min(...wordParts.map((part) => part.bounds.x))
+  const top = Math.min(...wordParts.map((part) => part.bounds.y))
+  const right = Math.max(...wordParts.map((part) => part.bounds.x + part.bounds.width))
+  const bottom = Math.max(...wordParts.map((part) => part.bounds.y + part.bounds.height))
+  const bounds = { x: left, y: top, width: right - left, height: bottom - top }
+  const wordQuad =
+    wordParts.length === 1
+      ? wordQuadFromBoxes(wordParts[0].line, wordParts[0].partStart, wordParts[0].partEnd, bounds)
+      : undefined
   return {
     selection: {
       word: word.text,
@@ -292,7 +310,7 @@ export function selectOcrTextHit(
     },
     confidence: target.confidence,
     bounds,
-    wordQuad: wordQuadFromBoxes(target, wordStart, wordEnd, bounds),
+    wordQuad,
     contextBounds: {
       x: contextLeft,
       y: contextTop,
@@ -631,7 +649,10 @@ function expandCompoundWord(
 }
 
 function needsSpace(left: string, right: string): boolean {
-  return (
-    /[\p{Script=Latin}\p{Number}.!?]$/u.test(left) && /^[\p{Script=Latin}\p{Number}]/u.test(right)
-  )
+  if (!/^[\p{Script=Latin}\p{Number}]/u.test(right)) return false
+  if (/[\p{Script=Latin}\p{Number}]$/u.test(left)) return true
+  if (/[.!?]$/u.test(left)) return true
+  // 逗号/分号后接字母补空格；接数字时不补，避免拆开千分位数字（如 1,234）。
+  if (/[,;]$/u.test(left)) return /^[\p{Script=Latin}]/u.test(right)
+  return false
 }

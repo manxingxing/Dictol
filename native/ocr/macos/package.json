@@ -1,0 +1,5 @@
+{
+  "name": "@dictol/screen-capture-macos-build",
+  "private": true,
+  "scripts": { "build": "node build.mjs" }
+}

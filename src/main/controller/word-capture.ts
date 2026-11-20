@@ -9,7 +9,7 @@ import {
   getPermissionStatus,
   openPermissionSettings,
   type ScreenCapturePermissionStatus
-} from '@dictol/screen-capture-native'
+} from '@dictol/ocr-native'
 
 import {
   LOOKUP_WORD_ON_SHORTCUT,

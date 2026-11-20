@@ -8,7 +8,10 @@ out
 vscode/
 
 test/
-tests/
+/tests/*
+!/tests/ocr-no-word.test.cjs
+!/tests/native/
+!/tests/main/
 
 
 opendesign/
@@ -32,15 +35,9 @@ opendesign/
 /native/accessibility/windows/target/
 /native/accessibility/windows/*.node
 /native/ocr/target/
-/native/ocr/macos/target/
+/native/ocr/node_modules/
+/native/ocr/macos/*.node
 /native/ocr/windows/target/
 /native/ocr/windows/*.node
-/native/screen-capture/target/
-/native/screen-capture/node_modules/
-/native/screen-capture/macos/target/
-/native/screen-capture/macos/*.node
-/native/screen-capture/macos/index.d.ts
-/native/screen-capture/windows/target/
-/native/screen-capture/windows/*.node
-/native/screen-capture/windows/index.d.ts
+/native/ocr/windows/index.d.ts
 /resources/system-translation/dictol-system-translation

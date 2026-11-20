@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, renameSync, rmSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const root = resolve(import.meta.dirname, '..')

@@ -564,9 +564,7 @@ const api = Object.freeze({
       ipcRenderer.invoke('screenshot-translation:set-shortcut', shortcut),
     getClipboardShortcutStatus: (): Promise<ClipboardTranslationStatus | null> =>
       ipcRenderer.invoke('translation:clipboard-shortcut-status'),
-    setClipboardShortcut: (
-      shortcut: string
-    ): Promise<ClipboardTranslationSettingResult | null> =>
+    setClipboardShortcut: (shortcut: string): Promise<ClipboardTranslationSettingResult | null> =>
       ipcRenderer.invoke('translation:set-clipboard-shortcut', shortcut),
     getConfig: (): Promise<TranslationPublicConfig | null> =>
       ipcRenderer.invoke('translation:get-config'),

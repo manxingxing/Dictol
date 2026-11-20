@@ -604,10 +604,15 @@ export class SelectionExplanationController extends BaseController {
     if (positionWindow) this.positionExplanation(window)
 
     try {
-      const lookupPromise = this.db.lookupDictionaryEntryGroup(
-        normalizedWord,
-        this.runtime.selectionDictionaryGroupId
-      )
+      const lookupStartedAt = performance.now()
+      const lookupPromise = this.db
+        .lookupDictionaryEntryGroup(normalizedWord, this.runtime.selectionDictionaryGroupId)
+        .finally(() => {
+          console.debug('[DictionaryLookup] selection explanation', {
+            term: normalizedWord,
+            takeMs: performance.now() - lookupStartedAt
+          })
+        })
       await loadingReady
       if (version !== this.lookupVersion) return
       if (!keepWindowVisible) this.showExplanationWindow(window)
@@ -972,6 +977,11 @@ export class SelectionExplanationController extends BaseController {
       aiEnabled:
         payload.mode === 'dictionary' ? this.runtime.appConfig.load().aiLookup.enabled : undefined,
       pinned: this.runtime.windowManager.isSelectionExplanationPinned()
+    }
+    if (payload.mode === 'dictionary') {
+      this.runtime.windowManager.setSelectionExplanationSwitcherVisible(
+        (payload.dictionaries?.length ?? 0) > 1
+      )
     }
     this.flushExplanationPayload()
   }

@@ -22,3 +22,11 @@ is written to `prebuilds/<platform>-<arch>/accessibility.node`. The root
 `npm run native:build` command builds MDict and Accessibility for the requested
 target; Windows cross-compilation remains orchestrated by
 `scripts/build-native.mjs`.
+
+On macOS, run the Accessibility fallback regression test with:
+
+```sh
+clang -fobjc-arc -fblocks tests/native/accessibility/macos/ax-fallback.m \
+  -framework ApplicationServices -framework Foundation -framework NaturalLanguage \
+  -o /tmp/dictol-ax-fallback-test && /tmp/dictol-ax-fallback-test
+```

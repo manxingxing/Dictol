@@ -22,7 +22,7 @@ export async function captureAccessibleText(
   }
   if (result.text === undefined || result.offset === undefined) return null
   const context = sentenceContextAt(result.text, result.offset)
-  if (!context || context.context === result.word) return null
+  if (!context) return null
 
   return {
     selection: {

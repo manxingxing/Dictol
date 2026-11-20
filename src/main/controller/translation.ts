@@ -17,7 +17,10 @@ import {
   type TranslationRequest,
   type TranslationSaveProviderRequest
 } from '../../shared/translation'
-import { CLIPBOARD_TRANSLATION_SHORTCUT, TRANSLATE_SELECTION_SHORTCUT } from '../../shared/shortcuts'
+import {
+  CLIPBOARD_TRANSLATION_SHORTCUT,
+  TRANSLATE_SELECTION_SHORTCUT
+} from '../../shared/shortcuts'
 import type { SelectionAnchor } from '../lib/selection-position'
 import { BaseController } from './base-controller'
 

@@ -34,13 +34,18 @@ if (!output) throw new Error(`No mdict prebuild layout configured for Rust targe
 const napi = join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'napi.cmd' : 'napi')
 if (!existsSync(napi)) throw new Error(`Missing local NAPI-RS CLI: ${napi}`)
 const commandArgs = ['build', '--platform', ...(debug ? [] : ['--release']), ...napiArgs]
+const buildEnv = { ...process.env }
+if (rustTarget.endsWith('-apple-darwin')) {
+  buildEnv.MACOSX_DEPLOYMENT_TARGET ??= '13.0'
+}
 if (process.platform === 'win32') {
   execFileSync('cmd.exe', ['/c', napi, ...commandArgs], {
     cwd: packageDirectory,
-    stdio: 'inherit'
+    stdio: 'inherit',
+    env: buildEnv
   })
 } else {
-  execFileSync(napi, commandArgs, { cwd: packageDirectory, stdio: 'inherit' })
+  execFileSync(napi, commandArgs, { cwd: packageDirectory, stdio: 'inherit', env: buildEnv })
 }
 
 const binaryName = `dictol-mdict-node.${output.suffix}.node`

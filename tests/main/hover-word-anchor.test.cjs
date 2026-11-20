@@ -53,8 +53,7 @@ for (const mode of ['dictionary', 'ai']) {
     compiled._compile(output.code, __filename)
     const controller = new compiled.exports.SelectionToolbarController(
       {
-        windowManager: { hideOcrHighlight() {} },
-        appConfig: { load: () => ({ ocrEngine: 'system' }) }
+        windowManager: { hideOcrHighlight() {} }
       },
       explanation,
       {}

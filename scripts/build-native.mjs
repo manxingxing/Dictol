@@ -42,6 +42,10 @@ const verifyWindowsX64Binding = (directory) => {
   }
   const screenCaptureExports = [
     'captureScreenRegion',
+    'captureDisplay',
+    'captureWindow',
+    'listShareableDisplays',
+    'listShareableWindows',
     'captureWindowsDisplayAtPoint',
     'captureWindowsScreenRegion',
     'getWindowsDisplayBoundsAtPoint',
@@ -162,23 +166,9 @@ if (target?.endsWith('-apple-darwin') || target?.endsWith('-pc-windows-msvc')) {
 
 const shouldBuildScreenCapture = target
   ? (target.endsWith('-apple-darwin') && process.platform === 'darwin') ||
-    (target.endsWith('-pc-windows-msvc') && process.platform === 'win32')
+    target.endsWith('-pc-windows-msvc')
   : ['darwin', 'win32'].includes(process.platform)
 if (shouldBuildScreenCapture) {
-  execFileSync(
-    process.execPath,
-    ['native/screen-capture/build.mjs', ...(target ? ['--target', target] : [])],
-    {
-      stdio: 'inherit'
-    }
-  )
-}
-
-const shouldBuildOcr = target
-  ? (target.endsWith('-apple-darwin') && process.platform === 'darwin') ||
-    (target.endsWith('-pc-windows-msvc') && process.platform === 'win32')
-  : ['darwin', 'win32'].includes(process.platform)
-if (shouldBuildOcr) {
   execFileSync(
     process.execPath,
     ['native/ocr/build.mjs', ...(target ? ['--target', target] : [])],
