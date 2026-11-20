@@ -27,7 +27,6 @@ const VIEW_SESSION_PARTITIONS = [
 
 export class AppController extends BaseController {
   override mount(): void {
-    // Keep app metadata behind the same sender boundary as the other renderer APIs.
     ipcMain.handle('app:get-version', this.getVersion)
     ipcMain.handle('app:is-main-window-focused', this.isMainWindowFocused)
     ipcMain.handle('app:get-aggregate-layout', (event) => {
