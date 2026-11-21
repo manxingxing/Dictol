@@ -29,6 +29,11 @@ export function TranslationPage(): React.JSX.Element {
   const requestIdRef = useRef<string | null>(null)
   const requestVersionRef = useRef(0)
   const unsubscribeRef = useRef<(() => void) | null>(null)
+  const submittedRef = useRef<{
+    text: string
+    source: TranslationSourceLanguage
+    target: TranslationLanguage
+  } | null>(null)
 
   useEffect(() => {
     let active = true
@@ -91,6 +96,7 @@ export function TranslationPage(): React.JSX.Element {
         setStatus('error')
         return
       }
+      submittedRef.current = { text: content, source, target }
       setStatus('running')
       setCopied(false)
       let startedId: string | null = null
@@ -151,18 +157,6 @@ export function TranslationPage(): React.JSX.Element {
     setTimeout(() => setCopied(false), 1500)
   }
 
-  const changeInput = (value: string): void => {
-    requestVersionRef.current += 1
-    if (requestIdRef.current) api.cancel(requestIdRef.current)
-    requestIdRef.current = null
-    unsubscribeRef.current?.()
-    unsubscribeRef.current = null
-    setInput(value)
-    setOutput('')
-    setError('')
-    setStatus('idle')
-  }
-
   if (loadingConfig) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -186,11 +180,9 @@ export function TranslationPage(): React.JSX.Element {
                 aria-label="源语言"
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                 value={sourceLanguage}
-                onChange={(event) => {
-                  const source = event.target.value as TranslationSourceLanguage
-                  setSourceLanguage(source)
-                  if (input.trim()) void translate(input, providerId, source, targetLanguage)
-                }}
+                onChange={(event) =>
+                  setSourceLanguage(event.target.value as TranslationSourceLanguage)
+                }
               >
                 <option value="auto">自动检测</option>
                 {TRANSLATION_LANGUAGES.map((language) => (
@@ -209,7 +201,6 @@ export function TranslationPage(): React.JSX.Element {
                 const nextTarget = sourceLanguage
                 setSourceLanguage(nextSource)
                 setTargetLanguage(nextTarget)
-                if (input.trim()) void translate(input, providerId, nextSource, nextTarget)
               }}
               size="icon"
               variant="ghost"
@@ -222,11 +213,7 @@ export function TranslationPage(): React.JSX.Element {
                 aria-label="目标语言"
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                 value={targetLanguage}
-                onChange={(event) => {
-                  const target = event.target.value as TranslationLanguage
-                  setTargetLanguage(target)
-                  if (input.trim()) void translate(input, providerId, sourceLanguage, target)
-                }}
+                onChange={(event) => setTargetLanguage(event.target.value as TranslationLanguage)}
               >
                 {TRANSLATION_LANGUAGES.map((language) => (
                   <option key={language} value={language}>
@@ -240,7 +227,7 @@ export function TranslationPage(): React.JSX.Element {
             aria-label="待翻译文本"
             className="min-h-0 flex-1 resize-none border-0 bg-transparent p-4 text-sm leading-6 outline-none"
             maxLength={TRANSLATION_MAX_TEXT_LENGTH}
-            onChange={(event) => changeInput(event.target.value)}
+            onChange={(event) => setInput(event.target.value)}
             placeholder="输入要翻译的文本…"
             value={input}
           />
@@ -266,7 +253,9 @@ export function TranslationPage(): React.JSX.Element {
                 onChange={(event) => {
                   const id = event.target.value
                   setProviderId(id)
-                  if (input.trim()) void translate(input, id, sourceLanguage, targetLanguage)
+                  const submitted = submittedRef.current
+                  if (submitted)
+                    void translate(submitted.text, id, submitted.source, submitted.target)
                 }}
               >
                 {!availableProviders.length && <option value="">尚无可用翻译服务</option>}
@@ -300,7 +289,11 @@ export function TranslationPage(): React.JSX.Element {
               <span>{error}</span>
               <Button
                 disabled={!providerId}
-                onClick={() => void translate(input, providerId, sourceLanguage, targetLanguage)}
+                onClick={() => {
+                  const submitted = submittedRef.current
+                  if (submitted)
+                    void translate(submitted.text, providerId, submitted.source, submitted.target)
+                }}
                 size="sm"
                 variant="outline"
               >
