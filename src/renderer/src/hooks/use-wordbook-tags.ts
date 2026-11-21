@@ -39,6 +39,28 @@ export function useCreateWordbookTag(): UseMutationResult<
   })
 }
 
+export function useCreateAndAddWordbookTag(): UseMutationResult<
+  Awaited<ReturnType<Window['dictol']['wordbooks']['createTag']>>,
+  Error,
+  { wordId: string; name: string }
+> {
+  const invalidate = useInvalidateWordbookTagData()
+  return useMutation({
+    mutationFn: async ({ wordId, name }) => {
+      const tag = await window.dictol.wordbooks.createTag(name)
+      try {
+        await window.dictol.wordbooks.addTagToWords([wordId], tag.id)
+      } catch (error) {
+        throw new Error(
+          `标签已创建，但添加失败：${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+      return tag
+    },
+    onSettled: invalidate
+  })
+}
+
 export function useRenameWordbookTag(): UseMutationResult<
   void,
   Error,

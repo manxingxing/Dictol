@@ -8,7 +8,7 @@ const dictionarySections = [
 
 export function DictionaryManagementLayout(): React.JSX.Element {
   return (
-    <section className="mx-auto flex max-w-3xl flex-col p-6 sm:p-8">
+    <section className="mx-auto flex max-w-4xl flex-col p-6 sm:p-8">
       <p className="mb-2 text-sm font-medium text-primary">词典库</p>
       <h1 className="text-xl font-semibold tracking-tight">管理你的词典</h1>
 

@@ -142,7 +142,7 @@ export const HistoryPage = (): React.JSX.Element => {
   })
 
   return (
-    <section className="mx-auto flex min-h-0 w-full max-w-3xl flex-col p-6 sm:min-h-full sm:p-8">
+    <section className="mx-auto flex min-h-0 w-full max-w-4xl flex-col p-6 sm:min-h-full sm:p-8">
       <p className="mb-2 text-sm font-medium text-primary">查询历史</p>
       <h1 className="text-xl font-semibold tracking-tight">最近查询</h1>
 

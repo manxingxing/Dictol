@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
+  useCreateAndAddWordbookTag,
   useCreateWordbookTag,
   useDeleteWordbookTag,
   useRenameWordbookTag,
@@ -38,7 +39,7 @@ export function WordbookTagManager({ tags }: { tags: WordbookTag[] }): React.JSX
 
   return (
     <Dialog>
-      <DialogTrigger>
+      <DialogTrigger asChild>
         <Button size="sm" type="button" variant="outline">
           <Tags />
           标签管理
@@ -46,7 +47,7 @@ export function WordbookTagManager({ tags }: { tags: WordbookTag[] }): React.JSX
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>管理标签</DialogTitle>
+          <DialogTitle>标签管理</DialogTitle>
           <DialogDescription>
             标签可在所有生词本中复用。删除标签会解除它与单词的关联。
           </DialogDescription>
@@ -54,6 +55,7 @@ export function WordbookTagManager({ tags }: { tags: WordbookTag[] }): React.JSX
         <div className="flex gap-2">
           <Input
             aria-label="新标签名称"
+            className="h-9"
             maxLength={50}
             onChange={(event) => setName(event.target.value)}
             onKeyDown={(event) => {
@@ -65,6 +67,7 @@ export function WordbookTagManager({ tags }: { tags: WordbookTag[] }): React.JSX
           <Button
             disabled={!name.trim() || createTag.isPending}
             onClick={submit}
+            size="sm"
             type="button"
           >
             <Plus />
@@ -221,6 +224,7 @@ function TagManagementRow({ tag }: { tag: WordbookTag }): React.JSX.Element {
     <div className="flex items-center gap-2 p-2">
       <Input
         aria-label={`重命名标签 ${tag.name}`}
+        className="h-9"
         maxLength={50}
         onChange={(event) => setName(event.target.value)}
         onKeyDown={(event) => {
@@ -230,6 +234,7 @@ function TagManagementRow({ tag }: { tag: WordbookTag }): React.JSX.Element {
       />
       <Button
         aria-label={`保存标签 ${tag.name}`}
+        className="size-8"
         disabled={!changed || !name.trim() || renameTag.isPending}
         onClick={submitRenameTag}
         size="icon"
@@ -240,6 +245,7 @@ function TagManagementRow({ tag }: { tag: WordbookTag }): React.JSX.Element {
       </Button>
       <Button
         aria-label={`删除标签 ${tag.name}`}
+        className="size-8"
         disabled={deleteTag.isPending}
         onClick={() =>
           deleteTag.mutate(tag.id, {
@@ -266,7 +272,7 @@ export function WordbookTagEditor({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const createTag = useCreateWordbookTag()
+  const createAndAddTag = useCreateAndAddWordbookTag()
   const setWordTags = useSetWordTags()
   const selectedIds = new Set(word.tags.map((tag) => tag.id))
   const matchingTags = allTags.filter((tag) =>
@@ -286,23 +292,16 @@ export function WordbookTagEditor({
     )
   }
 
-  const createAndAssign = (): void => {
-    createTag.mutate(search.trim(), {
-      onSuccess: (tag) => {
-        setWordTags.mutate(
-          { wordId: word.id, tagIds: [...word.tags.map((item) => item.id), tag.id] },
-          {
-            onSuccess: () => {
-              setSearch('')
-              toast.success(`已创建并添加标签“${tag.name}”`)
-            },
-            onError: (error) =>
-              toast.error('标签已创建，但添加失败', { description: error.message })
-          }
-        )
-      },
-      onError: (error) => toast.error('创建标签失败', { description: error.message })
-    })
+  const createAndAssign = async (): Promise<void> => {
+    try {
+      const tag = await createAndAddTag.mutateAsync({ wordId: word.id, name: search.trim() })
+      setSearch('')
+      toast.success(`已创建并添加标签“${tag.name}”`)
+    } catch (error) {
+      toast.error('创建并添加标签失败', {
+        description: error instanceof Error ? error.message : String(error)
+      })
+    }
   }
 
   return (
@@ -371,7 +370,7 @@ export function WordbookTagEditor({
           {canCreate && (
             <button
               className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm text-primary hover:bg-muted disabled:opacity-50"
-              disabled={createTag.isPending || setWordTags.isPending}
+              disabled={createAndAddTag.isPending || setWordTags.isPending}
               onClick={createAndAssign}
               type="button"
             >

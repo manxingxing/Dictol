@@ -401,26 +401,24 @@ export function DictionaryGroupsPage(): React.JSX.Element {
   return (
     <section className="flex min-h-0 flex-1 overflow-y-auto bg-background">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-5 py-6 sm:px-8 sm:py-8">
-        <header className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <Button asChild className="-ml-2 mb-3" size="sm" type="button" variant="ghost">
-              <NavLink to="/dictionaries">
-                <ArrowLeft />
-                词典库
-              </NavLink>
-            </Button>
+        <header>
+          <Button asChild className="-ml-2 mb-3" size="sm" type="button" variant="ghost">
+            <NavLink to="/dictionaries">
+              <ArrowLeft />
+              词典库
+            </NavLink>
+          </Button>
+          <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Library className="size-5 shrink-0 text-primary" />
               <h1 className="text-xl font-semibold tracking-tight">词典组</h1>
             </div>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              为不同的查询任务选择一组常用词典。
-            </p>
+            <Button className="shrink-0" onClick={openCreateEditor} size="sm" type="button">
+              <Plus />
+              新建词典组
+            </Button>
           </div>
-          <Button className="shrink-0" onClick={openCreateEditor} type="button">
-            <Plus />
-            新建词典组
-          </Button>
+          <p className="mt-1.5 text-sm text-muted-foreground">为不同的查询任务选择一组常用词典。</p>
         </header>
 
         {isGroupsLoading ? (
