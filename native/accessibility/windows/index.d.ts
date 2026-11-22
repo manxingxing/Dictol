@@ -15,5 +15,4 @@ export interface AccessibleText {
   height: number
 }
 
-
 export declare function readAccessibleText(x: number, y: number, includeContext?: boolean | undefined | null): Promise<AccessibleLookup>

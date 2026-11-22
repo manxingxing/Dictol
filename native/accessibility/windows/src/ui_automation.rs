@@ -60,39 +60,43 @@ fn read_accessible_text_impl(
         };
         element = parent;
     }
+
     let Some(pattern) = text_pattern else {
         return Ok(None);
     };
+
     let at_point = unsafe { pattern.RangeFromPoint(point)? };
     let word_range = unsafe { at_point.Clone()? };
     unsafe { word_range.ExpandToEnclosingUnit(TextUnit_Word)? };
-    let word = unsafe { word_range.GetText(256)? }
-        .to_string()
-        .trim()
-        .to_owned();
+    let raw_word = unsafe { word_range.GetText(-1)? }.to_string();
+    let word = raw_word.trim().to_owned();
     // UI Automation represents an image or embedded object as U+FFFC. It is
     // not readable text, so let the caller try screenshot OCR instead.
     if word.is_empty()
         || word.contains('\u{fffc}')
         || !word.chars().any(char::is_alphanumeric)
-        || word.encode_utf16().count() > 128
     {
         return Ok(None);
     }
 
     // RangeFromPoint can snap to the nearest text outside the actual glyphs.
-    let Some([left, top, width, height]) = range_rectangle(&word_range, x, y)? else {
+    // Keep the untrimmed range for this check: UIA word units can include
+    // trailing whitespace and punctuation (Chromium adds them so word navigation
+    // reaches the next word), and hovering that separator should still resolve
+    // to this word.
+    let Some(raw_rect) = range_rectangle(&word_range, x, y)? else {
         return Ok(None);
     };
-    if width <= 0.0
-        || height <= 0.0
-        || (x as f64) < left - 2.0
-        || (x as f64) > left + width + 2.0
-        || (y as f64) < top - 2.0
-        || (y as f64) > top + height + 2.0
-    {
+    if !rect_contains(raw_rect, x, y) {
         return Ok(None);
     }
+    // Measure only the trimmed text so the highlight does not cover the
+    // separators that the UIA word unit includes. Trimming is best effort: any
+    // provider failure keeps the untrimmed bounds rather than failing lookup.
+    let word_rect = trimmed_range(&word_range, &raw_word, &word)
+        .and_then(|range| range_rectangle(&range, x, y).ok().flatten())
+        .unwrap_or(raw_rect);
+    let [left, top, width, height] = word_rect;
 
     let (text, offset) = if include_context {
         let paragraph = unsafe { at_point.Clone()? };
@@ -105,16 +109,24 @@ fn read_accessible_text_impl(
                 TextPatternRangeEndpoint_Start,
             )?;
         }
-        let before = unsafe { prefix.GetText(16_384)? }.to_string();
-        let text = unsafe { paragraph.GetText(16_384)? }.to_string();
-        let offset = before.encode_utf16().count();
-        if offset >= text.encode_utf16().count() {
+        let before = unsafe { prefix.GetText(-1)? }.to_string();
+        let text = unsafe { paragraph.GetText(-1)? }.to_string();
+        let leading = &raw_word[..raw_word.len() - raw_word.trim_start().len()];
+        let Some(after_word_start) = text
+            .strip_prefix(&before)
+            .and_then(|after| after.strip_prefix(leading))
+        else {
+            return Ok(None);
+        };
+        if !after_word_start.starts_with(&word) {
             return Ok(None);
         }
+        let offset = before.encode_utf16().count() + leading.encode_utf16().count();
         (text, offset)
     } else {
         (word.clone(), 0)
     };
+
     Ok(Some(AccessibleText {
         text,
         offset: offset as u32,
@@ -133,6 +145,64 @@ pub fn read_accessible_text(
     _include_context: bool,
 ) -> Result<Option<AccessibleText>, String> {
     Err("unsupported-platform".to_owned())
+}
+
+#[cfg(windows)]
+fn rect_contains(rect: [f64; 4], x: i32, y: i32) -> bool {
+    let [left, top, width, height] = rect;
+    width > 0.0
+        && height > 0.0
+        && (x as f64) >= left - 2.0
+        && (x as f64) <= left + width + 2.0
+        && (y as f64) >= top - 2.0
+        && (y as f64) <= top + height + 2.0
+}
+
+/// Returns the part of a UIA word unit that equals the trimmed word, or `None`
+/// when the unit has no surrounding whitespace, the provider fails, or its
+/// character units do not line up with the text.
+#[cfg(windows)]
+fn trimmed_range(
+    range: &windows::Win32::UI::Accessibility::IUIAutomationTextRange,
+    raw_word: &str,
+    word: &str,
+) -> Option<windows::Win32::UI::Accessibility::IUIAutomationTextRange> {
+    use windows::Win32::UI::Accessibility::{
+        TextPatternRangeEndpoint_End, TextPatternRangeEndpoint_Start, TextUnit_Character,
+    };
+
+    if raw_word == word {
+        return None;
+    }
+    let leading = raw_word.chars().take_while(|c| c.is_whitespace()).count() as i32;
+    let trailing = raw_word.chars().rev().take_while(|c| c.is_whitespace()).count() as i32;
+    if leading == 0 && trailing == 0 {
+        return None;
+    }
+    let trimmed = unsafe { range.Clone() }.ok()?;
+    if leading > 0 {
+        unsafe {
+            trimmed.MoveEndpointByUnit(
+                TextPatternRangeEndpoint_Start,
+                TextUnit_Character,
+                leading,
+            )
+        }
+        .ok()?;
+    }
+    if trailing > 0 {
+        unsafe {
+            trimmed.MoveEndpointByUnit(
+                TextPatternRangeEndpoint_End,
+                TextUnit_Character,
+                -trailing,
+            )
+        }
+        .ok()?;
+    }
+    // Some providers count a CRLF pair as one character; only use the trimmed
+    // range when it is exactly the word that will be looked up.
+    (unsafe { trimmed.GetText(-1) }.ok()?.to_string() == word).then_some(trimmed)
 }
 
 #[cfg(windows)]
