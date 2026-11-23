@@ -40,6 +40,7 @@ import {
   createCursorAnchor,
   createWordAnchor,
   fitNearSelection,
+  fitTranslationNearSelection,
   insetRectangle,
   toDisplayAnchor,
   toDisplayPoint,
@@ -264,9 +265,9 @@ export class SelectionToolbarController extends BaseController {
     if (!this.acceptsToolbarSender(event) || !this.currentCapture) return
     const text = this.currentCapture.selection.text.trim()
     if (!text || text.length > TRANSLATION_MAX_TEXT_LENGTH) return
-    const anchor = this.anchor
+    const position = fitTranslationNearSelection(this.currentCapture.selection)
     this.hideToolbar()
-    this.translation.showSelection(text, anchor)
+    this.translation.showSelection(text, position)
   }
 
   private readonly lookupInMain = (event: IpcMainEvent): void => {

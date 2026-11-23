@@ -21,7 +21,6 @@ import {
   CLIPBOARD_TRANSLATION_SHORTCUT,
   TRANSLATE_SELECTION_SHORTCUT
 } from '../../shared/shortcuts'
-import type { SelectionAnchor } from '../lib/selection-position'
 import { BaseController } from './base-controller'
 
 export class TranslationController extends BaseController {
@@ -49,8 +48,8 @@ export class TranslationController extends BaseController {
     ipcMain.on('selection-translation:desired-height', this.handleDesiredHeight)
   }
 
-  showSelection(text: string, anchor?: SelectionAnchor): void {
-    this.runtime.actions.translation.showSelection(text, anchor)
+  showSelection(text: string, position?: Point): void {
+    this.runtime.actions.translation.showSelection(text, position)
   }
 
   get isVisible(): boolean {

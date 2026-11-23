@@ -6,8 +6,6 @@ const SELECTION_ANCHOR_GAP = 4
 const EXPLANATION_SELECTION_GAP = 8
 const EXPLANATION_POINTER_OFFSET = 12
 const EXPLANATION_SCREEN_MARGIN = 12
-const EXPLANATION_MIN_WIDTH = 360
-const EXPLANATION_MIN_HEIGHT = 300
 const INVALID_COORDINATE = -99_999
 const POSITION_LEVEL = {
   NONE: 0,
@@ -70,10 +68,8 @@ function createSelectionAnchor(selection: CapturedSelection['selection']): Selec
   const startBottom = toDisplayPoint(selection.startBottom)
   const endTop = toDisplayPoint(selection.endTop)
   const endBottom = toDisplayPoint(selection.endBottom)
-  const multiline = endTop.y >= startBottom.y || startTop.y >= endBottom.y
-  const workArea = screen.getDisplayNearestPoint(endBottom).workArea
-  const left = multiline ? workArea.x : Math.min(startTop.x, endBottom.x)
-  const right = multiline ? workArea.x + workArea.width : Math.max(startTop.x, endBottom.x)
+  const left = Math.min(startTop.x, startBottom.x, endTop.x, endBottom.x)
+  const right = Math.max(startTop.x, startBottom.x, endTop.x, endBottom.x)
   const topY = Math.min(startTop.y, endTop.y)
   const bottomY = Math.max(startBottom.y, endBottom.y)
   if (right <= left || bottomY <= topY) return createMouseAnchor(selection)
@@ -145,6 +141,27 @@ export function fitNearSelection(
   return { x, y, width, height }
 }
 
+/** Place translation below the selection, or below the cursor when bounds are unavailable. */
+export function fitTranslationNearSelection(selection?: CapturedSelection['selection']): Point {
+  if (selection && hasSelectionPosition(selection.posLevel)) {
+    const points = [
+      selection.startTop,
+      selection.startBottom,
+      selection.endTop,
+      selection.endBottom
+    ]
+    if (points.every(isValidPoint)) {
+      const displayPoints = points.map(toDisplayPoint)
+      return {
+        x: Math.round(Math.min(...displayPoints.map((point) => point.x))),
+        y: Math.round(Math.max(...displayPoints.map((point) => point.y)) + SELECTION_ANCHOR_GAP)
+      }
+    }
+  }
+  const cursor = screen.getCursorScreenPoint()
+  return { x: cursor.x, y: cursor.y + MOUSE_ANCHOR_GAP }
+}
+
 export function fitExplanationNearSelection(
   anchor: SelectionAnchor,
   preferredSize: ExplanationSize
@@ -155,10 +172,7 @@ export function fitExplanationNearSelection(
   const safeTop = workArea.y + EXPLANATION_SCREEN_MARGIN
   const safeRight = workArea.x + workArea.width - EXPLANATION_SCREEN_MARGIN
   const safeBottom = workArea.y + workArea.height - EXPLANATION_SCREEN_MARGIN
-  const availableWidth = Math.max(1, safeRight - safeLeft)
-  const availableHeight = Math.max(1, safeBottom - safeTop)
-  const width = Math.min(Math.max(preferredSize.width, EXPLANATION_MIN_WIDTH), availableWidth)
-  const height = Math.min(Math.max(preferredSize.height, EXPLANATION_MIN_HEIGHT), availableHeight)
+  const { width, height } = preferredSize
   if (anchor.avoidanceBounds) {
     const target = anchor.avoidanceBounds
     const gap = EXPLANATION_SELECTION_GAP

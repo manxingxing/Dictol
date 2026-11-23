@@ -7,20 +7,12 @@ import {
   type SelectionTranslationPayload
 } from '../../shared/translation'
 import type { AppRuntime } from '../app-runtime'
-import {
-  clamp,
-  containsPoint,
-  createCursorAnchor,
-  fitExplanationNearSelection,
-  toDisplayAnchor,
-  type SelectionAnchor
-} from '../lib/selection-position'
+import { clamp, containsPoint, fitTranslationNearSelection } from '../lib/selection-position'
 import { resolveRendererUrl } from '../output-path'
 import { hideSelectionWindow, showSelectionWindowInactive } from '../selection-window-behavior'
 
 /** Coordinates text translation and the floating translation window. */
 export class TranslationActions {
-  private anchor: SelectionAnchor | undefined
   private pendingPayload: SelectionTranslationPayload | undefined
   private loaded = false
   private webContentsId: number | undefined
@@ -38,12 +30,11 @@ export class TranslationActions {
   translateCurrentSelection(): void {
     const selection = this.runtime.selectionHookService.getCurrentSelection()
     if (!selection) return
-    this.showSelection(selection.text, toDisplayAnchor({ source: 'shortcut', selection }))
+    this.showSelection(selection.text, fitTranslationNearSelection(selection))
   }
 
-  showSelection(text: string, anchor?: SelectionAnchor): void {
+  showSelection(text: string, position = fitTranslationNearSelection()): void {
     if (!text.trim() || text.length > TRANSLATION_MAX_TEXT_LENGTH) return
-    this.anchor = anchor
     this.pendingPayload = {
       text: text.trim(),
       version: ++this.selectionVersion,
@@ -80,11 +71,11 @@ export class TranslationActions {
       })
     }
     if (!this.pinned) {
-      const bounds = fitExplanationNearSelection(this.anchor ?? createCursorAnchor(), {
+      window.setBounds({
+        ...position,
         width: SELECTION_TRANSLATION_WIDTH,
         height: SELECTION_TRANSLATION_INITIAL_HEIGHT
       })
-      window.setBounds(bounds)
     }
     if (this.loaded) this.flush(window)
   }

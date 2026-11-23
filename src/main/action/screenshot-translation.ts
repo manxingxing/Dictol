@@ -1,7 +1,6 @@
 import { app, BrowserWindow, Notification, screen, type Display, type Rectangle } from 'electron'
 import { TRANSLATION_MAX_TEXT_LENGTH } from '../../shared/translation'
 import type { AppRuntime } from '../app-runtime'
-import { createCursorAnchor } from '../lib/selection-position'
 import { captureScreen } from '../ocr/screen-capture'
 import { recognizeScreenshotText } from '../ocr/screenshot-ocr'
 import { resolvePreloadPath, resolveRendererUrl } from '../output-path'
@@ -146,11 +145,8 @@ export class ScreenshotTranslationAction {
       if (!text) throw new Error('没有识别到文字')
       this.closeStatusWindow()
       this.runtime.actions.translation.showSelection(text, {
-        ...createCursorAnchor(),
-        centerX: region.x + region.width / 2,
-        top: region.y,
-        bottom: region.y + region.height,
-        gap: 8
+        x: region.x,
+        y: region.y + region.height + 8
       })
       console.info('[ScreenshotTranslation] Translation dispatched', {
         time: new Date().toISOString()

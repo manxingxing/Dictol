@@ -62,6 +62,7 @@ export class SelectionExplanationController extends BaseController {
   private preferredExplanationSize: ExplanationSize = { width: 520, height: 600 }
   private preferredOcrAiSize: ExplanationSize = { width: 520, height: 320 }
   private appliedExplanationSize: ExplanationSize | undefined
+  private applyingExplanationBounds = false
   private activeAiRequestId: string | undefined
   private onVisibilityChange: (() => void) | undefined
   private moveTimer: ReturnType<typeof setTimeout> | undefined
@@ -1013,14 +1014,13 @@ export class SelectionExplanationController extends BaseController {
         ? this.preferredOcrAiSize
         : this.preferredExplanationSize
     const bounds = fitExplanationNearSelection(anchor, preferredSize)
-    this.appliedExplanationSize = { width: bounds.width, height: bounds.height }
     if (!window.isVisible() || !this.animateMovement) {
-      window.setBounds(bounds, false)
+      this.applyExplanationBounds(window, bounds)
       return
     }
 
     const start = window.getBounds()
-    window.setBounds({ ...start, width: bounds.width, height: bounds.height }, false)
+    this.applyExplanationBounds(window, { ...start, width: bounds.width, height: bounds.height })
     if (start.x === bounds.x && start.y === bounds.y) return
 
     const startedAt = performance.now()
@@ -1031,15 +1031,11 @@ export class SelectionExplanationController extends BaseController {
       }
       const progress = Math.min((performance.now() - startedAt) / EXPLANATION_MOVE_DURATION, 1)
       const eased = 1 - (1 - progress) ** 3
-      const current = window.getBounds()
-      window.setBounds(
-        {
-          ...current,
-          x: Math.round(start.x + (bounds.x - start.x) * eased),
-          y: Math.round(start.y + (bounds.y - start.y) * eased)
-        },
-        false
-      )
+      this.applyExplanationBounds(window, {
+        ...bounds,
+        x: Math.round(start.x + (bounds.x - start.x) * eased),
+        y: Math.round(start.y + (bounds.y - start.y) * eased)
+      })
       this.moveTimer = progress < 1 ? setTimeout(move, EXPLANATION_MOVE_FRAME) : undefined
     }
     this.moveTimer = setTimeout(move, EXPLANATION_MOVE_FRAME)
@@ -1050,12 +1046,24 @@ export class SelectionExplanationController extends BaseController {
     this.moveTimer = undefined
   }
 
+  private applyExplanationBounds(window: SelectionSurfaceWindow, bounds: Electron.Rectangle): void {
+    this.applyingExplanationBounds = true
+    try {
+      window.setBounds(bounds, false)
+      const [width, height] = window.getSize()
+      this.appliedExplanationSize = { width, height }
+    } finally {
+      this.applyingExplanationBounds = false
+    }
+  }
+
   private rememberExplanationSize(window: SelectionSurfaceWindow): void {
-    if (window.isDestroyed()) return
+    if (window.isDestroyed() || this.applyingExplanationBounds) return
     const [width, height] = window.getSize()
     const appliedSize = this.appliedExplanationSize
-    this.appliedExplanationSize = undefined
     if (appliedSize?.width === width && appliedSize.height === height) return
+    this.appliedExplanationSize = undefined
+    this.cancelExplanationMove()
     const preferredSize = {
       width: Math.max(EXPLANATION_MIN_WIDTH, width),
       height: Math.max(EXPLANATION_MIN_HEIGHT, height)
