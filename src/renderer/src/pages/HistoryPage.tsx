@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table'
+import { Input } from '@/components/ui/input'
 
 import { useAppStore } from '@/stores/app-store'
 import {
@@ -48,9 +49,15 @@ export const HistoryPage = (): React.JSX.Element => {
   const navigate = useNavigate()
   const setSearchQuery = useAppStore((state) => state.setSearchQuery)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
+  const [filterTerm, setFilterTerm] = useState('')
 
   const { data: history = [], isLoading, isError } = useQueryHistory()
   const clearHistory = useClearQueryHistory()
+  const filteredHistory = useMemo(() => {
+    const normalizedFilter = filterTerm.trim().toLocaleLowerCase()
+    if (!normalizedFilter) return history
+    return history.filter((item) => item.term.toLocaleLowerCase().includes(normalizedFilter))
+  }, [filterTerm, history])
 
   const searchHistoryTerm = useCallback(
     async (term: string): Promise<void> => {
@@ -135,7 +142,7 @@ export const HistoryPage = (): React.JSX.Element => {
   // TanStack Table returns mutable APIs that React Compiler intentionally does not memoize.
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
-    data: history,
+    data: filteredHistory,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => String(row.id)
@@ -147,12 +154,17 @@ export const HistoryPage = (): React.JSX.Element => {
       <h1 className="text-xl font-semibold tracking-tight">最近查询</h1>
 
       <section className="min-h-0 flex-1 mt-8">
-        <div className="mb-3 flex items-start justify-between gap-5">
-          <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold leading-5">最近访问的词条</h2>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              共 {history.length} 条记录
-            </p>
+        <div className="mb-3 flex items-center justify-between gap-5">
+          <div className="relative min-w-0 max-w-xs flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="搜索查询历史"
+              className="h-9 pl-9 text-xs"
+              onChange={(event) => setFilterTerm(event.target.value)}
+              placeholder="搜索查询过的词条"
+              type="search"
+              value={filterTerm}
+            />
           </div>
           <Button
             className="shrink-0 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
@@ -163,6 +175,7 @@ export const HistoryPage = (): React.JSX.Element => {
             }}
             type="button"
             variant="outline"
+            size="sm"
           >
             <Trash2 />
             清空历史
@@ -185,7 +198,14 @@ export const HistoryPage = (): React.JSX.Element => {
               </p>
             </div>
           )}
-          {!isLoading && !isError && history.length > 0 && (
+          {!isLoading && !isError && history.length > 0 && filteredHistory.length === 0 && (
+            <div className="bg-card px-4 py-10 text-center">
+              <Search className="mx-auto mb-3 size-6 text-muted-foreground" />
+              <p className="text-sm font-medium">没有找到匹配的词条</p>
+              <p className="mt-1.5 text-xs text-muted-foreground">试试其他关键词。</p>
+            </div>
+          )}
+          {!isLoading && !isError && filteredHistory.length > 0 && (
             <Table
               className="min-w-0 table-fixed"
               containerClassName="max-w-full max-h-full overflow-x-hidden overflow-y-auto"
