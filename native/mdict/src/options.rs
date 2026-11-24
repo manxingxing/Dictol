@@ -44,8 +44,8 @@ impl Default for CacheOptions {
     /// 返回默认的 Key Block 与 Record Block 缓存容量。
     fn default() -> Self {
         Self {
-            key_blocks_bytes: 32 * 1024 * 1024,
-            record_blocks_bytes: 64 * 1024 * 1024,
+            key_blocks_bytes: 3 * 1024 * 1024,
+            record_blocks_bytes: 5 * 1024 * 1024,
         }
     }
 }

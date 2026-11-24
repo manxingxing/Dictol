@@ -176,7 +176,10 @@ export class MdictResourceManager {
       try {
         mddList =
           manifest.mddList.length > 0
-            ? MddList.open(manifest.mddList.map((file) => file.filePath))
+            ? MddList.open(
+                manifest.mddList.map((file) => file.filePath),
+                { recordBlocksCacheBytes: 0 }
+              )
             : null
       } catch (error) {
         mdx.close()
