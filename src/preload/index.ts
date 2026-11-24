@@ -196,7 +196,6 @@ type WordCaptureStatus = {
   selectionDictionaryGroupId: string | null
   excludedPrograms: string[]
   ocrSupported: boolean
-  ocrEnabled: boolean
   ocrDictionaryShortcut: string
   ocrAiShortcut: string
   ocrDictionaryRegistered: boolean
@@ -667,8 +666,6 @@ const api = Object.freeze({
       ipcRenderer.invoke('word-capture:set-shortcut', shortcut),
     setSelectionEnabled: (enabled: boolean): Promise<WordCaptureShortcutResult | null> =>
       ipcRenderer.invoke('word-capture:set-selection-enabled', enabled),
-    setOcrEnabled: (enabled: boolean): Promise<WordCaptureShortcutResult | null> =>
-      ipcRenderer.invoke('word-capture:set-ocr-enabled', enabled),
     setOcrShortcut: (
       mode: 'dictionary' | 'ai',
       shortcut: string

@@ -23,7 +23,6 @@ export type AppConfig = {
   dictionaryDisplay: DictionaryDisplay
   featureFlags: {
     lookupWordOnSelection: boolean
-    ocrLookup: boolean
   }
   shortcuts: {
     lookupWordOnShortcut: string
@@ -49,8 +48,7 @@ const DEFAULT_CONFIG: AppConfig = {
   dictionaryLayout: 'single',
   dictionaryDisplay: 'icon',
   featureFlags: {
-    lookupWordOnSelection: false,
-    ocrLookup: false
+    lookupWordOnSelection: false
   },
   shortcuts: {
     lookupWordOnShortcut: 'Alt+D',
@@ -173,7 +171,6 @@ function parseConfig(value: unknown): AppConfig {
     dictionaryDisplay?: unknown
     featureFlags?: {
       lookupWordOnSelection?: unknown
-      ocrLookup?: unknown
     }
     shortcuts?: {
       lookupWordOnShortcut?: unknown
@@ -220,11 +217,7 @@ function parseConfig(value: unknown): AppConfig {
       lookupWordOnSelection:
         typeof candidate.featureFlags?.lookupWordOnSelection === 'boolean'
           ? candidate.featureFlags.lookupWordOnSelection
-          : DEFAULT_CONFIG.featureFlags.lookupWordOnSelection,
-      ocrLookup:
-        typeof candidate.featureFlags?.ocrLookup === 'boolean'
-          ? candidate.featureFlags.ocrLookup
-          : DEFAULT_CONFIG.featureFlags.ocrLookup
+          : DEFAULT_CONFIG.featureFlags.lookupWordOnSelection
     },
     shortcuts: {
       lookupWordOnShortcut:
@@ -239,11 +232,14 @@ function parseConfig(value: unknown): AppConfig {
         typeof candidate.shortcuts?.showMainWindow === 'string'
           ? candidate.shortcuts.showMainWindow.trim()
           : DEFAULT_CONFIG.shortcuts.showMainWindow,
-      ocrDictionary: normalizeConfigString(
-        candidate.shortcuts?.ocrDictionary,
-        DEFAULT_CONFIG.shortcuts.ocrDictionary
-      ),
-      ocrAi: normalizeConfigString(candidate.shortcuts?.ocrAi, DEFAULT_CONFIG.shortcuts.ocrAi),
+      ocrDictionary:
+        typeof candidate.shortcuts?.ocrDictionary === 'string'
+          ? candidate.shortcuts.ocrDictionary.trim()
+          : DEFAULT_CONFIG.shortcuts.ocrDictionary,
+      ocrAi:
+        typeof candidate.shortcuts?.ocrAi === 'string'
+          ? candidate.shortcuts.ocrAi.trim()
+          : DEFAULT_CONFIG.shortcuts.ocrAi,
       screenshotTranslation:
         typeof candidate.shortcuts?.screenshotTranslation === 'string'
           ? candidate.shortcuts.screenshotTranslation.trim()

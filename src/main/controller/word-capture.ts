@@ -30,7 +30,6 @@ export type WordCaptureStatus = {
   selectionDictionaryGroupId: string | null
   excludedPrograms: string[]
   ocrSupported: boolean
-  ocrEnabled: boolean
   ocrDictionaryShortcut: string
   ocrAiShortcut: string
   ocrDictionaryRegistered: boolean
@@ -62,7 +61,6 @@ export class WordCaptureController extends BaseController {
     ipcMain.handle('word-capture:set-selection-enabled', this.setSelectionEnabled)
     ipcMain.handle('word-capture:set-selection-dictionary-group', this.setSelectionDictionaryGroup)
     ipcMain.handle('word-capture:remove-excluded-program', this.removeExcludedProgram)
-    ipcMain.handle('word-capture:set-ocr-enabled', this.setOcrEnabled)
     ipcMain.handle('word-capture:set-ocr-shortcut', this.setOcrShortcut)
   }
 
@@ -271,34 +269,6 @@ export class WordCaptureController extends BaseController {
     }
   }
 
-  setOcrEnabled = (
-    event: IpcMainInvokeEvent,
-    enabled: unknown
-  ): WordCaptureShortcutResult | null => {
-    if (!this.acceptsSender(event.sender)) return null
-    if (typeof enabled !== 'boolean' || !OCR_SUPPORTED) {
-      return { ok: false, status: this.createStatus(), error: '当前平台无法开启悬停取词。' }
-    }
-    const previous = this.runtime.appConfig.load()
-    try {
-      this.runtime.appConfig.save({
-        ...previous,
-        featureFlags: { ...previous.featureFlags, ocrLookup: enabled }
-      })
-      this.runtime.restartOcrShortcuts()
-      if (enabled && !this.areOcrShortcutsRegistered()) throw new Error('OCR 快捷键不可用')
-      return { ok: true, status: this.createStatus() }
-    } catch (error) {
-      console.error('Failed to update OCR lookup setting', error)
-      this.restoreOcrConfig(previous)
-      return {
-        ok: false,
-        status: this.createStatus(),
-        error: '悬停取词快捷键被系统或其他应用占用。'
-      }
-    }
-  }
-
   setOcrShortcut = (
     event: IpcMainInvokeEvent,
     mode: unknown,
@@ -309,20 +279,20 @@ export class WordCaptureController extends BaseController {
       !OCR_SUPPORTED ||
       (mode !== 'dictionary' && mode !== 'ai') ||
       typeof shortcut !== 'string' ||
-      !shortcut.trim() ||
       shortcut.length > 64
     ) {
       return { ok: false, status: this.createStatus(), error: '无效的悬停取词快捷键。' }
     }
+    const normalized = shortcut.trim()
     const previous = this.runtime.appConfig.load()
     const key = mode === 'dictionary' ? 'ocrDictionary' : 'ocrAi'
     try {
       this.runtime.appConfig.save({
         ...previous,
-        shortcuts: { ...previous.shortcuts, [key]: shortcut.trim() }
+        shortcuts: { ...previous.shortcuts, [key]: normalized }
       })
       this.runtime.restartOcrShortcut(mode)
-      if (previous.featureFlags.ocrLookup && !this.runtime.shortcutRegister.isRegistered(key)) {
+      if (normalized && !this.runtime.shortcutRegister.isRegistered(key)) {
         throw new Error('OCR 快捷键不可用')
       }
       return { ok: true, status: this.createStatus() }
@@ -333,18 +303,10 @@ export class WordCaptureController extends BaseController {
     }
   }
 
-  private areOcrShortcutsRegistered(): boolean {
-    return (
-      this.runtime.shortcutRegister.isRegistered(OCR_DICTIONARY_SHORTCUT) &&
-      this.runtime.shortcutRegister.isRegistered(OCR_AI_SHORTCUT)
-    )
-  }
-
-  private restoreOcrConfig(config: AppConfig, mode?: 'dictionary' | 'ai'): void {
+  private restoreOcrConfig(config: AppConfig, mode: 'dictionary' | 'ai'): void {
     try {
       this.runtime.appConfig.save(config)
-      if (mode) this.runtime.restartOcrShortcut(mode)
-      else this.runtime.restartOcrShortcuts()
+      this.runtime.restartOcrShortcut(mode)
     } catch (error) {
       console.error('Failed to restore OCR configuration', error)
     }
@@ -366,7 +328,6 @@ export class WordCaptureController extends BaseController {
           : String(this.runtime.selectionDictionaryGroupId),
       excludedPrograms: [...config.selection.excludedPrograms],
       ocrSupported: OCR_SUPPORTED,
-      ocrEnabled: config.featureFlags.ocrLookup,
       ocrDictionaryShortcut: config.shortcuts.ocrDictionary,
       ocrAiShortcut: config.shortcuts.ocrAi,
       ocrDictionaryRegistered: this.runtime.shortcutRegister.isRegistered(OCR_DICTIONARY_SHORTCUT),

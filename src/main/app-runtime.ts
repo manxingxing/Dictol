@@ -236,7 +236,7 @@ export class AppRuntime {
   private registerOcrShortcut(config: AppConfig, mode: OcrLookupMode): void {
     const command = mode === 'dictionary' ? OCR_DICTIONARY_SHORTCUT : OCR_AI_SHORTCUT
     this.shortcutRegister.unregister(command)
-    if (!OCR_SUPPORTED || !config.featureFlags.ocrLookup || !this.ocrShortcutHandler) {
+    if (!OCR_SUPPORTED || !config.shortcuts[command] || !this.ocrShortcutHandler) {
       return
     }
     this.shortcutRegister.register(command, config.shortcuts[command], {

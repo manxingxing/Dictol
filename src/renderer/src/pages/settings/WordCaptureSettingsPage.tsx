@@ -46,8 +46,6 @@ export function WordCaptureSettingsPage(): React.JSX.Element {
   const queryClient = useQueryClient()
   const captureStatusQuery = useWordCaptureStatus()
   const captureStatus = captureStatusQuery.data
-  const [savingOcr, setSavingOcr] = useState(false)
-  const [ocrError, setOcrError] = useState<string | null>(null)
   const [screenCaptureSettingsError, setScreenCaptureSettingsError] = useState<string | null>(null)
   const [savingSelectionLookup, setSavingSelectionLookup] = useState(false)
   const [savingSelectionGroup, setSavingSelectionGroup] = useState(false)
@@ -334,57 +332,6 @@ export function WordCaptureSettingsPage(): React.JSX.Element {
                 </Dialog>
               </SettingsRow>
             )}
-
-            {captureStatus.ocrSupported && (
-              <>
-                <div className="border-b border-border bg-card px-4 py-3 last:border-b-0">
-                  <Field className="items-start gap-4" orientation="horizontal">
-                    <FieldContent>
-                      <FieldLabel
-                        className="inline-flex cursor-pointer items-center gap-2"
-                        htmlFor="ocr-lookup-enabled"
-                      >
-                        悬停取词
-                        <span className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary">
-                          Beta
-                        </span>
-                      </FieldLabel>
-                      <FieldDescription className="text-xs leading-5">
-                        在屏幕文字上按快捷键，识别鼠标下的词语
-                      </FieldDescription>
-                    </FieldContent>
-                    <Switch
-                      checked={captureStatus.ocrEnabled}
-                      disabled={savingOcr}
-                      id="ocr-lookup-enabled"
-                      onCheckedChange={(enabled) => {
-                        setOcrError(null)
-                        setSavingOcr(true)
-                        void window.dictol.wordCapture
-                          .setOcrEnabled(enabled)
-                          .then((result) => {
-                            if (!result) {
-                              setOcrError('无法更新悬停取词设置。')
-                              return
-                            }
-                            setCaptureStatus(result.status)
-                            setOcrError(result.error ?? null)
-                          })
-                          .finally(() => setSavingOcr(false))
-                      }}
-                    />
-                  </Field>
-                </div>
-                {ocrError && (
-                  <p
-                    className="border-b border-border bg-card px-4 py-3 text-xs text-destructive"
-                    role="alert"
-                  >
-                    {ocrError}
-                  </p>
-                )}
-              </>
-            )}
           </SettingsList>
 
           {window.dictol.platform === 'darwin' && (
@@ -476,7 +423,7 @@ export function WordCaptureSettingsPage(): React.JSX.Element {
                   {openingInputMonitoringSettings ? '正在打开…' : '打开输入监控设置'}
                 </Button>
               </div>
-              {captureStatus.ocrEnabled && window.dictol.platform === 'darwin' && (
+              {captureStatus.ocrSupported && (
                 <div className="flex items-start justify-between gap-6 border-t border-border px-4 py-4">
                   <div className="flex min-w-0 gap-3">
                     {captureStatus.screenCapturePermission === 'granted' ? (

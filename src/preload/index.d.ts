@@ -547,7 +547,6 @@ declare global {
           groupId: string | null
         ) => Promise<WordCaptureShortcutResult | null>
         removeExcludedProgram: (programName: string) => Promise<WordCaptureShortcutResult | null>
-        setOcrEnabled: (enabled: boolean) => Promise<WordCaptureShortcutResult | null>
         setOcrShortcut: (
           mode: 'dictionary' | 'ai',
           shortcut: string

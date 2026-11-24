@@ -196,33 +196,41 @@ export function KeyboardSettingsPage(): React.JSX.Element {
             {captureShortcutError}
           </p>
         )}
-        {captureStatus?.supported && captureStatus.ocrSupported && captureStatus.ocrEnabled && (
+        {captureStatus?.ocrSupported && (
           <>
             <SettingsRow
               label="悬停查词"
               description={
-                captureStatus.ocrDictionaryRegistered
-                  ? '在屏幕文字上按快捷键，在弹窗中查看词典解释'
-                  : '快捷键被占用，请重新设置'
+                !captureStatus.ocrDictionaryShortcut
+                  ? '未设置快捷键'
+                  : captureStatus.ocrDictionaryRegistered
+                    ? '在屏幕文字上按快捷键，在弹窗中查看词典解释'
+                    : '快捷键被占用，请重新设置'
               }
             >
               <ShortcutSettingControl
+                allowClear
                 command="ocrDictionary"
                 currentShortcut={captureStatus.ocrDictionaryShortcut}
+                onClear={() => updateOcrShortcut('dictionary', '')}
                 onUpdate={(shortcut) => updateOcrShortcut('dictionary', shortcut)}
               />
             </SettingsRow>
             <SettingsRow
               label="AI 语境查词"
               description={
-                captureStatus.ocrAiRegistered
-                  ? '在屏幕文字上按快捷键，调用大模型解释单词在语境中的含义'
-                  : '快捷键被占用，请重新设置'
+                !captureStatus.ocrAiShortcut
+                  ? '未设置快捷键'
+                  : captureStatus.ocrAiRegistered
+                    ? '在屏幕文字上按快捷键，调用大模型解释单词在语境中的含义'
+                    : '快捷键被占用，请重新设置'
               }
             >
               <ShortcutSettingControl
+                allowClear
                 command="ocrAi"
                 currentShortcut={captureStatus.ocrAiShortcut}
+                onClear={() => updateOcrShortcut('ai', '')}
                 onUpdate={(shortcut) => updateOcrShortcut('ai', shortcut)}
               />
             </SettingsRow>
