@@ -488,15 +488,11 @@ export class WindowManager {
     version: number
   ): Promise<void> {
     const content = window.getContentBounds()
-    const height =
-      process.platform === 'win32'
-        ? Math.min(bounds.height, Math.max(12, Math.round(bounds.height * 0.8)))
-        : bounds.height
     const painted = {
       x: bounds.x - content.x,
-      y: bounds.y + Math.floor((bounds.height - height) / 2) - content.y,
+      y: bounds.y - content.y,
       width: bounds.width,
-      height
+      height: bounds.height
     }
     try {
       const cssText = `left:${painted.x}px;top:${painted.y}px;right:auto;bottom:auto;width:${painted.width}px;height:${painted.height}px`
