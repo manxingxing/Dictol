@@ -1,11 +1,11 @@
 import {
   captureScreenRegion,
   captureDisplay,
-  getWindowsDisplayBoundsAtPoint,
-  getPermissionStatus
+  getWindowsDisplayBoundsAtPoint
 } from '@dictol/ocr-native'
-import { desktopCapturer, screen, type Display, type Rectangle } from 'electron'
+import { screen, type Display, type Rectangle } from 'electron'
 import { mapWindowsCaptureRegion } from './windows-capture-geometry'
+import type { WindowsCaptureEngine as CaptureEngine } from '@dictol/ocr-native'
 
 export type Screenshot = {
   data: Buffer
@@ -13,18 +13,14 @@ export type Screenshot = {
   pixelSize: { width: number; height: number }
   bounds: Rectangle
   displayId: number
-  backend: 'screencapturekit' | 'windows-wgc' | 'electron-fallback'
+  backend: 'screencapturekit' | 'windows-native'
 }
 
 export type CaptureRequest = {
   displayId: number
   /** Global screen coordinates in Electron DIP. Omit for the entire display. */
   region?: Rectangle
-}
-
-function supportsMacNativeCapture(): boolean {
-  const [major] = process.getSystemVersion().split('.').map(Number)
-  return major >= 13
+  windowsCaptureEngine?: CaptureEngine
 }
 
 function validateRegion(display: Display, region: Rectangle): void {
@@ -42,51 +38,6 @@ function validateRegion(display: Display, region: Rectangle): void {
   }
 }
 
-export async function captureElectronFallback(
-  display: Display,
-  bounds: Rectangle
-): Promise<Screenshot> {
-  const sources = await desktopCapturer.getSources({
-    types: ['screen'],
-    thumbnailSize: {
-      width: Math.round(display.bounds.width * display.scaleFactor),
-      height: Math.round(display.bounds.height * display.scaleFactor)
-    }
-  })
-  const source = sources.find((item) => item.display_id === String(display.id))
-  if (!source || source.thumbnail.isEmpty()) {
-    throw new Error('无法捕获当前屏幕，请重试。')
-  }
-  const fullSize = source.thumbnail.getSize()
-  console.info('[ScreenCapture] Electron display captured', {
-    sizeDip: { width: display.bounds.width, height: display.bounds.height },
-    sizePixels: fullSize
-  })
-  const left = Math.round(((bounds.x - display.bounds.x) / display.bounds.width) * fullSize.width)
-  const top = Math.round(((bounds.y - display.bounds.y) / display.bounds.height) * fullSize.height)
-  const right = Math.round(
-    ((bounds.x + bounds.width - display.bounds.x) / display.bounds.width) * fullSize.width
-  )
-  const bottom = Math.round(
-    ((bounds.y + bounds.height - display.bounds.y) / display.bounds.height) * fullSize.height
-  )
-  const pixelRect = { x: left, y: top, width: right - left, height: bottom - top }
-  const image = source.thumbnail.crop(pixelRect)
-  return {
-    data: image.toPNG(),
-    mimeType: 'image/png',
-    pixelSize: image.getSize(),
-    bounds: {
-      x: display.bounds.x + (left / fullSize.width) * display.bounds.width,
-      y: display.bounds.y + (top / fullSize.height) * display.bounds.height,
-      width: (pixelRect.width / fullSize.width) * display.bounds.width,
-      height: (pixelRect.height / fullSize.height) * display.bounds.height
-    },
-    displayId: display.id,
-    backend: 'electron-fallback'
-  }
-}
-
 /** Capture one display or a rectangle within it. Both platforms return the same PNG contract. */
 export async function captureScreen(request: CaptureRequest): Promise<Screenshot> {
   const display = screen.getAllDisplays().find((item) => item.id === request.displayId)
@@ -95,24 +46,17 @@ export async function captureScreen(request: CaptureRequest): Promise<Screenshot
   validateRegion(display, bounds)
 
   if (process.platform === 'darwin') {
-    if (supportsMacNativeCapture()) {
-      try {
-        const image = request.region
-          ? await captureScreenRegion(display.id, bounds.x, bounds.y, bounds.width, bounds.height)
-          : await captureDisplay(display.id)
-        return {
-          data: image.png,
-          mimeType: 'image/png',
-          pixelSize: { width: image.width, height: image.height },
-          bounds,
-          displayId: display.id,
-          backend: 'screencapturekit'
-        }
-      } catch (error) {
-        console.warn('[ScreenCapture] ScreenCaptureKit failed; using Electron fallback', error)
-      }
+    const image = request.region
+      ? await captureScreenRegion(display.id, bounds.x, bounds.y, bounds.width, bounds.height)
+      : await captureDisplay(display.id)
+    return {
+      data: image.png,
+      mimeType: 'image/png',
+      pixelSize: { width: image.width, height: image.height },
+      bounds,
+      displayId: display.id,
+      backend: 'screencapturekit'
     }
-    return captureMacFallback(display, bounds)
   }
 
   if (process.platform === 'win32') {
@@ -128,14 +72,14 @@ export async function captureScreen(request: CaptureRequest): Promise<Screenshot
         bounds.height === display.bounds.height
       const physicalDisplay = getWindowsDisplayBoundsAtPoint(center.x, center.y)
       if (wholeDisplay) {
-        const image = await captureDisplay(physicalDisplay.id)
+        const image = await captureDisplay(physicalDisplay.id, request.windowsCaptureEngine)
         return {
           data: image.png,
           mimeType: 'image/png',
           pixelSize: { width: image.width, height: image.height },
           bounds: display.bounds,
           displayId: display.id,
-          backend: 'windows-wgc'
+          backend: 'windows-native'
         }
       }
       const mapped = mapWindowsCaptureRegion(display.bounds, physicalDisplay, bounds)
@@ -144,7 +88,8 @@ export async function captureScreen(request: CaptureRequest): Promise<Screenshot
         mapped.physical.x,
         mapped.physical.y,
         mapped.physical.width,
-        mapped.physical.height
+        mapped.physical.height,
+        request.windowsCaptureEngine
       )
       return {
         data: image.png,
@@ -152,30 +97,14 @@ export async function captureScreen(request: CaptureRequest): Promise<Screenshot
         pixelSize: { width: image.width, height: image.height },
         bounds: mapped.bounds,
         displayId: display.id,
-        backend: 'windows-wgc'
+        backend: 'windows-native'
       }
     } catch (error) {
-      console.warn(
-        '[ScreenCapture] Windows Graphics Capture failed; using Electron fallback',
-        error
-      )
-      return captureElectronFallback(display, bounds)
+      // 所选方案失败时直接报告错误，不切换截图方案。
+      console.warn('[ScreenCapture] Windows native capture failed', error)
+      throw error
     }
   }
 
   throw new Error('当前平台尚未支持屏幕截图。')
-}
-
-/** Shared macOS fallback and permission feedback for PNG capture and region OCR. */
-export async function captureMacFallback(display: Display, bounds: Rectangle): Promise<Screenshot> {
-  try {
-    return await captureElectronFallback(display, bounds)
-  } catch (error) {
-    if (getPermissionStatus() !== 'granted') {
-      throw new Error(
-        '未获得屏幕录制权限。请在「系统设置 → 隐私与安全性 → 屏幕与系统音频录制」中允许启动开发版的终端或 IDE（安装版为 Dictol），然后完全退出并重新启动。'
-      )
-    }
-    throw error
-  }
 }

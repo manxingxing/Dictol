@@ -64,8 +64,25 @@ snapshots, and listing a target does not guarantee that a later capture succeeds
 The lists are asynchronous and may fail if ScreenCaptureKit cannot retrieve the
 content, including due to permissions.
 
-The application keeps display selection, Electron DIP conversion, and Electron
-fallback in `src/main/ocr/screen-capture.ts`.
+The application keeps display selection and Electron DIP conversion in
+`src/main/ocr/screen-capture.ts`. Native capture errors propagate directly without
+Electron fallback.
+
+AI context lookup uses `captureMacOcrImage` / `captureWindowsOcrImage` to retain
+one native screenshot and return an image handle with pixel dimensions.
+`image.recognize(region, language)` crops and recognizes raw pixels; `null`
+recognizes the full retained image. Regions use integer pixels relative to the
+image's top-left corner. macOS accepts a language array; Windows accepts one
+language tag or `undefined`. Node decides whether to retry the full image.
+No PNG or pixel Buffer crosses the native boundary on this path.
+
+Call `image.dispose()` in `finally` after each lookup. Disposal is idempotent,
+and new recognition calls reject after disposal. Each asynchronous task retains
+its own image reference, so disposing the handle does not invalidate queued OCR.
+Windows uses `Arc<RawFrame>` and row copies for cropping; macOS uses retained
+`CGImageRef` objects and `CGImageCreateWithImageInRect`. Rust drop / the Node-API
+finalizer releases the handle's image as a GC fallback. No global image registry
+or persistent capture session is used.
 
 The macOS native addon targets macOS 13.0 or later and returns PNG data in the
 same `{ png, width, height }` result shape on each supported version. This does
@@ -79,12 +96,12 @@ Coordinates are global screen points contained in the specified display. It retu
 `{ observations, width, height }`, with image dimensions in pixels. No PNG or image
 handle crosses the Node boundary; the task owns and releases the image.
 Normal macOS hover lookup uses this method. Only capture-stage failures carry
-`code: 'ERR_SCREEN_CAPTURE'` and trigger Electron capture plus PNG OCR; OCR errors
-propagate. Normal macOS lookup captures up to 1000×300 screen points. AI context
-lookup captures a display-width × 600-point band as PNG and first recognizes a crop
+`code: 'ERR_SCREEN_CAPTURE'`. Capture and OCR errors propagate directly without
+switching capture backends. Normal macOS lookup captures up to 1000×300 screen points. AI context
+lookup retains a display-width × 600-point native image and first recognizes a crop
 of two-thirds display width × 450 points. When more context is needed, it recognizes
-the entire captured band PNG without another capture or crop. Regions are clamped
-to their available bounds. Windows lookup is unchanged.
+the entire retained image without another capture. Regions are clamped
+to their available bounds.
 
 Screenshot translation captures the selected region as PNG, shows recognition
 progress, and passes that PNG to the platform OCR API. The progress window appears

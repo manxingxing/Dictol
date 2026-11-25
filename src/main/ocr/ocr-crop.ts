@@ -20,12 +20,17 @@ export function cropAroundPointer(
   }
 }
 
+/** Horizontal padding shared by every platform's word highlight. */
+export function defaultHorizontalPadding(width: number): number {
+  return Math.max(2, Math.min(5, width * 0.05))
+}
+
 export function mapOcrBoundsToRegion(region: Rect, word: Rect, padding?: BoundsPadding): Rect {
   const left = region.x + word.x * region.width
   const top = region.y + word.y * region.height
   const right = left + word.width * region.width
   const bottom = top + word.height * region.height
-  const horizontalPadding = padding?.horizontal ?? Math.max(2, Math.min(5, (right - left) * 0.05))
+  const horizontalPadding = padding?.horizontal ?? defaultHorizontalPadding(right - left)
   const verticalPadding = padding?.vertical ?? Math.max(1, Math.min(3, (bottom - top) * 0.1))
   const x = Math.max(region.x, Math.floor(left - horizontalPadding))
   const y = Math.max(region.y, Math.floor(top - verticalPadding))
@@ -57,7 +62,7 @@ export function mapOcrQuadToRegion(
     x: (bottomLeft.x - topLeft.x) / axisLength,
     y: (bottomLeft.y - topLeft.y) / axisLength
   }
-  const horizontalPadding = padding?.horizontal ?? Math.max(2, Math.min(5, inlineLength * 0.05))
+  const horizontalPadding = padding?.horizontal ?? defaultHorizontalPadding(inlineLength)
   const verticalPadding = padding?.vertical ?? Math.max(1, Math.min(3, axisLength * 0.1))
   const extend = (point: Point, horizontal: number, vertical: number): Point => ({
     x: point.x + inline.x * horizontal * horizontalPadding + axis.x * vertical * verticalPadding,

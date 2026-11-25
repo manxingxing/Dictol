@@ -35,6 +35,7 @@ function copyBuild(source, platform, arch) {
           'hasScreenCapturePermission',
           'recognizeMacPng',
           'captureAndRecognizeMacText',
+          'captureMacOcrImage',
           'chineseWordRange'
         ]
       : [

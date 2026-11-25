@@ -133,6 +133,14 @@ export interface NativeOcrImage<Result, Language> {
   dispose(): void
 }
 
+export declare function captureMacOcrImage(
+  displayId: number,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): Promise<NativeOcrImage<MacOcrResult, string[]>>
+
 export declare function captureWindowsOcrImage(
   displayId: string,
   x: number,

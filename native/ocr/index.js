@@ -15,6 +15,7 @@ if (!['darwin', 'win32'].includes(process.platform)) {
           'hasScreenCapturePermission',
           'recognizeMacPng',
           'captureAndRecognizeMacText',
+          'captureMacOcrImage',
           'chineseWordRange'
         ]
       : [
@@ -58,11 +59,19 @@ if (!['darwin', 'win32'].includes(process.platform)) {
     if (result.error) throw new Error(result.error)
     return result
   }
+  const wrapMacImage = (image) => ({
+    width: image.width,
+    height: image.height,
+    recognize: async (region, languages) => parseMacOcr(await image.recognize(region, languages)),
+    dispose: () => image.dispose()
+  })
   const macOcr =
     process.platform === 'darwin'
       ? {
           recognizeMacText: async (png, languages) =>
             parseMacOcr(await addon.recognizeMacPng(png, languages)),
+          captureMacOcrImage: async (...args) =>
+            wrapMacImage(await addon.captureMacOcrImage(...args)),
           captureAndRecognizeMacText: async (displayId, x, y, width, height, languages) => {
             const output = await addon.captureAndRecognizeMacText(
               displayId,

@@ -4,14 +4,16 @@
 #import "ocr.h"
 #import <ImageIO/ImageIO.h>
 #include <cmath>
-#include <chrono>
 #include <string>
+#include <memory>
 
-enum Operation { Displays, Windows, Region, Display, Window, PngOcr, RegionOcr };
+enum Operation { Displays, Windows, Region, Display, Window, PngOcr, RegionOcr, RegionImage, ImageOcr };
+
 struct OperationBinding {
     const char *name;
     Operation operation;
 };
+
 // 一次异步请求的输入和输出，按 JS 线程 → 工作线程 → JS 线程的顺序交接。
 // png/items 由 ARC 管理；image 为自持有 CF 引用，在任务销毁时手动释放。
 struct Work {
@@ -24,25 +26,31 @@ struct Work {
     NSData *png;
     NSArray *items;
     CGImageRef image = nullptr;
+    bool has_crop = false;
     std::string json, error;
     const char *error_code = nullptr;
-    double capture_ms = 0, ocr_ms = 0;
     size_t width = 0, height = 0;
     ~Work() { if (image) CGImageRelease(image); }
 };
+
 static napi_value string(napi_env env, const char *value, size_t length = NAPI_AUTO_LENGTH) {
     napi_value result; napi_create_string_utf8(env, value, length, &result); return result;
 }
+
 static napi_value number(napi_env env, double value) {
     napi_value result; napi_create_double(env, value, &result); return result;
 }
+
 static napi_value object(napi_env env) { napi_value value; napi_create_object(env, &value); return value; }
+
 static void set(napi_env env, napi_value obj, const char *key, napi_value value) {
     napi_set_named_property(env, obj, key, value);
 }
+
 static napi_value error_value(napi_env env, const char *message) {
     napi_value result; napi_create_error(env, nullptr, string(env, message), &result); return result;
 }
+
 // 属性 getter 也会执行 JS；若它已抛错，应保留原始异常，不能用参数错误覆盖。
 static bool invalid(napi_env env, const char *message) {
     bool pending = false;
@@ -50,9 +58,11 @@ static bool invalid(napi_env env, const char *message) {
     if (!pending) napi_throw_type_error(env, nullptr, message);
     return false;
 }
+
 static bool read_number(napi_env env, napi_value value, double &result) {
     return value && napi_get_value_double(env, value, &result) == napi_ok && std::isfinite(result);
 }
+
 static bool read_string(napi_env env, napi_value value, std::string &result) {
     size_t length;
     if (!value || napi_get_value_string_utf8(env, value, nullptr, 0, &length) != napi_ok) return false;
@@ -61,12 +71,14 @@ static bool read_string(napi_env env, napi_value value, std::string &result) {
     result.resize(length);
     return true;
 }
+
 static bool read_rect(napi_env env, napi_value *args, CGRect &rect) {
     double values[4];
     for (int i = 0; i < 4; i++) if (!read_number(env, args[i], values[i])) return false;
     rect = CGRectMake(values[0], values[1], values[2], values[3]);
     return values[2] > 0 && values[3] > 0;
 }
+
 // 在 JS 线程校验语言列表，然后传递给后台识别任务。
 static bool read_languages(napi_env env, Work *work, napi_value languages) {
     bool array = false; uint32_t count;
@@ -84,9 +96,61 @@ static bool read_languages(napi_env env, Work *work, napi_value languages) {
     }
     return true;
 }
-static double elapsed(std::chrono::steady_clock::time_point start) {
-    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+
+// Handle ownership is confined to the JS thread. Queued tasks retain their own
+// CGImage reference, so dispose/GC cannot invalidate an in-flight recognition.
+struct ImageOwner {
+    CGImageRef image;
+    explicit ImageOwner(CGImageRef value) : image(CGImageRetain(value)) {}
+    void dispose() { if (image) { CGImageRelease(image); image = nullptr; } }
+    ~ImageOwner() { dispose(); }
+};
+
+static const napi_type_tag image_tag = {0x9cc69030b5bb462aULL, 0x89f29f0c7794bd28ULL};
+static napi_value recognize_handle(napi_env env, napi_callback_info info);
+
+static ImageOwner *image_owner(napi_env env, napi_value value) {
+    bool tagged = false; void *owner = nullptr;
+    if (napi_check_object_type_tag(env, value, &image_tag, &tagged) != napi_ok || !tagged ||
+        napi_unwrap(env, value, &owner) != napi_ok || !owner) {
+        invalid(env, "Invalid OCR image handle"); return nullptr;
+    }
+    return static_cast<ImageOwner *>(owner);
 }
+
+static napi_value dispose_handle(napi_env env, napi_callback_info info) {
+    napi_value self; size_t argc = 0;
+    napi_get_cb_info(env, info, &argc, nullptr, &self, nullptr);
+    auto *owner = image_owner(env, self);
+    if (!owner) return nullptr;
+    owner->dispose();
+    napi_value result; napi_get_undefined(env, &result); return result;
+}
+
+static napi_value create_image_handle(napi_env env, CGImageRef image) {
+    napi_value result = object(env);
+    std::unique_ptr<ImageOwner> owner(new ImageOwner(image));
+    if (napi_type_tag_object(env, result, &image_tag) != napi_ok ||
+        napi_wrap(env, result, owner.get(), [](napi_env, void *data, void *) {
+            delete static_cast<ImageOwner *>(data);
+        }, nullptr, nullptr) != napi_ok) {
+        napi_throw_error(env, nullptr, "Could not create OCR image handle"); return nullptr;
+    }
+    owner.release(); // Owned by the JS object's finalizer from this point on.
+    napi_property_descriptor properties[] = {
+        {"width", nullptr, nullptr, nullptr, nullptr, number(env, CGImageGetWidth(image)), napi_default, nullptr},
+        {"height", nullptr, nullptr, nullptr, nullptr, number(env, CGImageGetHeight(image)), napi_default, nullptr},
+        {"recognize", nullptr, recognize_handle, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"dispose", nullptr, dispose_handle, nullptr, nullptr, nullptr, napi_default, nullptr},
+    };
+    if (napi_define_properties(env, result, 4, properties) != napi_ok) {
+        void *removed = nullptr;
+        napi_remove_wrap(env, result, &removed); delete static_cast<ImageOwner *>(removed);
+        napi_throw_error(env, nullptr, "Could not initialize OCR image handle"); return nullptr;
+    }
+    return result;
+}
+
 // 将原生截图编码成 PNG，供 Node 调用方保存或传给独立的 OCR 接口。
 static void encode_captured_image(Work *work) {
     NSMutableData *png = [NSMutableData data];
@@ -107,11 +171,9 @@ static void finish_ocr(Work *work, int success, uint8_t *bytes, size_t length) {
 }
 
 static void execute_png_ocr(Work *work) {
-    auto start = std::chrono::steady_clock::now();
     uint8_t *bytes = nullptr; size_t length = 0;
     int success = recognize_png((const uint8_t *)work->png.bytes, work->png.length,
         work->languages.c_str(), &bytes, &length);
-    work->ocr_ms = elapsed(start);
     finish_ocr(work, success, bytes, length);
 }
 
@@ -129,19 +191,33 @@ static void execute_list_windows(Work *work) {
 
 static void execute_capture_region(Work *work) {
     NSError *error = nil;
-    auto start = std::chrono::steady_clock::now();
     work->image = capture_region(work->identifier, work->region, &error);
-    work->capture_ms = elapsed(start);
     if (error) { work->error = error.localizedDescription.UTF8String; return; }
     encode_captured_image(work);
+}
+
+static void execute_capture_image(Work *work) {
+    NSError *error = nil;
+    work->image = capture_region(work->identifier, work->region, &error);
+    if (!work->image) {
+        work->error = error ? error.localizedDescription.UTF8String : "Screenshot returned no image";
+        work->error_code = "ERR_SCREEN_CAPTURE";
+    }
+}
+
+static void execute_image_ocr(Work *work) {
+    CGImageRef input = work->has_crop ? CGImageCreateWithImageInRect(work->image, work->region) : CGImageRetain(work->image);
+    if (!input) { work->error = "Could not crop OCR image"; return; }
+    uint8_t *bytes = nullptr; size_t length = 0;
+    int success = recognize_image(input, work->languages.c_str(), &bytes, &length);
+    CGImageRelease(input);
+    finish_ocr(work, success, bytes, length);
 }
 
 // 图像仅在本次任务中持有，不编码 PNG，也不向 JS 暴露图像句柄。
 static void execute_region_ocr(Work *work) {
     NSError *error = nil;
-    auto start = std::chrono::steady_clock::now();
     work->image = capture_region(work->identifier, work->region, &error);
-    work->capture_ms = elapsed(start);
     if (error) {
         work->error = error.localizedDescription.UTF8String;
         work->error_code = "ERR_SCREEN_CAPTURE";
@@ -149,27 +225,21 @@ static void execute_region_ocr(Work *work) {
     }
     work->width = CGImageGetWidth(work->image);
     work->height = CGImageGetHeight(work->image);
-    start = std::chrono::steady_clock::now();
     uint8_t *bytes = nullptr; size_t length = 0;
     int success = recognize_image(work->image, work->languages.c_str(), &bytes, &length);
-    work->ocr_ms = elapsed(start);
     finish_ocr(work, success, bytes, length);
 }
 
 static void execute_capture_display(Work *work) {
     NSError *error = nil;
-    auto start = std::chrono::steady_clock::now();
     work->image = capture_display(work->identifier, &error);
-    work->capture_ms = elapsed(start);
     if (error) { work->error = error.localizedDescription.UTF8String; return; }
     encode_captured_image(work);
 }
 
 static void execute_capture_window(Work *work) {
     NSError *error = nil;
-    auto start = std::chrono::steady_clock::now();
     work->image = capture_window(work->identifier, &error);
-    work->capture_ms = elapsed(start);
     if (error) { work->error = error.localizedDescription.UTF8String; return; }
     encode_captured_image(work);
 }
@@ -187,6 +257,8 @@ static void execute(napi_env, void *data) {
             case Window: execute_capture_window(work); break;
             case PngOcr: execute_png_ocr(work); break;
             case RegionOcr: execute_region_ocr(work); break;
+            case RegionImage: execute_capture_image(work); break;
+            case ImageOcr: execute_image_ocr(work); break;
         }
     }
 }
@@ -221,7 +293,8 @@ static void complete(napi_env env, napi_status status, void *data) {
         else {
             napi_value result;
             if (work->operation == Displays || work->operation == Windows) result = to_js(env, work->items);
-            else if (work->operation == PngOcr) result = string(env, work->json.data(), work->json.size());
+            else if (work->operation == PngOcr || work->operation == ImageOcr) result = string(env, work->json.data(), work->json.size());
+            else if (work->operation == RegionImage) result = create_image_handle(env, work->image);
             else {
                 result = object(env);
                 set(env, result, "width", number(env, work->width)); set(env, result, "height", number(env, work->height));
@@ -233,11 +306,68 @@ static void complete(napi_env env, napi_status status, void *data) {
                     set(env, result, "png", buffer);
                 }
             }
-            napi_resolve_deferred(env, work->deferred, result);
+            if (result) napi_resolve_deferred(env, work->deferred, result);
+            else {
+                napi_value error;
+                napi_get_and_clear_last_exception(env, &error);
+                napi_reject_deferred(env, work->deferred, error);
+            }
         }
         napi_delete_async_work(env, work->work); delete work;
     }
 }
+
+static napi_value queue_work(napi_env env, Work *work) {
+    napi_value promise;
+    if (napi_create_promise(env, &work->deferred, &promise) != napi_ok) {
+        delete work; napi_throw_error(env, nullptr, "Could not create OCR promise"); return nullptr;
+    }
+    napi_status status = napi_create_async_work(env, nullptr, string(env, "macOS capture/OCR"), execute, complete, work, &work->work);
+    if (status == napi_ok) status = napi_queue_async_work(env, work->work);
+    if (status != napi_ok) {
+        if (work->work) napi_delete_async_work(env, work->work);
+        delete work; napi_throw_error(env, nullptr, "Could not schedule macOS capture/OCR task"); return nullptr;
+    }
+    return promise;
+}
+
+static napi_value recognize_handle(napi_env env, napi_callback_info info) {
+    @autoreleasepool {
+    napi_value args[2] = {}, self; size_t argc = 2;
+    napi_get_cb_info(env, info, &argc, args, &self, nullptr);
+    auto *owner = image_owner(env, self);
+    if (!owner) return nullptr;
+    if (!owner->image) { napi_throw_error(env, nullptr, "OCR image has been disposed"); return nullptr; }
+    std::unique_ptr<Work> work(new Work{});
+    work->operation = ImageOcr;
+    work->image = CGImageRetain(owner->image);
+    napi_valuetype type;
+    if (!args[0] || napi_typeof(env, args[0], &type) != napi_ok) {
+        invalid(env, "OCR region must be a rectangle or null"); return nullptr;
+    }
+    if (type != napi_null) {
+        if (type != napi_object) { invalid(env, "OCR region must be a rectangle or null"); return nullptr; }
+        napi_value coordinates[4] = {};
+        const char *names[] = {"x", "y", "width", "height"};
+        for (int i = 0; i < 4; i++) {
+            if (napi_get_named_property(env, args[0], names[i], &coordinates[i]) != napi_ok) {
+                invalid(env, "Invalid OCR region"); return nullptr;
+            }
+        }
+        if (!read_rect(env, coordinates, work->region)) { invalid(env, "Invalid OCR region"); return nullptr; }
+        const CGRect rect = work->region;
+        if (floor(rect.origin.x) != rect.origin.x || floor(rect.origin.y) != rect.origin.y ||
+            floor(rect.size.width) != rect.size.width || floor(rect.size.height) != rect.size.height ||
+            !CGRectContainsRect(CGRectMake(0, 0, CGImageGetWidth(work->image), CGImageGetHeight(work->image)), rect)) {
+            invalid(env, "OCR region exceeds image bounds or uses noninteger pixels"); return nullptr;
+        }
+        work->has_crop = true;
+    }
+    if (!read_languages(env, work.get(), args[1])) return nullptr;
+    return queue_work(env, work.release());
+    }
+}
+
 // 共用的 Node 入口：由注册时的回调数据选择操作，校验成功后才创建异步任务。
 static napi_value invoke(napi_env env, napi_callback_info info) {
     @autoreleasepool {
@@ -248,12 +378,12 @@ static napi_value invoke(napi_env env, napi_callback_info info) {
     work->operation = binding->operation;
     bool valid = true;
     if (work->operation == Region || work->operation == Display ||
-        work->operation == Window || work->operation == RegionOcr) {
+        work->operation == Window || work->operation == RegionOcr || work->operation == RegionImage) {
         double identifier;
         if (!read_number(env, args[0], identifier) || identifier < 1 || identifier > UINT32_MAX || floor(identifier) != identifier)
             valid = invalid(env, "Invalid display or window ID");
         else work->identifier = (uint32_t)identifier;
-        if (valid && (work->operation == Region || work->operation == RegionOcr) && !read_rect(env, args + 1, work->region))
+        if (valid && (work->operation == Region || work->operation == RegionOcr || work->operation == RegionImage) && !read_rect(env, args + 1, work->region))
             valid = invalid(env, "Invalid screen region");
         if (valid && work->operation == RegionOcr) valid = read_languages(env, work, args[5]);
     } else if (work->operation == PngOcr) {
@@ -266,23 +396,14 @@ static napi_value invoke(napi_env env, napi_callback_info info) {
         if (valid) valid = read_languages(env, work, args[1]);
     }
     if (!valid) { delete work; return nullptr; }
-    napi_value promise;
-    napi_create_promise(env, &work->deferred, &promise);
-    napi_status status = napi_create_async_work(env, nullptr, string(env, "macOS capture/OCR"), execute, complete, work, &work->work);
-    if (status == napi_ok) {
-        status = napi_queue_async_work(env, work->work);
-    }
-    if (status != napi_ok) {
-        if (work->work) napi_delete_async_work(env, work->work);
-        delete work; napi_throw_error(env, nullptr, "Could not schedule macOS capture/OCR task"); return nullptr;
-    }
-    return promise;
+    return queue_work(env, work);
     }
 }
 // 权限预检仅提供提示，实际能否截图仍以 ScreenCaptureKit 调用结果为准。
 static napi_value permission(napi_env env, napi_callback_info) {
     napi_value result; napi_get_boolean(env, CGPreflightScreenCaptureAccess(), &result); return result;
 }
+
 static napi_value word_range(napi_env env, napi_callback_info info) {
     napi_value args[2] = {}; size_t argc = 2; napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
     std::string text; double offset;
@@ -296,6 +417,7 @@ static napi_value word_range(napi_env env, napi_callback_info info) {
     }
     napi_value result = object(env); set(env, result, "start", number(env, start)); set(env, result, "length", number(env, length)); return result;
 }
+
 // 显式绑定名称与操作，不依赖枚举值和导出列表的排列顺序。
 static napi_value initialize(napi_env env, napi_value exports) {
     // 回调数据引用此表，因此表项须在异步调用之外持续有效。
@@ -306,6 +428,7 @@ static napi_value initialize(napi_env env, napi_value exports) {
         {"captureDisplay", Display},
         {"captureWindow", Window},
         {"captureAndRecognizeMacText", RegionOcr},
+        {"captureMacOcrImage", RegionImage},
         {"recognizeMacPng", PngOcr}
     };
     for (const auto &entry : operations) {
