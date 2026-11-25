@@ -13,6 +13,32 @@ test('PNG OCR rejects invalid input', { skip: !supported }, async () => {
 })
 
 test(
+  'Windows PNG OCR preserves normal sizes and limits the longest edge to min(engine limit, 3200)',
+  {
+    skip: process.platform !== 'win32'
+  },
+  async () => {
+    const api = require('../../../native/ocr')
+    const sharp = require('sharp')
+    const png = async (width, height) =>
+      sharp({
+        create: { width, height, channels: 4, background: '#ffffff' }
+      })
+        .png()
+        .toBuffer()
+    const normal = await api.recognizeWindowsText(await png(400, 150))
+    assert.deepEqual([normal.inputWidth, normal.inputHeight], [400, 150])
+    assert.deepEqual([normal.processedWidth, normal.processedHeight], [400, 150])
+    const limit = Math.min(normal.maxImageDimension, 3200)
+    const width = limit + 1
+    const large = await api.recognizeWindowsText(await png(width, 150))
+    assert.equal(large.inputWidth, width)
+    assert.equal(large.processedWidth, limit)
+    assert.equal(large.processedHeight, Math.round((150 * limit) / width))
+  }
+)
+
+test(
   'captured region PNG can be recognized independently',
   {
     skip: !supported || process.env.DICTOL_SCREEN_CAPTURE_INTEGRATION !== '1'

@@ -99,6 +99,24 @@ test(
       assert.deepEqual(JSON.parse(recognized.json), { observations: [] })
       assert.equal(recognized.png, undefined)
       assert.equal(recognized.snapshot, undefined)
+      const retained = await api.captureMacOcrImage(1, 10, 20, 200, 100)
+      try {
+        assert.deepEqual([retained.width, retained.height], [200, 100])
+        assert.equal(retained.png, undefined)
+        assert.throws(
+          () => retained.recognize({ x: 190, y: 0, width: 20, height: 10 }, ['en-US']),
+          /bounds/
+        )
+        const crop = await retained.recognize({ x: 10, y: 20, width: 100, height: 50 }, ['en-US'])
+        assert.deepEqual(JSON.parse(crop), { observations: [] })
+        const pending = retained.recognize(null, ['en-US'])
+        retained.dispose()
+        retained.dispose()
+        assert.throws(() => retained.recognize(null, ['en-US']), /disposed/)
+        assert.deepEqual(JSON.parse(await pending), { observations: [] })
+      } finally {
+        retained.dispose()
+      }
       await assert.rejects(
         () => api.captureAndRecognizeMacText(4294967295, 0, 0, 200, 100, ['en-US']),
         { code: 'ERR_SCREEN_CAPTURE', message: 'Fixture display was not found' }

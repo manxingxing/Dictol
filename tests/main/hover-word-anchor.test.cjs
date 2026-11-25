@@ -41,9 +41,13 @@ for (const mode of ['dictionary', 'ai']) {
           createCursorAnchor: () => ({ cursor: true }),
           createWordAnchor: (bounds) => ({ wordBounds: bounds })
         }
+      if (id === '../../shared/ocr-settings')
+        return { windowsOcrLanguage: (config) => config.language }
       if (id === '../ocr/ocr')
         return {
-          captureTextUnderCursor: async (_mode, ready) => {
+          captureTextUnderCursor: async (_mode, ready, language, engine) => {
+            assert.equal(engine, process.platform === 'win32' ? 'wgc' : undefined)
+            assert.equal(language, process.platform === 'win32' ? 'ja-JP' : undefined)
             ready?.()
             return { wordBounds, selection: { word: 'example' } }
           }
@@ -53,6 +57,7 @@ for (const mode of ['dictionary', 'ai']) {
     compiled._compile(output.code, __filename)
     const controller = new compiled.exports.SelectionToolbarController(
       {
+        appConfig: { load: () => ({ ocr: { language: 'ja-JP', captureEngine: 'wgc' } }) },
         windowManager: { hideOcrHighlight() {} }
       },
       explanation,

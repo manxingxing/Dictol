@@ -4,6 +4,42 @@ const esbuild = require('esbuild')
 const Module = require('node:module')
 const path = require('node:path')
 
+for (const engine of ['gdi', 'wgc']) {
+  for (const mode of ['dictionary', 'ai']) {
+    test(`Windows ${mode} keeps ${engine} for all capture requests`, async () => {
+      makeMocks([])
+      const capture = globalThis.__hoverFlowMocks['./ocr-screen-capture']
+      const received = []
+      const dictionary = capture.captureWindowsOcrRegion
+      capture.captureWindowsOcrRegion = async (
+        display,
+        pointer,
+        size,
+        language,
+        selectedEngine
+      ) => {
+        received.push(selectedEngine)
+        const output = await dictionary(display, pointer, size)
+        if (received.length === 1) output.result.observations = []
+        return output
+      }
+      const ai = capture.captureOcrRegion
+      capture.captureOcrRegion = async (display, pointer, size, selectedEngine) => {
+        received.push(selectedEngine)
+        return ai(display, pointer, size)
+      }
+      try {
+        const flow = await loadFlow('win32')
+        const result = await flow.captureWindowsTextUnderCursor(mode, undefined, 'en-US', engine)
+        assert.equal(result.selection.word, 'example')
+        assert.deepEqual(received, mode === 'dictionary' ? [engine, engine] : [engine])
+      } finally {
+        delete globalThis.__hoverFlowMocks
+      }
+    })
+  }
+}
+
 async function loadFlow(platform) {
   const root = path.resolve(__dirname, '../../..')
   const source = platform === 'darwin' ? 'mac-ocr.ts' : 'win-ocr.ts'
@@ -30,9 +66,9 @@ async function loadFlow(platform) {
               electron: 'screen',
               '@dictol/ocr-native': 'chineseWordRange, recognizeMacText, recognizeWindowsText',
               './ocr-screen-capture':
-                'captureMacOcrRegion, captureOcrRegion, captureOcrDisplay, captureOcrImage, cropOcrDisplay',
+                'captureMacOcrRegion, captureOcrRegion, captureWindowsOcrRegion, recognizeOcrSnapshot',
               './ocr-text': 'selectOcrTextHit',
-              './ocr-crop': 'contextTouchesCropEdge, mapOcrQuadToRegion'
+              './ocr-crop': 'contextTouchesCropEdge, mapOcrQuadToRegion, defaultHorizontalPadding'
             }
             return {
               contents: `export const { ${exports[path]} } = globalThis.__hoverFlowMocks[${JSON.stringify(path)}]`,
@@ -52,9 +88,8 @@ async function loadFlow(platform) {
 
 function makeMocks(events) {
   const display = { bounds: { x: 0, y: 0, width: 1920, height: 1080 } }
-  const snapshot = { image: { data: Buffer.from('display-png'), bounds: display.bounds } }
+  const snapshot = { image: { dispose: () => events.push('dispose') }, bounds: display.bounds }
   const frame = ({ width, height }) => ({
-    buffer: Buffer.from(`${width}x${height}`),
     size: { width, height },
     pointer: { x: 0.5, y: 0.5 },
     region: { x: 0, y: 0, width, height },
@@ -66,10 +101,8 @@ function makeMocks(events) {
     contextBounds: { x: 0, y: 0, width: 0.1, height: 0.1 },
     hasBothAdjacentSentences: false
   }
-  const recognize = async (png) => {
-    assert.ok(Buffer.isBuffer(png))
-    events.push(`ocr:${png}`)
-    const [width, height] = png.toString().split('x').map(Number)
+  const recognize = async ({ width, height }) => {
+    events.push(`ocr:${width}x${height}`)
     return {
       observations: width >= 1200 && height >= 600 ? [{}] : [],
       recognizerLanguage: 'en-US'
@@ -87,7 +120,11 @@ function makeMocks(events) {
       recognizeMacText: recognize,
       recognizeWindowsText: recognize
     },
-    './ocr-crop': { contextTouchesCropEdge: () => false, mapOcrQuadToRegion: () => null },
+    './ocr-crop': {
+      contextTouchesCropEdge: () => false,
+      mapOcrQuadToRegion: () => null,
+      defaultHorizontalPadding: (width) => Math.max(2, Math.min(5, width * 0.05))
+    },
     './ocr-text': { selectOcrTextHit: (observations) => (observations.length ? hit : null) },
     './ocr-screen-capture': {
       captureMacOcrRegion: async (_display, _pointer, size) => {
@@ -97,29 +134,30 @@ function makeMocks(events) {
       },
       captureOcrRegion: async (_display, _pointer, size) => {
         assert.deepEqual(size, { width: display.bounds.width, height: 600 })
-        snapshot.image.bounds = { x: 0, y: 0, ...size }
+        snapshot.bounds = { x: 0, y: 0, ...size }
         events.push('capture:band')
         return snapshot
       },
-      captureOcrDisplay: async () => {
-        events.push('capture:display')
-        return snapshot
+      captureWindowsOcrRegion: async (_display, _pointer, size) => {
+        events.push('capture:native-region-ocr')
+        const result = { observations: [{ text: 'example' }], recognizerLanguage: 'en-US' }
+        return { frame: frame(size), result }
       },
-      captureOcrImage: async (_display, _pointer, size) => {
-        events.push('capture:region')
-        return frame(size)
-      },
-      cropOcrDisplay: (received, _pointer, size) => {
+      recognizeOcrSnapshot: async (received, _pointer, size, language) => {
         assert.strictEqual(received, snapshot)
         events.push(size ? `crop:${size.width}x${size.height}` : 'crop:full')
-        return frame(size ?? snapshot.image.bounds)
+        const result = await globalThis.__hoverFlowMocks['@dictol/ocr-native'].recognizeWindowsText(
+          size ?? snapshot.bounds,
+          language
+        )
+        return { ...frame(size ?? snapshot.bounds), result }
       }
     }
   }
 }
 
 for (const platform of ['darwin', 'win32']) {
-  test(`${platform} AI crops the same PNG and shows progress before recognition`, async () => {
+  test(`${platform} AI reuses a native handle and disposes it after recognition`, async () => {
     const events = []
     makeMocks(events)
     try {
@@ -129,22 +167,21 @@ for (const platform of ['darwin', 'win32']) {
       const result = await fn('ai', () => events.push('ready'))
       assert.equal(result.selection.word, 'example')
       assert.equal(events.filter((e) => e.startsWith('capture:')).length, 1)
-      assert.deepEqual(
-        events.slice(0, 4),
-        platform === 'darwin'
-          ? ['capture:band', 'crop:1280x450', 'ready', 'ocr:1280x450']
-          : ['capture:display', 'crop:1024x500', 'ready', 'ocr:1024x500']
-      )
-      assert.ok(events.includes(platform === 'darwin' ? 'ocr:1920x600' : 'ocr:1434x800'))
-      if (platform === 'darwin') {
-        assert.equal(events.filter((event) => event.startsWith('ocr:')).length, 2)
-      }
+      assert.deepEqual(events.slice(0, 4), [
+        'capture:band',
+        'ready',
+        'crop:1280x450',
+        'ocr:1280x450'
+      ])
+      assert.ok(events.includes('ocr:1920x600'))
+      assert.equal(events.filter((event) => event.startsWith('ocr:')).length, 2)
+      assert.equal(events.at(-1), 'dispose')
     } finally {
       delete globalThis.__hoverFlowMocks
     }
   })
 
-  test(`${platform} propagates PNG OCR failures`, async () => {
+  test(`${platform} releases the image on OCR failure`, async () => {
     const events = []
     makeMocks(events)
     const failure = new Error('recognition failed')
@@ -160,40 +197,127 @@ for (const platform of ['darwin', 'win32']) {
         () => fn('ai', () => events.push('ready')),
         (e) => e === failure
       )
-      assert.deepEqual(
-        events,
-        platform === 'darwin'
-          ? ['capture:band', 'crop:1280x450', 'ready']
-          : ['capture:display', 'crop:1024x500', 'ready']
-      )
+      assert.deepEqual(events, ['capture:band', 'ready', 'crop:1280x450', 'dispose'])
     } finally {
       delete globalThis.__hoverFlowMocks
     }
   })
 }
 
-test('Windows dictionary retries English with the same PNG buffer', async () => {
-  const events = []
-  makeMocks(events)
-  const buffers = []
-  globalThis.__hoverFlowMocks['@dictol/ocr-native'].recognizeWindowsText = async (
-    png,
-    language
-  ) => {
-    buffers.push(png)
-    events.push(language ?? 'profile')
-    return { observations: [{ text: 'example' }], recognizerLanguage: language ?? 'zh-CN' }
-  }
-  try {
-    const flow = await loadFlow('win32')
-    const result = await flow.captureWindowsTextUnderCursor('dictionary')
-    assert.equal(result.selection.word, 'example')
-    assert.deepEqual(events, ['capture:region', 'profile', 'en-US'])
-    assert.strictEqual(buffers[0], buffers[1])
-  } finally {
-    delete globalThis.__hoverFlowMocks
-  }
-})
+for (const language of [undefined, 'en-US', 'zh-CN', 'ja-JP', 'ko-KR', 'fr-FR', 'de-DE']) {
+  test(
+    'Windows dictionary uses configured language without language retry: ' + language,
+    async () => {
+      const events = []
+      makeMocks(events)
+      globalThis.__hoverFlowMocks['@dictol/ocr-native'].recognizeWindowsText = () => {
+        throw new Error('Unexpected PNG OCR')
+      }
+      let calls = 0
+      globalThis.__hoverFlowMocks['./ocr-screen-capture'].captureWindowsOcrRegion = async (
+        _d,
+        _p,
+        size,
+        receivedLanguage
+      ) => {
+        calls++
+        assert.equal(receivedLanguage, language)
+        return {
+          frame: {
+            size,
+            pointer: { x: 0.5, y: 0.5 },
+            region: { x: 0, y: 0, ...size },
+            mapBounds: () => ({ x: 10, y: 20, width: 30, height: 40 })
+          },
+          result: { observations: [{ text: 'example' }], recognizerLanguage: 'zh-CN' }
+        }
+      }
+      try {
+        const flow = await loadFlow('win32')
+        assert.equal(
+          (await flow.captureWindowsTextUnderCursor('dictionary', undefined, language)).selection
+            .word,
+          'example'
+        )
+        assert.equal(calls, 1)
+      } finally {
+        delete globalThis.__hoverFlowMocks
+      }
+    }
+  )
+}
+
+for (const language of [undefined, 'ja-JP', 'en-US']) {
+  test('Windows AI uses configured language for every crop: ' + language, async () => {
+    const events = []
+    makeMocks(events)
+    const original = globalThis.__hoverFlowMocks['@dictol/ocr-native'].recognizeWindowsText
+    const languages = []
+    globalThis.__hoverFlowMocks['@dictol/ocr-native'].recognizeWindowsText = async (
+      png,
+      selected
+    ) => {
+      languages.push(selected)
+      return original(png)
+    }
+    try {
+      const flow = await loadFlow('win32')
+      await flow.captureWindowsTextUnderCursor('ai', undefined, language)
+      assert.equal(languages.length, 2)
+      assert.ok(languages.every((selected) => selected === language))
+    } finally {
+      delete globalThis.__hoverFlowMocks
+    }
+  })
+}
+
+for (const fail of [false, true]) {
+  test(
+    'Windows dictionary ' +
+      (fail ? 'propagates native errors' : 'retries a smaller native region on miss'),
+    async () => {
+      const events = []
+      makeMocks(events)
+      const sizes = []
+      const failure = new Error('native capture or OCR failed')
+      globalThis.__hoverFlowMocks['./ocr-screen-capture'].captureWindowsOcrRegion = async (
+        _d,
+        _p,
+        size
+      ) => {
+        if (fail) throw failure
+        sizes.push(size)
+        return {
+          frame: { size, pointer: { x: 0.5, y: 0.5 }, region: { x: 0, y: 0, ...size } },
+          result: { observations: [], recognizerLanguage: 'en-US' },
+          image: {
+            recognize: () => {
+              throw new Error('Unexpected English retry')
+            }
+          }
+        }
+      }
+      try {
+        const flow = await loadFlow('win32')
+        if (fail)
+          await assert.rejects(
+            () => flow.captureWindowsTextUnderCursor('dictionary'),
+            (e) => e === failure
+          )
+        else {
+          assert.equal(await flow.captureWindowsTextUnderCursor('dictionary'), null)
+          assert.deepEqual(sizes, [
+            { width: 1000, height: 300 },
+            { width: 550, height: 290 }
+          ])
+        }
+        assert.deepEqual(events, [])
+      } finally {
+        delete globalThis.__hoverFlowMocks
+      }
+    }
+  )
+}
 
 test('macOS dictionary uses one region OCR call without PNG recognition', async () => {
   const events = []
@@ -253,3 +377,100 @@ test('macOS dictionary propagates region OCR errors', async () => {
     delete globalThis.__hoverFlowMocks
   }
 })
+
+for (const platform of ['darwin', 'win32']) {
+  for (const scenario of [
+    { name: 'keeps first hit away from crop edges', edge: false, count: 1 },
+    { name: 'does not retry complete context', edge: true, complete: true, count: 1 },
+    { name: 'expands incomplete context once', edge: true, count: 2 },
+    {
+      name: 'returns a miss after one full-band retry',
+      firstMiss: true,
+      expandedMiss: true,
+      count: 2
+    },
+    {
+      name: 'keeps initial hit if expanded recognition misses',
+      edge: true,
+      expandedMiss: true,
+      count: 2
+    }
+  ]) {
+    test(platform + ' AI ' + scenario.name, async () => {
+      const events = []
+      makeMocks(events)
+      const firstHit = {
+        selection: { word: 'example', sentence: 'Example.', context: 'Example.' },
+        bounds: { x: 0, y: 0, width: 0.1, height: 0.1 },
+        contextBounds: { x: 0, y: 0, width: 0.1, height: 0.1 },
+        hasBothAdjacentSentences: scenario.complete ?? false
+      }
+      const expandedHit = {
+        ...firstHit,
+        selection: { ...firstHit.selection, context: 'Before. Example. After.' }
+      }
+      let calls = 0
+      const recognize = async () => {
+        const hit =
+          calls++ === 0
+            ? scenario.firstMiss
+              ? null
+              : firstHit
+            : scenario.expandedMiss
+              ? null
+              : expandedHit
+        return { observations: hit ? [{ hit }] : [], recognizerLanguage: 'en-US' }
+      }
+      globalThis.__hoverFlowMocks['@dictol/ocr-native'].recognizeWindowsText = recognize
+      globalThis.__hoverFlowMocks['@dictol/ocr-native'].recognizeMacText = recognize
+      globalThis.__hoverFlowMocks['./ocr-text'].selectOcrTextHit = (observations) =>
+        observations[0]?.hit ?? null
+      globalThis.__hoverFlowMocks['./ocr-crop'].contextTouchesCropEdge = () =>
+        scenario.edge ?? false
+      try {
+        const flow = await loadFlow(platform)
+        const fn =
+          platform === 'darwin' ? flow.captureTextUnderCursor : flow.captureWindowsTextUnderCursor
+        const result = await fn('ai')
+        assert.equal(calls, scenario.count)
+        assert.equal(events.filter((e) => e === 'dispose').length, 1)
+        assert.equal(events.filter((e) => e.startsWith('capture:')).length, 1)
+        if (scenario.firstMiss && scenario.expandedMiss) assert.equal(result, null)
+        else
+          assert.equal(
+            result.selection.context,
+            scenario.count === 2 && !scenario.expandedMiss
+              ? expandedHit.selection.context
+              : firstHit.selection.context
+          )
+        assert.deepEqual(
+          events.filter((e) => e.startsWith('crop:')),
+          scenario.count === 1 ? ['crop:1280x450'] : ['crop:1280x450', 'crop:full']
+        )
+      } finally {
+        delete globalThis.__hoverFlowMocks
+      }
+    })
+  }
+
+  test(platform + ' AI releases the handle if region recognition fails', async () => {
+    const events = []
+    makeMocks(events)
+    const failure = new Error('native crop failed')
+    globalThis.__hoverFlowMocks['./ocr-screen-capture'].recognizeOcrSnapshot = async () => {
+      throw failure
+    }
+    try {
+      const flow = await loadFlow(platform)
+      const fn =
+        platform === 'darwin' ? flow.captureTextUnderCursor : flow.captureWindowsTextUnderCursor
+      await assert.rejects(
+        () => fn('ai', () => events.push('ready')),
+        (error) => error === failure
+      )
+      assert.deepEqual(events, ['capture:band', 'ready', 'dispose'])
+    } finally {
+      delete globalThis.__hoverFlowMocks
+    }
+  })
+}

@@ -122,6 +122,7 @@ for (const [platform, recognitionFails] of [
       },
       '../ocr/screen-capture': {
         captureScreen: async (request) => {
+          assert.equal(request.windowsCaptureEngine, platform === 'win32' ? 'wgc' : undefined)
           assert.equal(windows.length, 2, 'Progress must not exist during capture')
           assert.ok(windows.slice(0, 2).every((window) => window.destroyed))
           events.push(`capture:${JSON.stringify(request)}`)
@@ -129,7 +130,8 @@ for (const [platform, recognitionFails] of [
         }
       },
       '../ocr/screenshot-ocr': {
-        recognizeScreenshotText: async (png) => {
+        recognizeScreenshotText: async (png, _rank, language) => {
+          assert.equal(language, platform === 'win32' ? 'ja-JP' : undefined)
           assert.ok(events.includes('progress'), 'Progress must be shown during OCR')
           events.push(`ocr:png:${png.toString()}`)
           if (recognitionFails) throw new Error('Vision failed')
@@ -141,7 +143,20 @@ for (const [platform, recognitionFails] of [
     }
     const Action = await loadAction(mocks, platform)
     const action = new Action({
-      actions: { translation: { showSelection: (text) => events.push(`translation:${text}`) } }
+      appConfig: {
+        load: () => {
+          assert.equal(platform, 'win32')
+          return { ocr: { language: 'ja-JP', captureEngine: 'wgc' } }
+        }
+      },
+      actions: {
+        translation: {
+          showSelection: (text, position) => {
+            assert.deepEqual(position, { x: 110, y: 68 })
+            events.push(`translation:${text}`)
+          }
+        }
+      }
     })
     try {
       await action.toggleSelector()
@@ -151,7 +166,9 @@ for (const [platform, recognitionFails] of [
       assert.deepEqual(
         events.filter((event) => /^(capture|ocr|translation|release):/.test(event)),
         [
-          'capture:{"displayId":2,"region":{"x":110,"y":20,"width":30,"height":40}}',
+          platform === 'win32'
+            ? 'capture:{"displayId":2,"region":{"x":110,"y":20,"width":30,"height":40},"windowsCaptureEngine":"wgc"}'
+            : 'capture:{"displayId":2,"region":{"x":110,"y":20,"width":30,"height":40}}',
           'ocr:png:selected-png',
           ...(recognitionFails ? [] : ['translation:hello'])
         ]

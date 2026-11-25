@@ -81,7 +81,7 @@ flowchart TD
     D -->|是| E[RangeFromPoint 获取光标位置的文本范围]
     E --> F[克隆范围并扩展到 TextUnit Word<br/>读取和修整词文本]
     F --> G{词有效?}
-    G -->|空、对象占位符、无字母数字<br/>或超过 128 UTF-16 单位| FAIL
+    G -->|空、对象占位符或无字母数字| FAIL
     G -->|有效| H[GetBoundingRectangles<br/>取得词范围的屏幕矩形]
     H --> I[若有多个矩形<br/>选取距离光标最近的矩形]
     I --> J{矩形有效且光标落在<br/>扩展 2 物理像素的矩形内?}
@@ -89,9 +89,9 @@ flowchart TD
     J -->|是| K{includeContext?}
     K -->|false| OUT[返回 word 和物理屏幕词框]
     K -->|true| L[克隆光标范围<br/>扩展到 TextUnit Paragraph]
-    L --> M[读取段落文本，最多 16384 单位<br/>读取段首至词起点的文本]
-    M --> N[将前缀换算成 UTF-16 长度<br/>作为词起点 offset]
-    N --> O{offset 位于已读取段落中?}
+    L --> M[读取完整段落文本<br/>读取段首至词起点的文本]
+    M --> N[将前缀和词范围前导空白换算成 UTF-16 长度<br/>作为词起点 offset]
+    N --> O{段落中对应位置包含命中词?}
     O -->|否| FAIL
     O -->|是| P[返回 word、物理屏幕词框<br/>段落 text 和 offset]
     OUT --> Q[Node 将词框从物理坐标转回 DIP]
@@ -105,7 +105,7 @@ flowchart TD
 ```
 
 - Windows 主进程对原生查词等待最多 1.2 秒。等待超时后可以进入 OCR，已启动的原生任务仍会继续执行。
-- UI Automation 提供的段落范围取决于目标应用。原生 `offset` 指向词范围起点，Node 在这段文本内提取句子。
+- UI Automation 提供的段落范围取决于目标应用。原生 `offset` 指向去除前导空白后的词起点，Node 在这段文本内提取句子。
 - 实现见 [Windows UI Automation](/Users/alan/projects/Dictol/native/accessibility/windows/src/ui_automation.rs) 和 [Windows 主进程适配器](/Users/alan/projects/Dictol/src/main/accessibility/platforms/windows.ts)。
 
 两平台的断句和回退判断共用 [Accessibility 结果处理](/Users/alan/projects/Dictol/src/main/ocr/accessibility.ts) 和 [sentenceContextAt](/Users/alan/projects/Dictol/src/main/ocr/ocr-text.ts)。

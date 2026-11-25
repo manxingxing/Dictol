@@ -119,12 +119,12 @@ AI 模式命中 `AXStaticText` 时，原生层会尝试合并相邻内联文本�
 
 Accessibility 不可用时，[mac-ocr.ts](../src/main/ocr/mac-ocr.ts) 重新读取当前光标和所在显示器，并使用 macOS Vision 识别：
 
-1. 普通查词以光标为中心请求约 `700 × 300` DIP 的截图区域。
-2. AI 模式先取得显示器快照，从中裁出约 `1024 × 500` DIP 的区域，必要时复用同一帧。
+1. 普通查词以光标为中心请求约 `1000 × 300` DIP 的截图区域。
+2. AI 模式保留显示器全宽 × `600` DIP 的原生图像，Node 指定宽度的 2/3 × `450` DIP 区域，由原生裁剪并识别。
 3. 首次使用 Vision `accurate` 识别，语言列表包含英语、简体中文、繁体中文和日语。
-4. AI 模式没有命中，或上下文不完整且触及截图边缘时，还可能扩大到约 `1280 × 650` DIP 并执行一次 `accurate` 识别。
+4. AI 模式没有命中，或上下文不完整且触及截图边缘时，通过同一句柄识别完整图像，最多重试一次。
 
-截图和首次识别在同一原生任务中执行，Vision 直接使用 `CGImage`；AI 扩大区域时复用同一原生图像。原生截图失败时，主进程用 Electron 截图并将 PNG 交给原生 OCR；识别失败不会触发截图回退。AI 加载窗口在取词完成后显示。
+普通查词在同一原生任务中完成截图和识别。AI 通过 `captureMacOcrImage` 保留 `CGImageRef`，只把句柄与尺寸交给 Node；区域识别返回 OCR 结果。查词结束在 `finally` 中调用 `dispose()`，Node-API finalizer 负责析构兜底，每个异步任务独立持有图像引用。原生截图或识别失败时直接报告错误，不使用 Electron 截图回退。AI 加载窗口在截图完成后、识别开始前显示。
 
 `[Native OCR] capture` 和 `[Native OCR] recognition` 分别记录原生截图及识别的耗时；同帧重试和 PNG 识别分别使用 `snapshot recognition`、`PNG recognition` 日志。各次计时不包含主进程请求排队、后续断句或弹窗流程。
 

@@ -78,7 +78,7 @@ test('word and selection bounds use the same positioning after coordinate conver
   )
 })
 
-test('multiline selection avoids the full span and missing positions use the cursor', async () => {
+test('multiline selection uses the known bounds and missing positions use the cursor', async () => {
   const { toDisplayAnchor, fitExplanationNearSelection } = await loadPosition({
     x: 0,
     y: 0,
@@ -93,9 +93,11 @@ test('multiline selection avoids the full span and missing positions use the cur
     endBottom: { x: 200, y: 670 }
   }
   const anchor = toDisplayAnchor({ selection })
-  assert.deepEqual(anchor.avoidanceBounds, { x: 0, y: 600, width: 1200, height: 70 })
+  assert.deepEqual(anchor.avoidanceBounds, { x: 200, y: 600, width: 200, height: 70 })
   const result = fitExplanationNearSelection(anchor, { width: 520, height: 400 })
   assert.equal(overlaps(result, anchor.avoidanceBounds), false)
+  assert.equal(result.x, 200)
+  assert.equal(result.y, 192)
   const fallback = toDisplayAnchor({ selection: { ...selection, posLevel: 0 } })
   assert.equal(fallback.avoidanceBounds, undefined)
   assert.equal(fallback.centerX, 40)
@@ -118,7 +120,59 @@ test('multiline selection avoids the full span and missing positions use the cur
   assert.equal(incomplete.posLevel, 1)
 })
 
-test('chooses the least overlap when no side has enough room', async () => {
+for (const [platform, scale, workAreaX] of [
+  ['darwin', 1, 0],
+  ['win32', 2, 0],
+  ['win32', 2, -1920]
+]) {
+  test(`${platform} scale ${scale}: multiline explanation stays by the selection on display ${workAreaX}`, async () => {
+    const workArea = { x: workAreaX, y: 0, width: 1920, height: 1040 }
+    const { toDisplayAnchor, fitExplanationNearSelection } = await loadPosition(workArea, platform)
+    const point = (x, y) => ({ x: (workAreaX + x) * scale, y: y * scale })
+    const selection = {
+      posLevel: 4,
+      startTop: point(400, 100),
+      startBottom: point(400, 120),
+      endTop: point(1000, 600),
+      endBottom: point(1000, 620)
+    }
+    const anchor = toDisplayAnchor({ selection })
+    assert.deepEqual(anchor.avoidanceBounds, {
+      x: workAreaX + 400,
+      y: 100,
+      width: 600,
+      height: 520
+    })
+    // Enough space below: align to the selection, not to the display's left edge.
+    assert.deepEqual(fitExplanationNearSelection(anchor, { width: 520, height: 300 }), {
+      x: workAreaX + 400,
+      y: 628,
+      width: 520,
+      height: 300
+    })
+    // A taller popup must still be able to avoid the selection on its right.
+    const tall = fitExplanationNearSelection(anchor, { width: 520, height: 600 })
+    assert.equal(overlaps(tall, anchor.avoidanceBounds), false)
+    assert.deepEqual(tall, { x: workAreaX + 1008, y: 100, width: 520, height: 600 })
+
+    const reversed = toDisplayAnchor({
+      selection: {
+        ...selection,
+        startTop: selection.endTop,
+        startBottom: selection.endBottom,
+        endTop: selection.startTop,
+        endBottom: selection.startBottom
+      }
+    })
+    assert.deepEqual(reversed.avoidanceBounds, anchor.avoidanceBounds)
+    assert.deepEqual(
+      fitExplanationNearSelection(reversed, { width: 520, height: 300 }),
+      fitExplanationNearSelection(anchor, { width: 520, height: 300 })
+    )
+  })
+}
+
+test('a window larger than the work area keeps its requested dimensions', async () => {
   const { createWordAnchor, fitExplanationNearSelection } = await loadPosition({
     x: 0,
     y: 0,
@@ -127,7 +181,25 @@ test('chooses the least overlap when no side has enough room', async () => {
   })
   const word = { x: 200, y: 175, width: 100, height: 50 }
   const result = fitExplanationNearSelection(createWordAnchor(word), { width: 520, height: 600 })
-  assert.deepEqual(result, { x: 12, y: 12, width: 476, height: 376 })
+  assert.deepEqual(result, { x: 12, y: 12, width: 520, height: 600 })
+})
+
+test('positioning preserves small dimensions with and without selection bounds', async () => {
+  const { createWordAnchor, createCursorAnchor, fitExplanationNearSelection } = await loadPosition({
+    x: 0,
+    y: 0,
+    width: 1200,
+    height: 800
+  })
+  const size = { width: 280, height: 200 }
+  for (const anchor of [
+    createWordAnchor({ x: 400, y: 300, width: 100, height: 30 }),
+    createCursorAnchor()
+  ]) {
+    const result = fitExplanationNearSelection(anchor, size)
+    assert.equal(result.width, size.width)
+    assert.equal(result.height, size.height)
+  }
 })
 
 test('mouse fallback stays above the cursor when there is not enough room below', async () => {

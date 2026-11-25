@@ -7,5 +7,11 @@
   },
   "[json]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
-  }
+  },
+  "rust-analyzer.linkedProjects": [
+    "native/accessibility/windows/Cargo.toml",
+    // "native/mdict/Cargo.toml",
+    // "native/mdict-node/Cargo.toml",
+    "native/ocr/windows/Cargo.toml"
+  ]
 }

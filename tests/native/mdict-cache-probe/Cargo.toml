@@ -1,0 +1,25 @@
+[package]
+name = "dictol-mdict-cache-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+adler2 = "2"
+bzip2 = "0.6"
+encoding_rs = "0.8"
+flate2 = "1"
+icu_collator = "2"
+icu_locale = "2"
+lz4 = "1.28"
+lzma-rs = "0.3"
+lzo1x = "0.2"
+memmap2 = "0.9"
+quick-xml = { version = "0.41", features = ["escape-html"] }
+ripemd = "0.1"
+thiserror = "2"
+unicode-casefold = "0.2.0"
+unicode-general-category = "1.1.0"
+unicode-normalization = "0.1.25"
+xxhash-rust = { version = "0.8", features = ["xxh64"] }
+zeroize = { version = "1", features = ["derive"] }

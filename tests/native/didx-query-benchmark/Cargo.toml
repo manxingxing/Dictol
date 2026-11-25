@@ -1,0 +1,22 @@
+[package]
+name = "dictol-didx-query-benchmark"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+dictol-mdict = { path = "../../../native/mdict" }
+napi = { version = "3", features = ["napi8"] }
+napi-derive = "3"
+rayon = "1.12"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+lto = true
+strip = "symbols"
