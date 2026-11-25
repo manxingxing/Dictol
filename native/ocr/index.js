@@ -24,7 +24,9 @@ if (!['darwin', 'win32'].includes(process.platform)) {
           'listShareableDisplays',
           'listShareableWindows',
           'getWindowsDisplayBoundsAtPoint',
-          'recognizeWindowsText'
+          'recognizeWindowsText',
+          'captureAndRecognizeWindowsText',
+          'captureWindowsOcrImage'
         ]
 
   for (const name of requiredExports) {

@@ -11,7 +11,10 @@ live in separate native subprojects:
   frame using the same display-local rectangle. Full-display and independent
   window capture use `SCScreenshotManager` on macOS 14+ and a single stream
   frame on macOS 13.
-- `windows/` uses Windows Graphics Capture through `windows-capture` and napi-rs.
+- `windows/` uses GDI or Windows Graphics Capture through `windows-capture` and napi-rs.
+  Display, region, and window capture accept a final `engine` argument: `gdi`
+  (default) or `wgc`. GDI uses BitBlt for displays/regions and PrintWindow for
+  windows. The native addon reports failures without switching engines.
   Capture failures fall back to Electron at the application layer.
 
 The package entry selects `prebuilds/<platform>-<arch>/ocr.node`. Build
@@ -44,7 +47,7 @@ are hexadecimal `HMONITOR` and `HWND` strings, and bounds and region coordinates
 are global physical pixels. The display list can include a name; the window list
 includes the title and available owning process information. The application
 maps Electron DIP coordinates to these native coordinates before capture.
-Windows captures one WGC frame per request. Regions are copied from the frame's
+When WGC is selected, Windows captures one frame per request. Regions are copied from the frame's
 GPU texture into a smaller CPU-readable texture. The cursor is hidden when the
 Windows version supports configuring cursor capture; otherwise WGC's default
 applies. WGC requires Windows 10 version 1903 or later.
@@ -134,3 +137,23 @@ preflight reporting access, the live test must be rerun after correcting system
 permission; the denial does not count as a successful capture test.
 macOS 13/14 runtime acceptance and mixed-scale/multiple-display acceptance remain
 pending until those environments are available. x64 is build-verified only.
+
+### Windows native OCR APIs
+
+`captureAndRecognizeWindowsText(displayId, x, y, width, height, language?, engine?)`
+captures and recognizes BGRA8 pixels in one native task, returning only
+`WindowsOcrResult`. No PNG encoding, decoding, or pixel Buffer transfer through
+Node occurs on this path. Coordinates are global physical pixels.
+
+`captureWindowsOcrImage(displayId, x, y, width, height, engine?)` retains a native
+screenshot and returns a handle with `width`, `height`, `recognize(region, language)`
+and `dispose()`. Regions use integer pixels relative to the image; `null` recognizes
+the entire image. Call `dispose()` in `finally`. Disposal is idempotent and rejects
+new recognition calls; queued tasks retain their own `Arc<RawFrame>` references
+and finish independently. Garbage collection also releases the handle. No global
+image registry or persistent capture session is used.
+
+The optional language tag selects an installed Windows OCR language; omitting it
+uses Windows user language preferences. Both raw-image and PNG recognition preserve
+normal input sizes and only shrink images exceeding
+`min(OcrEngine.MaxImageDimension, 3200)`, using bilinear interpolation.

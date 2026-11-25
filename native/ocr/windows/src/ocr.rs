@@ -226,7 +226,6 @@ fn recognize(png: &[u8], language: Option<&str>) -> windows::core::Result<Window
             "未找到匹配的 Windows OCR 语言包，请在系统设置中安装 OCR 语言包",
         ));
     }
-    let recognizer_language = engine.RecognizerLanguage()?.LanguageTag()?.to_string();
 
     let stream = InMemoryRandomAccessStream::new()?;
     let writer = DataWriter::CreateDataWriter(&stream)?;
@@ -238,16 +237,15 @@ fn recognize(png: &[u8], language: Option<&str>) -> windows::core::Result<Window
     let decoder = BitmapDecoder::CreateAsync(&stream)?.join()?;
     let original_width = decoder.PixelWidth()?;
     let original_height = decoder.PixelHeight()?;
-    let max_dimension = OcrEngine::MaxImageDimension()?;
-    // Small labels in illustrations are often only a dozen physical pixels
-    // high. Enlarge the crop before recognition while keeping memory bounded.
+    let max_dimension = OcrEngine::MaxImageDimension()?.min(3_200);
+    // Preserve the input size unless it exceeds the effective OCR limit.
     let longest_edge = original_width.max(original_height);
-    let scale = (max_dimension.min(3_200) as f64 / longest_edge as f64).min(3.0);
-    let bitmap = if (scale - 1.0).abs() > 0.001 {
+    let bitmap = if longest_edge > max_dimension {
+        let scale = max_dimension as f64 / longest_edge as f64;
         let transform = BitmapTransform::new()?;
         transform.SetScaledWidth((original_width as f64 * scale).round().max(1.0) as u32)?;
         transform.SetScaledHeight((original_height as f64 * scale).round().max(1.0) as u32)?;
-        transform.SetInterpolationMode(BitmapInterpolationMode::Cubic)?;
+        transform.SetInterpolationMode(BitmapInterpolationMode::Linear)?;
         decoder
             .GetSoftwareBitmapTransformedAsync(
                 BitmapPixelFormat::Bgra8,
@@ -265,9 +263,98 @@ fn recognize(png: &[u8], language: Option<&str>) -> windows::core::Result<Window
             )?
             .join()?
     };
+    recognize_bitmap(&bitmap, &engine, original_width, original_height)
+}
+
+#[cfg(windows)]
+pub(crate) fn recognize_frame(
+    frame: &crate::windows_screen_capture::RawFrame,
+    language: Option<&str>,
+) -> windows::core::Result<WindowsOcrResult> {
+    use windows::Globalization::Language;
+    use windows::Graphics::Imaging::{BitmapAlphaMode, BitmapPixelFormat, SoftwareBitmap};
+    use windows::Media::Ocr::OcrEngine;
+    use windows::Storage::Streams::DataWriter;
+    use windows::Win32::Graphics::Imaging::{
+        CLSID_WICImagingFactory, GUID_WICPixelFormat32bppBGRA, IWICImagingFactory,
+        WICBitmapInterpolationModeLinear,
+    };
+    use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
+    use windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize, RoUninitialize};
+    use windows::core::{Error as WindowsError, HRESULT, HSTRING, Interface};
+
+    struct Apartment;
+    impl Drop for Apartment {
+        fn drop(&mut self) {
+            unsafe { RoUninitialize() };
+        }
+    }
+    unsafe { RoInitialize(RO_INIT_MULTITHREADED)? };
+    let _apartment = Apartment;
+    let engine = match language {
+        Some(tag) => {
+            OcrEngine::TryCreateFromLanguage(&Language::CreateLanguage(&HSTRING::from(tag))?)?
+        }
+        None => OcrEngine::TryCreateFromUserProfileLanguages()?,
+    };
+    if engine.as_raw().is_null() {
+        return Err(WindowsError::new(
+            HRESULT(0x80004005u32 as i32),
+            "未找到匹配的 Windows OCR 语言包，请在系统设置中安装 OCR 语言包",
+        ));
+    }
+    let max_dimension = OcrEngine::MaxImageDimension()?.min(3_200);
+    let longest_edge = frame.width.max(frame.height);
+    // 正常尺寸直接识别；仅在超过 min(引擎上限, 3200) 时用双线性插值缩小。
+    let (width, height, pixels) = if longest_edge > max_dimension {
+        let scale = max_dimension as f64 / longest_edge as f64;
+        let width = (frame.width as f64 * scale).round().max(1.0) as u32;
+        let height = (frame.height as f64 * scale).round().max(1.0) as u32;
+        let mut pixels = vec![0; width as usize * height as usize * 4];
+        unsafe {
+            let factory: IWICImagingFactory =
+                CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)?;
+            let source = factory.CreateBitmapFromMemory(
+                frame.width,
+                frame.height,
+                &GUID_WICPixelFormat32bppBGRA,
+                frame.width * 4,
+                &frame.pixels,
+            )?;
+            let scaler = factory.CreateBitmapScaler()?;
+            scaler.Initialize(&source, width, height, WICBitmapInterpolationModeLinear)?;
+            scaler.CopyPixels(std::ptr::null(), width * 4, &mut pixels)?;
+        }
+        (width, height, Some(pixels))
+    } else {
+        (frame.width, frame.height, None)
+    };
+    let writer = DataWriter::new()?;
+    writer.WriteBytes(pixels.as_deref().unwrap_or(&frame.pixels))?;
+    let bitmap = SoftwareBitmap::CreateCopyWithAlphaFromBuffer(
+        &writer.DetachBuffer()?,
+        BitmapPixelFormat::Bgra8,
+        width as i32,
+        height as i32,
+        BitmapAlphaMode::Premultiplied,
+    )?;
+    recognize_bitmap(&bitmap, &engine, frame.width, frame.height)
+}
+
+#[cfg(windows)]
+fn recognize_bitmap(
+    bitmap: &windows::Graphics::Imaging::SoftwareBitmap,
+    engine: &windows::Media::Ocr::OcrEngine,
+    original_width: u32,
+    original_height: u32,
+) -> windows::core::Result<WindowsOcrResult> {
+    let recognizer_language = engine.RecognizerLanguage()?.LanguageTag()?.to_string();
+    let max_dimension = windows::Media::Ocr::OcrEngine::MaxImageDimension()?;
     let image_width = bitmap.PixelWidth()? as f64;
     let image_height = bitmap.PixelHeight()? as f64;
-    let ocr_result = engine.RecognizeAsync(&bitmap)?.join()?;
+    let ocr_result = engine
+        .RecognizeAsync(bitmap)
+        .and_then(|operation| operation.join())?;
     let text_angle = ocr_result
         .TextAngle()
         .ok()

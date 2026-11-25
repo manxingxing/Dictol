@@ -6,6 +6,8 @@ export interface ScreenCaptureImage {
   height: number
 }
 
+export type WindowsCaptureEngine = 'gdi' | 'wgc'
+
 /** Global screen coordinates: points on macOS, physical pixels on Windows. */
 export interface CaptureBounds {
   x: number
@@ -65,14 +67,22 @@ export declare function captureScreenRegion(
   x: number,
   y: number,
   width: number,
-  height: number
+  height: number,
+  /** Windows only. Defaults to GDI. No fallback between engines. */
+  engine?: WindowsCaptureEngine
 ): Promise<ScreenCaptureImage>
 
 /** Capture the entire display. */
-export declare function captureDisplay(displayId: number | string): Promise<ScreenCaptureImage>
+export declare function captureDisplay(
+  displayId: number | string,
+  engine?: WindowsCaptureEngine
+): Promise<ScreenCaptureImage>
 
 /** Capture an individual window. */
-export declare function captureWindow(windowId: number | string): Promise<ScreenCaptureImage>
+export declare function captureWindow(
+  windowId: number | string,
+  engine?: WindowsCaptureEngine
+): Promise<ScreenCaptureImage>
 
 export declare function getWindowsDisplayBoundsAtPoint(x: number, y: number): WindowsDisplayBounds
 
@@ -113,6 +123,25 @@ export interface WindowsOcrResult {
   textAngle?: number
 }
 
+/** An owned native screenshot. Regions use integer pixels relative to this image. */
+export interface NativeOcrImage<Result, Language> {
+  readonly width: number
+  readonly height: number
+  /** null recognizes the entire retained image. Each task retains its own reference. */
+  recognize(region: CaptureBounds | null, language: Language): Promise<Result>
+  /** Idempotent. Releases the handle's image; queued tasks finish independently. GC is a fallback. */
+  dispose(): void
+}
+
+export declare function captureWindowsOcrImage(
+  displayId: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  engine?: WindowsCaptureEngine
+): Promise<NativeOcrImage<WindowsOcrResult, string | undefined>>
+
 export interface WordRange {
   start: number
   length: number
@@ -144,6 +173,17 @@ export declare function captureAndRecognizeMacText(
 export declare function recognizeWindowsText(
   png: Buffer,
   language?: string
+): Promise<WindowsOcrResult>
+
+/** Capture a physical-pixel region and recognize it in one native task. Windows only. */
+export declare function captureAndRecognizeWindowsText(
+  displayId: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  language?: string,
+  engine?: WindowsCaptureEngine
 ): Promise<WindowsOcrResult>
 
 /** Find a word in UTF-16 text using NaturalLanguage. Available on macOS. */

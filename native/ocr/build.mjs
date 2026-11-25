@@ -44,7 +44,9 @@ function copyBuild(source, platform, arch) {
           'listShareableDisplays',
           'listShareableWindows',
           'getWindowsDisplayBoundsAtPoint',
-          'recognizeWindowsText'
+          'recognizeWindowsText',
+          'captureAndRecognizeWindowsText',
+          'captureWindowsOcrImage'
         ]
   const missing = exports.filter((name) => !binary.includes(Buffer.from(name)))
   if (missing.length)

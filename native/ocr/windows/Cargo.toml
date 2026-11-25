@@ -13,7 +13,7 @@ napi-derive = "3"
 
 [target.'cfg(windows)'.dependencies]
 windows-capture = "=2.0.1"
-windows = { version = "0.62.2", features = ["Foundation", "Globalization", "Media_Ocr", "Graphics_Capture", "Graphics_DirectX", "Graphics_DirectX_Direct3D11", "Graphics_Imaging", "Storage_Streams", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common", "Win32_Graphics_Gdi", "Win32_Graphics_Imaging", "Win32_System_Com", "Win32_System_Ole", "Win32_System_WinRT", "Win32_System_WinRT_Direct3D11", "Win32_System_WinRT_Graphics_Capture"] }
+windows = { version = "0.62.2", features = ["Foundation", "Globalization", "Media_Ocr", "Graphics_Capture", "Graphics_DirectX", "Graphics_DirectX_Direct3D11", "Graphics_Imaging", "Storage_Streams", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common", "Win32_Graphics_Gdi", "Win32_Graphics_Imaging", "Win32_Storage_Xps", "Win32_UI_WindowsAndMessaging", "Win32_System_Com", "Win32_System_Ole", "Win32_System_WinRT", "Win32_System_WinRT_Direct3D11", "Win32_System_WinRT_Graphics_Capture"] }
 
 [build-dependencies]
 napi-build = "2"
