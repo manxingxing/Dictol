@@ -3,6 +3,7 @@ import { TRANSLATION_MAX_TEXT_LENGTH } from '../../shared/translation'
 import type { AppRuntime } from '../app-runtime'
 import { captureScreen } from '../ocr/screen-capture'
 import { recognizeScreenshotText } from '../ocr/screenshot-ocr'
+import { windowsOcrLanguage } from '../../shared/ocr-settings'
 import { resolvePreloadPath, resolveRendererUrl } from '../output-path'
 
 /** Owns the screenshot selector, OCR work, and translation handoff. */
@@ -162,7 +163,14 @@ export class ScreenshotTranslationAction {
     lookupRank?: (word: string) => number | null
   ): Promise<string> {
     const startedAt = performance.now()
-    const image = await captureScreen({ displayId: display.id, region })
+    const windowsOcrConfig =
+      process.platform === 'win32' ? this.runtime.appConfig.load().ocr : undefined
+    const language = windowsOcrConfig ? windowsOcrLanguage(windowsOcrConfig) : undefined
+    const image = await captureScreen({
+      displayId: display.id,
+      region,
+      windowsCaptureEngine: windowsOcrConfig?.captureEngine
+    })
     console.info('[ScreenshotTranslation] Screenshot captured', {
       source: 'screenshot-translation',
       elapsedMs: Math.round(performance.now() - startedAt),
@@ -171,7 +179,7 @@ export class ScreenshotTranslationAction {
     })
     await this.showRecognitionProgress(region)
     console.info('[ScreenshotTranslation] OCR started', { time: new Date().toISOString() })
-    return recognizeScreenshotText(image.data, lookupRank)
+    return recognizeScreenshotText(image.data, lookupRank, language)
   }
 
   private async showRecognitionProgress(region: Rectangle): Promise<void> {

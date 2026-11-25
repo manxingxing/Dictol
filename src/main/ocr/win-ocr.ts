@@ -10,7 +10,7 @@ import {
 import { selectOcrTextHit, type OcrTextHit } from './ocr-text'
 import type { OcrCapture } from './ocr-capture-types'
 import { captureAiOcrRegion, shouldExpandAiOcr, preferExpandedAiHit } from './ai-ocr'
-import type { WindowsCaptureEngine as CaptureEngine } from '@dictol/ocr-native'
+import type { CaptureEngine } from '../../shared/ocr-settings'
 
 const dictionaryCaptureSize = { width: 1000, height: 300 }
 const angledRetryCaptureSize = { width: 550, height: 290 }

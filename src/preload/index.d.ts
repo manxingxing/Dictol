@@ -5,6 +5,7 @@ import type {
 } from '../shared/ai-ipc'
 import type { WordCaptureStatus, WordCaptureShortcutResult } from '../main/controller/word-capture'
 import type { ToastPayload } from '../shared/notification'
+import type { OcrConfig } from '../shared/ocr-settings'
 import type {
   TtsConfig,
   TtsCredentialsStatus,
@@ -454,6 +455,10 @@ declare global {
       }
       notifications: {
         onToast: (callback: (payload: ToastPayload) => void) => () => void
+      }
+      ocr: {
+        getConfig: () => Promise<OcrConfig | null>
+        saveConfig: (config: OcrConfig) => Promise<OcrConfig | null>
       }
       tts: TtsPlayback & {
         getConfig: () => Promise<TtsConfig | null>

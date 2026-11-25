@@ -6,13 +6,14 @@ import type { OcrObservation } from './ocr-text'
 /** Recognize PNG input using the platform's native OCR and assemble translation text. */
 export async function recognizeScreenshotText(
   png: Buffer,
-  lookupRank?: (word: string) => number | null
+  lookupRank?: (word: string) => number | null,
+  windowsLanguage?: string
 ): Promise<string> {
   const startedAt = performance.now()
   const result =
     process.platform === 'darwin'
       ? await recognizeMacText(png, ocrLanguages)
-      : await recognizeWindowsText(png)
+      : await recognizeWindowsText(png, windowsLanguage)
   console.info('[ScreenshotTranslation] Native OCR returned', {
     time: new Date().toISOString(),
     elapsedMs: Math.round(performance.now() - startedAt),

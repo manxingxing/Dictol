@@ -2,7 +2,7 @@ import type { Display, Point } from 'electron'
 import { contextTouchesCropEdge } from './ocr-crop'
 import { captureOcrRegion, type OcrFrame, type OcrSnapshot } from './ocr-screen-capture'
 import type { OcrTextHit } from './ocr-text'
-import type { WindowsCaptureEngine as CaptureEngine } from '@dictol/ocr-native'
+import type { CaptureEngine } from '../../shared/ocr-settings'
 
 /** Both platforms retain the same native image for both OCR passes. */
 export async function captureAiOcrRegion(

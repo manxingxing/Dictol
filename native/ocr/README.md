@@ -103,6 +103,16 @@ of two-thirds display width × 450 points. When more context is needed, it recog
 the entire retained image without another capture. Regions are clamped
 to their available bounds.
 
+Windows hover lookup, AI context lookup, and screenshot translation share the
+Windows-only OCR language setting. Omitting the language uses Windows user
+language preferences; no automatic language retry runs.
+
+The Windows-only OCR settings include a capture engine, defaulting to GDI for
+new and existing configurations. Hover lookup, AI context lookup, and screenshot
+translation read the settings once at the start of each operation and pass the
+engine through Node to native capture. Retries keep the same engine. Failures
+propagate without changing engines. macOS does not read or apply this setting.
+
 Screenshot translation captures the selected region as PNG, shows recognition
 progress, and passes that PNG to the platform OCR API. The progress window appears
 after capture, so it does not enter the recognized image. Capture and OCR are

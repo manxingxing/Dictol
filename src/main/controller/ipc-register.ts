@@ -16,6 +16,7 @@ import { SelectionExplanationController } from './selection-explanation'
 import { TranslationController } from './translation'
 import { ScreenshotTranslationController } from './screenshot-translation'
 import { TtsController } from './tts'
+import { OcrController } from './ocr'
 import { WordCaptureController } from './word-capture'
 import { WordLookupController } from './word-lookup'
 import { WordbookController } from './wordbook'
@@ -32,6 +33,7 @@ export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
     new AiController(appRuntime),
     new ExternalExcerptController(appRuntime),
     new TtsController(appRuntime),
+    new OcrController(appRuntime),
     new AppController(appRuntime),
     new DictionaryEntryController(appRuntime),
     new DictionaryNoteController(appRuntime),

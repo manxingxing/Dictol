@@ -12,7 +12,7 @@ import { screen, type Display, type Point, type Rectangle } from 'electron'
 import { cropAroundPointer, mapOcrBoundsToRegion } from './ocr-crop'
 import { ocrLanguages } from './mac-ocr-languages'
 import { mapWindowsCaptureRegion } from './windows-capture-geometry'
-import type { WindowsCaptureEngine as CaptureEngine } from '@dictol/ocr-native'
+import type { CaptureEngine } from '../../shared/ocr-settings'
 
 export type CaptureSize = { width: number; height: number }
 

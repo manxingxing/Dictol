@@ -6,6 +6,7 @@ import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
 import type { ThemeMode } from '../shared/theme-mode'
 import type { TtsConfig } from '../shared/tts'
+import type { OcrConfig } from '../shared/ocr-settings'
 import type { AiLookupConfig } from '../shared/ai-ipc'
 import { isAiProviderId } from '../shared/ai-settings'
 import {
@@ -39,10 +40,12 @@ export type AppConfig = {
   }
   aiLookup: AiLookupConfig
   tts: TtsConfig
+  ocr: OcrConfig
   translation: TranslationConfig
 }
 
 const DEFAULT_CONFIG: AppConfig = {
+  ocr: { engine: 'system', language: 'system', captureEngine: 'gdi' },
   themeMode: 'auto',
   aggregateLayout: 'vertical',
   dictionaryLayout: 'single',
@@ -199,9 +202,14 @@ function parseConfig(value: unknown): AppConfig {
       fish?: { model?: unknown; voiceId?: unknown }
     }
     translation?: { targetLanguage?: unknown; providers?: unknown }
+    ocr?: Partial<OcrConfig>
   }
 
   return {
+    ocr:
+      process.platform === 'win32'
+        ? { ...DEFAULT_CONFIG.ocr, ...candidate.ocr }
+        : { ...DEFAULT_CONFIG.ocr },
     themeMode:
       candidate.themeMode === 'light' || candidate.themeMode === 'dark'
         ? candidate.themeMode
@@ -314,6 +322,7 @@ function parseConfig(value: unknown): AppConfig {
 
 function cloneConfig(config: AppConfig): AppConfig {
   return {
+    ocr: { ...config.ocr },
     themeMode: config.themeMode,
     aggregateLayout: config.aggregateLayout,
     dictionaryLayout: config.dictionaryLayout,

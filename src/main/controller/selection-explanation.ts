@@ -409,15 +409,15 @@ export class SelectionExplanationController extends BaseController {
         {
           label: '复制图片',
           click: () =>
-            void copyContextImageToClipboard(view.webContents, params).catch(
-              (error: unknown) => console.error('Failed to copy explanation image', error)
+            void copyContextImageToClipboard(view.webContents, params).catch((error: unknown) =>
+              console.error('Failed to copy explanation image', error)
             )
         },
         {
           label: '下载图片',
           click: () =>
-            void downloadContextImage(window, view.webContents, params).catch(
-              (error: unknown) => console.error('Failed to download explanation image', error)
+            void downloadContextImage(window, view.webContents, params).catch((error: unknown) =>
+              console.error('Failed to download explanation image', error)
             )
         },
         {

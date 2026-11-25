@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { OcrConfig } from '../shared/ocr-settings'
 import { createTtsPlayback, getSystemTtsVoices, onSystemTtsVoicesChanged } from './tts'
 import { getMainWindowChromeMaterial } from '../shared/window-chrome'
 import type { TtsConfig, TtsCredentialsStatus, TtsSaveSettingsRequest } from '../shared/tts'
@@ -520,6 +521,11 @@ const api = Object.freeze({
       ipcRenderer.on('notification:toast', listener)
       return () => ipcRenderer.removeListener('notification:toast', listener)
     }
+  }),
+  ocr: Object.freeze({
+    getConfig: (): Promise<OcrConfig | null> => ipcRenderer.invoke('ocr:get-config'),
+    saveConfig: (config: OcrConfig): Promise<OcrConfig | null> =>
+      ipcRenderer.invoke('ocr:save-config', config)
   }),
   tts: Object.freeze({
     ...createTtsPlayback(),

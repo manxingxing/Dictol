@@ -9,7 +9,7 @@ export async function readAccessibleTextAtCursor(
   const pointer = screen.getCursorScreenPoint()
   const physical = screen.dipToScreenPoint(pointer)
 
-  const startedAt = performance.now()
+  // const startedAt = performance.now()
   let timeout: ReturnType<typeof setTimeout> | undefined
   const lookup = await Promise.race([
     readAccessibleText(physical.x, physical.y, mode === 'ai'),
@@ -18,9 +18,9 @@ export async function readAccessibleTextAtCursor(
     })
   ]).finally(() => clearTimeout(timeout))
 
-  console.info('[Accessibility] read Text Via Windows Accessibility API', lookup, {
-    elapsedMs: Math.round(performance.now() - startedAt)
-  })
+  // console.info('[Accessibility] read Text Via Windows Accessibility API', lookup, {
+  //   elapsedMs: Math.round(performance.now() - startedAt)
+  // })
 
   if (!lookup) {
     return { failure: 'timeout' }

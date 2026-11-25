@@ -21,6 +21,7 @@ import { KeyboardSettingsPage } from '@/pages/settings/KeyboardSettingsPage'
 import { TranslationSettingsPage } from '@/pages/settings/TranslationSettingsPage'
 import { TtsSettingsPage } from '@/pages/settings/TtsSettingsPage'
 import { WordCaptureSettingsPage } from '@/pages/settings/WordCaptureSettingsPage'
+import { OcrSettingsPage } from '@/pages/settings/OcrSettingsPage'
 
 export const router = createHashRouter([
   {
@@ -69,6 +70,15 @@ export const router = createHashRouter([
           { index: true, element: <Navigate to="appearance" replace /> },
           { path: 'appearance', element: <AppearanceSettingsPage /> },
           { path: 'capture', element: <WordCaptureSettingsPage /> },
+          {
+            path: 'ocr',
+            element:
+              window.dictol.platform === 'win32' ? (
+                <OcrSettingsPage />
+              ) : (
+                <Navigate to="/settings/appearance" replace />
+              )
+          },
           { path: 'translation', element: <TranslationSettingsPage /> },
           { path: 'ai', element: <AiLookupSettingsPage /> },
           { path: 'tts', element: <TtsSettingsPage /> },

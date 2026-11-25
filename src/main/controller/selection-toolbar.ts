@@ -13,6 +13,7 @@ import {
 import type { AppRuntime, OcrLookupMode } from '../app-runtime'
 import type { OcrCapture } from '../ocr/ocr-capture-types'
 import { captureTextUnderCursor } from '../ocr/ocr'
+import { windowsOcrLanguage } from '../../shared/ocr-settings'
 import {
   getSelectionToolbarWindowSize,
   SELECTION_TOOLBAR_WINDOWS_SHADOW_MARGIN,
@@ -123,7 +124,15 @@ export class SelectionToolbarController extends BaseController {
       this.runtime.windowManager.hideOcrHighlight()
       this.dismissForMainExplanation()
       if (mode === 'ai') this.explanation.prewarmExplanationWindow()
-      const capture = await captureTextUnderCursor(mode, onCaptureReady)
+      const windowsOcrConfig =
+        process.platform === 'win32' ? this.runtime.appConfig.load().ocr : undefined
+      const language = windowsOcrConfig ? windowsOcrLanguage(windowsOcrConfig) : undefined
+      const capture = await captureTextUnderCursor(
+        mode,
+        onCaptureReady,
+        language,
+        windowsOcrConfig?.captureEngine
+      )
       if (!isCurrent()) return
       this.explanation.setAnchor(capture ? createWordAnchor(capture.wordBounds) : anchor)
       if (!capture) {

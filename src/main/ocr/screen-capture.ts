@@ -5,7 +5,7 @@ import {
 } from '@dictol/ocr-native'
 import { screen, type Display, type Rectangle } from 'electron'
 import { mapWindowsCaptureRegion } from './windows-capture-geometry'
-import type { WindowsCaptureEngine as CaptureEngine } from '@dictol/ocr-native'
+import type { CaptureEngine } from '../../shared/ocr-settings'
 
 export type Screenshot = {
   data: Buffer
