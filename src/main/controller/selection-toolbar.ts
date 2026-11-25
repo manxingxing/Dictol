@@ -454,7 +454,12 @@ export class SelectionToolbarController extends BaseController {
       this.showPendingToolbar(window)
     })
     window.on('hide', this.handleToolbarHidden)
-    window.on('closed', this.handleToolbarHidden)
+    window.once('closed', () => {
+      this.toolbarWebContentsId = undefined
+      this.toolbarLoaded = false
+      this.currentCapture = undefined
+      this.handleToolbarHidden()
+    })
     window.webContents.on('will-navigate', (event) => event.preventDefault())
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 

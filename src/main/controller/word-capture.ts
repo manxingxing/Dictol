@@ -188,6 +188,10 @@ export class WordCaptureController extends BaseController {
       if (enabled && !this.runtime.selectionHookService.getStatus().running) {
         throw new Error('实时取词服务不可用')
       }
+      if (!enabled) {
+        const toolbar = this.runtime.windowManager.selectionToolbarWindow
+        if (toolbar && !toolbar.isDestroyed()) toolbar.destroy()
+      }
       return { ok: true, status: this.createStatus() }
     } catch (error) {
       console.error('Failed to update selection lookup setting', { enabled, error })
