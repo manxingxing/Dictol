@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,7 +9,8 @@ const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 
 export default function stageSharpNative(context) {
   const platform = context.electronPlatformName
-  if (platform !== 'darwin' && platform !== 'win32') return
+  if (platform !== 'darwin' && platform !== 'win32')
+    throw new Error(`Unsupported package platform: ${platform}`)
   const arch =
     context.arch === 1 || context.arch === 'x64'
       ? 'x64'

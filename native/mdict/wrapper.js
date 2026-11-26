@@ -9,10 +9,6 @@ const nativeTargets = {
   },
   win32: {
     x64: ['win32-x64', 'win32-x64-msvc']
-  },
-  linux: {
-    x64: ['linux-x64-gnu', 'linux-x64-gnu'],
-    arm64: ['linux-arm64-gnu', 'linux-arm64-gnu']
   }
 }
 

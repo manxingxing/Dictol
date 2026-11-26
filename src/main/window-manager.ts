@@ -1,6 +1,5 @@
 import { BrowserWindow, Menu, nativeTheme, screen, type Point, type Rectangle } from 'electron'
 
-import icon from '../../resources/icon.png?asset'
 import {
   SELECTION_EXPLANATION_DICTIONARY_SWITCHER_HEIGHT,
   SELECTION_EXPLANATION_HEADER_HEIGHT
@@ -111,7 +110,6 @@ export class WindowManager {
               }
             }
           : {}),
-      ...(process.platform === 'linux' ? { icon } : {}),
       webPreferences: {
         preload: resolvePreloadPath('index.js'),
         contextIsolation: true,

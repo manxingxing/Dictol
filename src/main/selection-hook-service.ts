@@ -121,33 +121,7 @@ export class SelectionHookService implements ShortcutHandler {
     if (process.platform === 'darwin' || process.platform === 'win32') {
       return { supported: true, limitation: null }
     }
-    if (process.platform !== 'linux') {
-      return { supported: false, limitation: '当前操作系统不受 selection-hook 支持。' }
-    }
-
-    try {
-      const environment = this.getHook().linuxGetEnvInfo()
-      if (!environment) {
-        return { supported: false, limitation: '无法识别当前 Linux 图形环境。' }
-      }
-      const usesWayland = environment.displayProtocol === 2
-      if (usesWayland && environment.compositorType === 2) {
-        return {
-          supported: false,
-          limitation: 'GNOME Wayland 不提供实时选区协议；请切换到 X11 会话后使用取词功能。'
-        }
-      }
-      if (usesWayland && !environment.hasInputDeviceAccess) {
-        return {
-          supported: true,
-          limitation: '当前 Wayland 会话没有输入设备权限，实时取词仍可用，但检测会有短暂延迟。'
-        }
-      }
-      return { supported: true, limitation: null }
-    } catch (error) {
-      console.error('Failed to inspect selection hook capabilities', error)
-      return { supported: false, limitation: 'selection-hook 原生模块无法在当前系统中加载。' }
-    }
+    return { supported: false, limitation: '当前操作系统不受支持。' }
   }
 
   onSelection(listener: SelectionListener): () => void {

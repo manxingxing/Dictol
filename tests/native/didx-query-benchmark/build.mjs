@@ -16,8 +16,7 @@ if (!process.argv.includes('--online')) args.push('--offline')
 execFileSync('cargo', args, { stdio: 'inherit' })
 const library = {
   win32: 'dictol_didx_query_benchmark.dll',
-  darwin: 'libdictol_didx_query_benchmark.dylib',
-  linux: 'libdictol_didx_query_benchmark.so'
+  darwin: 'libdictol_didx_query_benchmark.dylib'
 }[process.platform]
 if (!library) throw new Error(`Unsupported platform: ${process.platform}`)
 copyFileSync(join(directory, 'target', 'release', library), join(directory, 'benchmark.node'))

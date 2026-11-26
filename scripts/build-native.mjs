@@ -17,6 +17,16 @@ const getTarget = () => {
   return process.env.DICTOL_NATIVE_TARGET
 }
 
+const requestedTarget = getTarget()
+const supportedTargets = ['aarch64-apple-darwin', 'x86_64-apple-darwin', WINDOWS_X64_TARGET]
+if (
+  requestedTarget
+    ? !supportedTargets.includes(requestedTarget)
+    : !['darwin', 'win32'].includes(process.platform)
+) {
+  throw new Error(`Unsupported native build target: ${requestedTarget ?? process.platform}`)
+}
+
 const verifyWindowsX64Binding = (directory) => {
   const binaryPath = join(
     directory,

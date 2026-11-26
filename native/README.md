@@ -1,5 +1,7 @@
 # Native projects
 
+Dictol supports macOS (arm64/x64) and Windows (x64). Linux is no longer supported.
+
 - `mdict/` contains the Rust dictionary and DIDX core, CLI, and the
   `@dictol/mdict-native` Node package in one Cargo project. The `node` feature
   enables `src/binding.rs`; Rust-only builds keep the default feature set.

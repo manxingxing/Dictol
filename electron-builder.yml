@@ -245,41 +245,5 @@ mac:
     - node_modules/@img/sharp-libvips-darwin-*/**
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
-linux:
-  files:
-    - out/**
-    - '!out/main/chunks/mac-*.js'
-    - drizzle/**
-    - resources/**
-    - '!resources/system-translation/**'
-    - '!resources/ecdict/**'
-    - '!resources/sqlite-simple/**'
-    - '!native/**'
-    - '!scripts/**'
-    - '!node_modules/**/*.map'
-    - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules,docs}/**'
-    - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,build.mjs,index.d.ts,package-lock.json}'
-    - '!node_modules/@dictol/mdict-native/*.node'
-    - '!node_modules/@dictol/macos-native/{src,target,node_modules}/**'
-    - '!node_modules/@dictol/macos-native/{build.mjs,README.md,index.d.ts}'
-    - '!node_modules/@dictol/macos-native/prebuilds/**'
-    - '!node_modules/@dictol/mdict-native/prebuilds/darwin-*/**'
-    - '!node_modules/@dictol/mdict-native/prebuilds/win32-*/**'
-    - '!node_modules/@dictol/accessibility-native/prebuilds/darwin-*/**'
-    - '!node_modules/@dictol/accessibility-native/prebuilds/win32-*/**'
-    - '!node_modules/@dictol/ocr-native/prebuilds/darwin-*/**'
-    - '!node_modules/@dictol/ocr-native/prebuilds/win32-*/**'
-  icon: build/icon.png
-  desktop:
-    entry:
-      MimeType: x-scheme-handler/dictol
-  target:
-    - AppImage
-    - snap
-    - deb
-  maintainer: electronjs.org
-  category: Utility
-appImage:
-  artifactName: ${name}-${version}.${ext}
 npmRebuild: false
 afterPack: scripts/strip-macos-signatures.mjs

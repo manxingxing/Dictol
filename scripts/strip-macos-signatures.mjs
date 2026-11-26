@@ -385,17 +385,8 @@ export default async function verifyAndSignNativePackages(context) {
     verifyWindowsNativeModules(context.appOutDir, arch)
     return
   }
-  if (context.electronPlatformName === 'linux') {
-    const arch =
-      context.arch === 1 || context.arch === 'x64'
-        ? 'x64'
-        : context.arch === 3 || context.arch === 'arm64'
-          ? 'arm64'
-          : String(context.arch)
-    pruneSqliteSimple(join(context.appOutDir, 'resources'), 'linux', arch)
-    return
-  }
-  if (context.electronPlatformName !== 'darwin') return
+  if (context.electronPlatformName !== 'darwin')
+    throw new Error(`Unsupported package platform: ${context.electronPlatformName}`)
 
   const appPath = resolveAppBundle(context.appOutDir)
   if (!existsSync(appPath)) throw new Error(`Packaged app does not exist: ${appPath}`)

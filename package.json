@@ -41,8 +41,7 @@
     "build:unpack": "npm run build && node scripts/package-unpacked.mjs",
     "build:win": "node scripts/build-win.mjs",
     "build:mac": "node scripts/build-mac.mjs x64",
-    "build:mac-arm64": "node scripts/build-mac.mjs arm64",
-    "build:linux": "node scripts/build-linux.mjs"
+    "build:mac-arm64": "node scripts/build-mac.mjs arm64"
   },
   "dependencies": {
     "@dictol/accessibility-native": "file:native/accessibility",
@@ -151,5 +150,9 @@
     "adblock-rs@0.13.2": true,
     "esbuild@0.18.20": true,
     "esbuild@0.25.12": true
-  }
+  },
+  "os": [
+    "darwin",
+    "win32"
+  ]
 }

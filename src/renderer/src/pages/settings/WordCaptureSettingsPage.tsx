@@ -322,12 +322,6 @@ export function WordCaptureSettingsPage(): React.JSX.Element {
                         <span>{excludedProgramsError}</span>
                       </FieldError>
                     )}
-
-                    {window.dictol.platform === 'linux' && (
-                      <p className="text-xs leading-5 text-muted-foreground">
-                        Linux Wayland 无法提供来源程序名，因此程序排除列表仅在 X11 会话中生效。
-                      </p>
-                    )}
                   </DialogContent>
                 </Dialog>
               </SettingsRow>

@@ -88,7 +88,7 @@
 | 前端     | React 19、TypeScript、Tailwind CSS 4、shadcn/ui、React Router、TanStack Query、Zustand |
 | 词典解析 | Rust `native/mdict`（v1/v2/v3），经 NAPI-RS 封装为 `@dictol/mdict-native`              |
 | 本地存储 | SQLite（better-sqlite3）+ Drizzle ORM                                                  |
-| 打包     | electron-builder（macOS / Windows / Linux）                                            |
+| 打包     | electron-builder（macOS / Windows）                                            |
 
 ## 开发
 

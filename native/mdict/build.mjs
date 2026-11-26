@@ -16,16 +16,12 @@ if (targetIndex >= 0 && (!explicitTarget || explicitTarget.startsWith('--'))) {
 const targets = {
   'x86_64-apple-darwin': { directory: 'darwin-x64', suffix: 'darwin-x64' },
   'aarch64-apple-darwin': { directory: 'darwin-arm64', suffix: 'darwin-arm64' },
-  'x86_64-pc-windows-msvc': { directory: 'win32-x64', suffix: 'win32-x64-msvc' },
-  'x86_64-unknown-linux-gnu': { directory: 'linux-x64-gnu', suffix: 'linux-x64-gnu' },
-  'aarch64-unknown-linux-gnu': { directory: 'linux-arm64-gnu', suffix: 'linux-arm64-gnu' }
+  'x86_64-pc-windows-msvc': { directory: 'win32-x64', suffix: 'win32-x64-msvc' }
 }
 const hostTarget = {
   'darwin-x64': 'x86_64-apple-darwin',
   'darwin-arm64': 'aarch64-apple-darwin',
-  'win32-x64': 'x86_64-pc-windows-msvc',
-  'linux-x64': 'x86_64-unknown-linux-gnu',
-  'linux-arm64': 'aarch64-unknown-linux-gnu'
+  'win32-x64': 'x86_64-pc-windows-msvc'
 }[`${process.platform}-${process.arch}`]
 const rustTarget = explicitTarget ?? hostTarget
 const output = targets[rustTarget]
