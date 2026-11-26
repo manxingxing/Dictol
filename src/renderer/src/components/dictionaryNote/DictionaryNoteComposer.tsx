@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { InputGroup } from '@/components/ui/input-group'
 import { RichNoteEditor } from '@/components/dictionaryNote/RichNoteEditor'
 import { useCreateDictionaryNote } from '@/hooks/use-dictionary-note'
 
@@ -85,8 +86,8 @@ export function DictionaryNoteComposer({ term }: { term: string }): React.JSX.El
   }
 
   return (
-    <div className="shrink-0 border-t border-border bg-[var(--surface-secondary)] p-3">
-      <div className="rounded-md border border-border bg-background p-1 focus-within:border-primary/60">
+    <div className="shrink-0 bg-[var(--surface-secondary)] p-3">
+      <InputGroup className="flex-col items-stretch p-2">
         {images.length > 0 && (
           <div className="m-1 flex flex-wrap gap-2">
             {images.map((image) => (
@@ -113,7 +114,7 @@ export function DictionaryNoteComposer({ term }: { term: string }): React.JSX.El
         )}
         <RichNoteEditor
           key={editorResetKey}
-          className="border-0"
+          className="border-0 bg-transparent"
           disabled={createNote.isPending}
           initialValue={comment.text}
           initialRichValue={comment.rich}
@@ -125,25 +126,26 @@ export function DictionaryNoteComposer({ term }: { term: string }): React.JSX.El
           }}
           placeholder="写下这个单词的笔记"
         />
-      </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+          <span className="min-w-0 flex-1 text-[11px] text-muted-foreground">
+            支持粘贴图片 · ⌘/Ctrl + Enter 提交
+          </span>
+          <Button
+            className="ml-auto shrink-0"
+            disabled={createNote.isPending || (!hasComment && images.length === 0)}
+            onClick={save}
+            size="sm"
+            type="button"
+          >
+            {createNote.isPending ? '提交中…' : '提交'}
+          </Button>
+        </div>
+      </InputGroup>
       {errorMessage && (
         <p className="mt-1 text-xs text-destructive" role="alert">
           {errorMessage}
         </p>
       )}
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="text-[11px] text-muted-foreground">
-          支持粘贴图片 · ⌘/Ctrl + Enter 提交
-        </span>
-        <Button
-          disabled={createNote.isPending || (!hasComment && images.length === 0)}
-          onClick={save}
-          size="sm"
-          type="button"
-        >
-          {createNote.isPending ? '提交中…' : '提交'}
-        </Button>
-      </div>
     </div>
   )
 }

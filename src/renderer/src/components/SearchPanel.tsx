@@ -193,7 +193,7 @@ export const SearchPanel = (): React.JSX.Element => {
             ref={searchInputRef}
             aria-label="搜索单词"
             autoFocus={!displayInCompactMode}
-            className="h-9 border-[var(--border-strong)] bg-card px-7 pr-12 shadow-none"
+            className="h-9 border-[var(--border-strong)] bg-card px-7 pr-14 shadow-none"
             onChange={(event) => setSearchQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -222,7 +222,7 @@ export const SearchPanel = (): React.JSX.Element => {
           {searchQuery.length > 0 && (
             <Button
               aria-label="清空搜索"
-              className="absolute right-6 top-1/2 size-6 -translate-y-1/2 rounded-md text-muted-foreground hover:text-foreground"
+              className="absolute right-7 top-1/2 size-6 -translate-y-1/2 rounded-md text-muted-foreground hover:text-foreground"
               onClick={() => {
                 setSearchQuery('')
                 searchInputRef.current?.focus()
