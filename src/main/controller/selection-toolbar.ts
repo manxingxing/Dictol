@@ -343,15 +343,12 @@ export class SelectionToolbarController extends BaseController {
     new Notification({ title: '摘抄窗口无法打开', body: message }).show()
   }
 
-  private disableCurrentApp(): void {
-    if (!this.currentCapture) return
-    const programName = this.currentCapture.selection.programName.trim()
+  private excludeProgram(programName: string): void {
     if (!programName) return
 
     try {
       this.runtime.appConfig.addExcludedProgram(programName)
       this.runtime.restartInputServices()
-      this.hideToolbar()
     } catch (error) {
       console.error('Failed to exclude program from selection lookup', { programName, error })
     }
@@ -374,7 +371,9 @@ export class SelectionToolbarController extends BaseController {
     if (surface instanceof NativeSelectionPanel) {
       this.nativeMenuOpen = true
       try {
-        surface.showDisableSelectionMenu(Boolean(programName))
+        if (surface.showDisableSelectionMenu(Boolean(programName))) {
+          this.excludeProgram(programName)
+        }
       } catch (error) {
         console.error('Failed to show selection toolbar native menu', error)
       } finally {
@@ -388,7 +387,7 @@ export class SelectionToolbarController extends BaseController {
       {
         label: '在此应用禁用划词',
         enabled: Boolean(programName),
-        click: () => this.disableCurrentApp()
+        click: () => this.excludeProgram(programName)
       }
     ])
     this.nativeMenu = menu
@@ -442,10 +441,6 @@ export class SelectionToolbarController extends BaseController {
     if (this.toolbarWebContentsId === window.webContents.id) return window
 
     this.toolbarWebContentsId = window.webContents.id
-
-    if (window instanceof NativeSelectionPanel) {
-      window.on('disable-selection', () => this.disableCurrentApp())
-    }
 
     this.toolbarLoaded = false
     window.webContents.on('did-finish-load', () => {

@@ -20,7 +20,7 @@ import {
 } from './selection-window-behavior'
 import { WebContentsViewManager } from './web-contents-view-manager'
 import { NativeSelectionPanel } from './native-selection-panel'
-import { configureElectronPanel } from '@dictol/mdict-native'
+import { configureElectronPanel } from '@dictol/macos-native'
 
 export type SelectionSurfaceWindow = BrowserWindow | NativeSelectionPanel
 

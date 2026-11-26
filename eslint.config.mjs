@@ -14,9 +14,8 @@ export default defineConfig(
       'oaldpe/**',
       'LDOCE5/**',
       'Dictionaries/**',
-      'native/mdict-node/index.js',
-      'native/mdict-node/index.d.ts',
-      'native/mdict-node/target/**'
+      'native/mdict/index.d.ts',
+      'native/mdict/target/**'
     ]
   },
   tseslint.configs.recommended,

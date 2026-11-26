@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/explicit-function-return-type */
 const path = require('node:path')
 const fs = require('node:fs')
 
@@ -32,15 +33,7 @@ if (!fs.existsSync(bindingPath)) {
   )
 }
 
-const previousBindingPath = process.env.NAPI_RS_NATIVE_LIBRARY_PATH
-process.env.NAPI_RS_NATIVE_LIBRARY_PATH = bindingPath
-let native
-try {
-  native = require('./index.js')
-} finally {
-  if (previousBindingPath === undefined) delete process.env.NAPI_RS_NATIVE_LIBRARY_PATH
-  else process.env.NAPI_RS_NATIVE_LIBRARY_PATH = previousBindingPath
-}
+const native = require(bindingPath)
 
 function addAsyncIterator(ScannerClass) {
   if (!ScannerClass) return
@@ -75,12 +68,3 @@ module.exports.MdxKeyScanner = native.MdxKeyScanner
 module.exports.hashFile = native.hashFile
 module.exports.DidxIndex = native.DidxIndex
 module.exports.Ld2 = native.Ld2
-module.exports.createSelectionPanel = native.createSelectionPanel
-module.exports.configureElectronPanel = native.configureElectronPanel
-module.exports.destroySelectionPanel = native.destroySelectionPanel
-module.exports.showSelectionPanel = native.showSelectionPanel
-module.exports.showSelectionPanelDisableMenu = native.showSelectionPanelDisableMenu
-module.exports.hideSelectionPanel = native.hideSelectionPanel
-module.exports.selectionPanelState = native.selectionPanelState
-module.exports.getSelectionPanelBounds = native.getSelectionPanelBounds
-module.exports.setSelectionPanelBounds = native.setSelectionPanelBounds

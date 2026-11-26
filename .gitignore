@@ -27,9 +27,8 @@ opendesign/
 # build artifact
 /benchmarks/opendict-rs/target/
 /native/mdict/target/
-/native/mdict-node/target/
-/native/mdict-node/node_modules/
-/native/mdict-node/*.node
+/native/mdict/node_modules/
+/native/mdict/*.node
 /native/accessibility/target/
 /native/accessibility/*.node
 /native/accessibility/windows/target/
@@ -41,3 +40,6 @@ opendesign/
 /native/ocr/windows/*.node
 /native/ocr/windows/index.d.ts
 /resources/system-translation/dictol-system-translation
+
+/native/macos/target/
+/native/macos/node_modules/

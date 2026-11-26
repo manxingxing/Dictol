@@ -7,6 +7,10 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
+#[cfg(feature = "node")]
+#[allow(missing_docs)]
+mod binding;
+
 mod block;
 mod cache;
 mod comparison;

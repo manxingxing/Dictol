@@ -56,7 +56,7 @@ OALDPE，源文件 58,072,934 字节；622,808 个物理词条、388,958 个归�
 
 ```sh
 cargo test --manifest-path native/mdict/Cargo.toml --offline
-node --test native/mdict-node/test/binding.test.mjs scripts/didx-index.test.mjs
+node --test tests/native/mdict/binding.test.mjs scripts/didx-index.test.mjs
 node --import tsx --test scripts/didx-query-service.test.ts scripts/word-form-service.test.ts scripts/didx-import-service.test.ts scripts/didx-search-integration.test.ts scripts/didx-schema-upgrade.test.ts
 npm run typecheck:node
 ```

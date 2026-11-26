@@ -1,6 +1,6 @@
 # MDict Node.js binding
 
-`native/mdict-node` 使用 napi-rs 将新版 `native/mdict` 暴露给 Electron main process。renderer 不直接加载原生模块，仍通过 Node 后端和 IPC 使用词典能力。
+`native/mdict` 在同一个 Cargo 项目中提供词典核心、CLI 和 napi-rs 绑定，通过 `node` feature 向 Electron main process 暴露 Node API。renderer 不直接加载原生模块，仍通过 Node 后端和 IPC 使用词典能力。
 
 ## 构建
 

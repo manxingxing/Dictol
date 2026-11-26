@@ -26,9 +26,11 @@ files:
   - '!native/**'
   - '!scripts/**'
   - '!node_modules/**/*.map'
-  - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules}/**'
+  - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules,docs}/**'
   - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,build.mjs,index.d.ts,package-lock.json}'
   - '!node_modules/@dictol/mdict-native/*.node'
+  - '!node_modules/@dictol/macos-native/{src,target,node_modules}/**'
+  - '!node_modules/@dictol/macos-native/{build.mjs,README.md,index.d.ts}'
   - '!node_modules/@dictol/accessibility-native/{macos,windows,target,test,node_modules}/**'
   - '!node_modules/@dictol/ocr-native/{macos,windows,target,test,node_modules}/**'
   - '!node_modules/adblock-rs/Cargo.lock'
@@ -50,6 +52,7 @@ files:
 asarUnpack:
   - resources/**
   - node_modules/@dictol/mdict-native/prebuilds/**/*.node
+  - node_modules/@dictol/macos-native/prebuilds/**/*.node
   - node_modules/@dictol/accessibility-native/prebuilds/**/*.node
   - node_modules/@dictol/ocr-native/prebuilds/**/*.node
   - node_modules/adblock-rs/js/index.node
@@ -68,6 +71,8 @@ win:
   icon: build/icon.ico
   artifactName: ${name}-${version}-${arch}-setup.${ext}
   files:
+    # Shared main-process code imports the lazy JS loader on Windows.
+    - '!node_modules/@dictol/macos-native/prebuilds/**'
     # Keep the Windows package self-contained while excluding unrelated
     # source, dictionary, and native-driver variants.
     - out/**
@@ -90,9 +95,11 @@ win:
     - '!native/**'
     - '!scripts/**'
     - '!node_modules/**/*.map'
-    - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules}/**'
+    - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules,docs}/**'
     - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,build.mjs,index.d.ts,package-lock.json}'
     - '!node_modules/@dictol/mdict-native/*.node'
+    - '!node_modules/@dictol/macos-native/{src,target,node_modules}/**'
+    - '!node_modules/@dictol/macos-native/{build.mjs,README.md,index.d.ts}'
     - '!node_modules/@dictol/accessibility-native/{macos,windows,target,test,node_modules}/**'
     - '!node_modules/@dictol/ocr-native/{macos,windows,target,test,node_modules}/**'
     - '!node_modules/adblock-rs/Cargo.lock'
@@ -185,9 +192,11 @@ mac:
     - '!native/**'
     - '!scripts/**'
     - '!node_modules/**/*.map'
-    - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules}/**'
+    - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules,docs}/**'
     - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,build.mjs,index.d.ts,package-lock.json}'
     - '!node_modules/@dictol/mdict-native/*.node'
+    - '!node_modules/@dictol/macos-native/{src,target,node_modules}/**'
+    - '!node_modules/@dictol/macos-native/{build.mjs,README.md,index.d.ts}'
     - '!node_modules/@dictol/accessibility-native/{macos,windows,target,test,node_modules}/**'
     - '!node_modules/@dictol/ocr-native/{macos,windows,target,test,node_modules}/**'
     - '!node_modules/adblock-rs/Cargo.lock'
@@ -220,6 +229,7 @@ mac:
     - node_modules/@dictol/mdict-native/prebuilds/darwin-*/**
     - node_modules/@dictol/accessibility-native/prebuilds/darwin-*/**
     - node_modules/@dictol/ocr-native/prebuilds/darwin-*/**
+    - node_modules/@dictol/macos-native/prebuilds/darwin-*/**
     - '!node_modules/better-sqlite3/{deps,src}/**'
     - '!node_modules/better-sqlite3/prebuilds/linux*.node'
     - '!node_modules/better-sqlite3/prebuilds/win32*.node'
@@ -247,9 +257,12 @@ linux:
     - '!native/**'
     - '!scripts/**'
     - '!node_modules/**/*.map'
-    - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules}/**'
+    - '!node_modules/@dictol/mdict-native/{src,target,test,node_modules,docs}/**'
     - '!node_modules/@dictol/mdict-native/{Cargo.lock,Cargo.toml,README.md,build.rs,build.mjs,index.d.ts,package-lock.json}'
     - '!node_modules/@dictol/mdict-native/*.node'
+    - '!node_modules/@dictol/macos-native/{src,target,node_modules}/**'
+    - '!node_modules/@dictol/macos-native/{build.mjs,README.md,index.d.ts}'
+    - '!node_modules/@dictol/macos-native/prebuilds/**'
     - '!node_modules/@dictol/mdict-native/prebuilds/darwin-*/**'
     - '!node_modules/@dictol/mdict-native/prebuilds/win32-*/**'
     - '!node_modules/@dictol/accessibility-native/prebuilds/darwin-*/**'

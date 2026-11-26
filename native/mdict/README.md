@@ -12,6 +12,23 @@
 - `MddList`：按调用方给定的路径顺序查询多份 MDD 文件；
 - `mdict`：与 library 一起构建的检查和提取命令行工具。
 
+## Node 绑定
+
+同一目录下的 `package.json`、`build.mjs` 和 `prebuilds/` 提供
+`@dictol/mdict-native`。`src/binding.rs` 包含 MDict、DIDX、LD2 和文件哈希
+的 N-API 绑定；`node` feature 启用绑定，默认 Rust 库和 CLI 构建不依赖 Node 运行时。
+启用 `node` feature 需要 Rust 1.88 或更高版本。
+
+```bash
+npm --prefix native/mdict run build
+npm run native:test
+# 纯 Rust CLI
+cargo run --manifest-path native/mdict/Cargo.toml -- --help
+```
+
+Node 包从 `wrapper.js` 加载当前平台的预构建文件，类型声明为 `index.d.ts`，
+renderer 通过主进程 IPC 使用词典能力。
+
 ## Rust API
 
 打开 MDX 并查词：

@@ -14,18 +14,10 @@ import {
   setSelectionPanelBounds,
   showSelectionPanel,
   showSelectionPanelDisableMenu
-} from '@dictol/mdict-native'
+} from '@dictol/macos-native'
 
 export type SelectionPanelId = 'toolbar'
-type NativePanelEvent =
-  | 'show'
-  | 'hide'
-  | 'resize'
-  | 'resize-end'
-  | 'move'
-  | 'focus'
-  | 'blur'
-  | 'disable-selection'
+type NativePanelEvent = 'show' | 'hide' | 'resize' | 'resize-end' | 'move' | 'focus' | 'blur'
 
 const PANEL_IDS: Record<SelectionPanelId, number> = { toolbar: 0 }
 
@@ -50,6 +42,7 @@ export class NativeSelectionPanel extends EventEmitter {
       options.movable,
       (error: Error | null, event: string) => {
         if (error || !isNativePanelEvent(event)) return
+        // Native geometry events go back to the hidden owner only.
         if (event === 'move' || event === 'resize-end') this.syncHostFrame()
         this.emit(event)
       }
@@ -135,10 +128,8 @@ export class NativeSelectionPanel extends EventEmitter {
     if (!this.isDestroyed()) hideSelectionPanel(PANEL_IDS[this.panelId])
   }
 
-  showDisableSelectionMenu(enabled: boolean): void {
-    if (!this.isDestroyed()) {
-      showSelectionPanelDisableMenu(PANEL_IDS[this.panelId], enabled)
-    }
+  showDisableSelectionMenu(enabled: boolean): boolean {
+    return !this.isDestroyed() && showSelectionPanelDisableMenu(PANEL_IDS[this.panelId], enabled)
   }
 
   setOpacity(opacity: number): void {
@@ -182,7 +173,6 @@ function isNativePanelEvent(value: string): value is NativePanelEvent {
     value === 'resize-end' ||
     value === 'move' ||
     value === 'focus' ||
-    value === 'blur' ||
-    value === 'disable-selection'
+    value === 'blur'
   )
 }

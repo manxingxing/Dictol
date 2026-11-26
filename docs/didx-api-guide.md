@@ -333,5 +333,5 @@ try {
 - [真实 API 与词形库集成测试](../scripts/didx-search-integration.test.ts)
 - [多词典查询服务测试](../scripts/didx-query-service.test.ts)
 - [导入和重建测试](../scripts/didx-import-service.test.ts)
-- [原生类型声明](../native/mdict-node/index.d.ts)（由构建生成，不手工修改）
+- [原生类型声明](../native/mdict/index.d.ts)（由构建生成，不手工修改）
 - [当前 DIDX v3 设计、文件布局与性能记录](./didx-v3.md)

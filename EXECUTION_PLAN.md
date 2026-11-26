@@ -360,7 +360,7 @@ Mozilla/5.0 (Macintosh) Dictol/1.0
 
 ## 9. Rust 解析器实现
 
-正式解析器为项目内的 `native/mdict`，Node 绑定位于 `native/mdict-node`。`js-mdict` 和 Python 工具仅作为行为对照与探索工具，不进入应用运行链路。
+正式解析器为项目内的 `native/mdict`，Node 绑定位于 `native/mdict`。`js-mdict` 和 Python 工具仅作为行为对照与探索工具，不进入应用运行链路。
 
 当前能力：
 

@@ -33,7 +33,17 @@ if (!output) throw new Error(`No mdict prebuild layout configured for Rust targe
 
 const napi = join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'napi.cmd' : 'napi')
 if (!existsSync(napi)) throw new Error(`Missing local NAPI-RS CLI: ${napi}`)
-const commandArgs = ['build', '--platform', ...(debug ? [] : ['--release']), ...napiArgs]
+const commandArgs = [
+  'build',
+  '--platform',
+  '--no-js',
+  '--features',
+  'node',
+  ...(debug ? [] : ['--release']),
+  ...napiArgs,
+  '--',
+  '--lib'
+]
 const buildEnv = { ...process.env }
 if (rustTarget.endsWith('-apple-darwin')) {
   buildEnv.MACOSX_DEPLOYMENT_TARGET ??= '13.0'

@@ -299,7 +299,6 @@ async function main() {
       [
         'src/main/didx-query-service.ts',
         ...sourceFiles('native/mdict/src'),
-        ...sourceFiles('native/mdict-node/src'),
         ...sourceFiles('tests/native/didx-query-benchmark/src'),
         'tests/native/didx-query-benchmark/run.cjs',
         'tests/native/didx-query-benchmark/harness.cjs',

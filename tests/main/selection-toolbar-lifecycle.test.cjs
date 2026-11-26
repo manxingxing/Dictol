@@ -44,6 +44,7 @@ async function setup(platform) {
     return () => subscriptions.delete(subscription)
   }
   const windows = []
+  class TestNativeSelectionPanel extends EventEmitter {}
   const runtime = {
     mainWindow: { isDestroyed: () => false, webContents: { id: 1 } },
     appConfig: {
@@ -64,7 +65,7 @@ async function setup(platform) {
     windowManager: {
       createSelectionToolbarWindow() {
         if (this.selectionToolbarWindow) return this.selectionToolbarWindow
-        const window = new EventEmitter()
+        const window = platform === 'darwin' ? new TestNativeSelectionPanel() : new EventEmitter()
         const webContents = new EventEmitter()
         Object.assign(webContents, {
           id: 10 + windows.length,
@@ -116,7 +117,7 @@ async function setup(platform) {
   })
   const { SelectionToolbarController } = await loadController('selection-toolbar.ts', platform, {
     electron: { BrowserWindow: { getFocusedWindow: () => undefined } },
-    '../native-selection-panel': { NativeSelectionPanel: class {} },
+    '../native-selection-panel': { NativeSelectionPanel: TestNativeSelectionPanel },
     '../output-path': { resolveRendererUrl: (name) => name },
     '../../shared/selection-toolbar': {
       getSelectionToolbarWindowSize: () => ({ width: 300, height: 44 })
@@ -198,6 +199,36 @@ test('toggling before first use never creates a toolbar window', async () => {
   assert.equal(toggle(true).ok, true)
   assert.equal(windows.length, 0)
 })
+
+for (const selected of [true, false]) {
+  test(`macOS native menu ${selected ? 'applies a selection' : 'dismisses'} after tracking ends`, async () => {
+    const { runtime, toolbar, windows, toggle, select, show } = await setup('darwin')
+    const calls = []
+    runtime.appConfig.addExcludedProgram = (program) => calls.push(program)
+    runtime.restartInputServices = () => calls.push('restart')
+    try {
+      select()
+      const window = windows[0]
+      show(window)
+      window.on('hide', () => calls.push('hide'))
+      window.showDisableSelectionMenu = (enabled) => {
+        assert.equal(enabled, true)
+        // A selection arriving during tracking must not change the menu's target.
+        toolbar.currentCapture = { selection: { programName: 'Different app' } }
+        calls.push('menu closed')
+        return selected
+      }
+      toolbar.openNativeMenu({ sender: window.webContents })
+      assert.deepEqual(
+        calls,
+        selected ? ['menu closed', 'Test', 'restart', 'hide'] : ['menu closed', 'hide']
+      )
+      assert.equal(toolbar.nativeMenuOpen, false)
+    } finally {
+      toggle(false)
+    }
+  })
+}
 
 test('failed setting update preserves the existing toolbar and restores the setting', async () => {
   const { runtime, toolbar, toggle, select, windows } = await setup('win32')

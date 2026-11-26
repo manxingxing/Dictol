@@ -10,12 +10,18 @@ repository = "https://github.com/manxingxing/Dictol"
 [lib]
 name = "mdict"
 path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
 
 [[bin]]
 name = "mdict"
 path = "src/main.rs"
 
+[features]
+node = ["dep:napi", "dep:napi-derive", "dep:napi-build"]
+
 [dependencies]
+napi = { version = "3", features = ["napi8"], optional = true }
+napi-derive = { version = "3", optional = true }
 adler2 = "2"
 bzip2 = "0.6"
 clap = { version = "4", features = ["derive"] }
@@ -33,8 +39,11 @@ thiserror = "2"
 unicode-casefold = "0.2.0"
 unicode-general-category = "1.1.0"
 unicode-normalization = "0.1.25"
-xxhash-rust = { version = "0.8", features = ["xxh64"] }
+xxhash-rust = { version = "0.8", features = ["xxh64", "xxh3"] }
 zeroize = { version = "1", features = ["derive"] }
+
+[build-dependencies]
+napi-build = { version = "2", optional = true }
 
 [dev-dependencies]
 sha2 = "0.10"

@@ -171,7 +171,11 @@ function pruneAndVerifyNativeModules(appPath, arch) {
       `sharp-darwin-${arch}-${sharpVersion}.node`
     )
   ]
+  expected.push(
+    join(unpacked, '@dictol', 'macos-native', 'prebuilds', `darwin-${arch}`, 'macos.node')
+  )
   const opposite = [
+    join(unpacked, '@dictol', 'macos-native', 'prebuilds', `darwin-${otherArch}`, 'macos.node'),
     join(
       unpacked,
       '@dictol',
@@ -245,6 +249,21 @@ function pruneAndVerifyNativeModules(appPath, arch) {
     throw new Error(
       `Packaged macOS screen capture binding is missing exports: ${missingCaptureExports.join(', ')}`
     )
+  }
+
+  const panelBinary = readFileSync(
+    join(unpacked, '@dictol', 'macos-native', 'prebuilds', `darwin-${arch}`, 'macos.node')
+  )
+  for (const name of [
+    'createSelectionPanel',
+    'configureElectronPanel',
+    'destroySelectionPanel',
+    'setSelectionPanelBounds'
+  ]) {
+    if (!panelBinary.includes(Buffer.from(name)))
+      throw new Error(`Packaged macOS addon is missing ${name}`)
+    if (readFileSync(expected[0]).includes(Buffer.from(name)))
+      throw new Error(`MDict addon still exports ${name}`)
   }
 
   console.log(`  • verified macOS native modules arch=${arch} count=${expected.length}`)

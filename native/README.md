@@ -1,23 +1,21 @@
 # Native projects
 
-Native code is split by responsibility, with platform implementations inside each
-functional project:
+- `mdict/` contains the Rust dictionary and DIDX core, CLI, and the
+  `@dictol/mdict-native` Node package in one Cargo project. The `node` feature
+  enables `src/binding.rs`; Rust-only builds keep the default feature set.
+- `macos/` contains the macOS-only `@dictol/macos-native` panel addon.
+  Objective-C implements AppKit behavior and Objective-C++ exposes Node N-API.
+  Its loader defers binary loading until a panel function is called, so shared
+  window-management code can import the package on Windows.
+- `accessibility/` owns hover text lookup, with macOS Objective-C and Windows Rust implementations.
+- `ocr/` owns capture and OCR, with macOS Objective-C and Windows Rust implementations.
+- `system-translation/` retains the standalone Swift translation helper.
 
-- `mdict-node` owns dictionary readers and writers and produces its own Node N-API addon.
-- `accessibility` owns hover text lookup and produces its own Node N-API addon;
-  `macos/` contains the Objective-C/Objective-C++ addon, and `windows/` contains
-  the Windows UI Automation addon.
-- `ocr` owns native display and region capture and Apple Vision or
-  Windows Media OCR. Its macOS project uses Objective-C/Objective-C++ and its Windows
-  project uses Rust; each produces one Node N-API addon.
+Build current-platform addons with `node scripts/build-native.mjs` or an individual
+package with `npm --prefix native/mdict run build` / `npm --prefix native/macos run build`.
+Build both macOS architectures using `--target aarch64-apple-darwin` or
+`--target x86_64-apple-darwin`. macOS addons require the macOS toolchain.
 
-The application imports the native packages independently. Each build
-produces a platform-specific `.node` file, and each platform build compiles only
-its implementation. The application-facing TypeScript API stays in
-`src/main/accessibility` and `src/main/ocr`. The selection panel remains in
-`mdict-node`.
-
-Build native addons for the current platform with `node scripts/build-native.mjs`.
-Build an individual package with `npm --prefix native/accessibility run build`,
-`npm --prefix native/ocr run build`. The merged capture/OCR addon can
-also be cross-compiled for Windows with `cargo-xwin` and the Windows SDK.
+Run dictionary binding tests with `npm run native:test`; run the panel integration
+check on a macOS desktop with `node_modules/.bin/electron tests/native/macos/panel.cjs`.
+All test scripts live in `tests/`.

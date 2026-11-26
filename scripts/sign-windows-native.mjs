@@ -13,14 +13,7 @@ if (!certificatePassword) {
 }
 
 const files = [
-  join(
-    root,
-    'native',
-    'mdict-node',
-    'prebuilds',
-    'win32-x64',
-    'dictol-mdict-node.win32-x64-msvc.node'
-  ),
+  join(root, 'native', 'mdict', 'prebuilds', 'win32-x64', 'dictol-mdict-node.win32-x64-msvc.node'),
   join(root, 'native', 'ocr', 'prebuilds', 'win32-x64', 'ocr.node'),
   join(root, 'node_modules', 'adblock-rs', 'js', 'index.node'),
   join(root, 'node_modules', 'better-sqlite3', 'prebuilds', 'win32-x64.node'),

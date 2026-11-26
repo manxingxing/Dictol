@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use mdict::{
+use crate::{
     DidxBuildResult as CoreDidxBuildResult, DidxIndex as CoreDidxIndex, Entry, FileKind,
     IndexEntry, IndexSource, Key, KeyScanner, Limits, Mdd as CoreMdd, MddKey,
     MddList as CoreMddList, MddListEntryScanner as CoreMddListEntryScanner,
@@ -16,12 +16,10 @@ use napi::bindgen_prelude::{AsyncTask, BigInt, Buffer};
 use napi::{Env, Error, Result, Status, Task};
 use napi_derive::napi;
 
-mod macos_selection_panel;
-
 /// Lingoes LD2 reader; all I/O-heavy operations run in asynchronous native tasks.
 #[napi]
 pub struct Ld2 {
-    dictionary: CloseableDictionary<mdict::Ld2>,
+    dictionary: CloseableDictionary<crate::Ld2>,
 }
 
 #[napi]
@@ -74,10 +72,10 @@ pub struct OpenLd2Task {
     path: String,
 }
 impl Task for OpenLd2Task {
-    type Output = mdict::Ld2;
+    type Output = crate::Ld2;
     type JsValue = Ld2;
     fn compute(&mut self) -> Result<Self::Output> {
-        mdict::Ld2::open(&self.path).map_err(to_napi_error)
+        crate::Ld2::open(&self.path).map_err(to_napi_error)
     }
     fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
         Ok(Ld2 {
@@ -87,7 +85,7 @@ impl Task for OpenLd2Task {
 }
 
 pub struct BuildLd2IndexTask {
-    dictionary: Arc<mdict::Ld2>,
+    dictionary: Arc<crate::Ld2>,
     output_path: String,
 }
 impl Task for BuildLd2IndexTask {
@@ -105,14 +103,14 @@ impl Task for BuildLd2IndexTask {
 }
 
 pub struct OpenLd2IndexTask {
-    dictionary: Arc<mdict::Ld2>,
+    dictionary: Arc<crate::Ld2>,
     index_path: String,
 }
 impl Task for OpenLd2IndexTask {
     type Output = CoreDidxIndex;
     type JsValue = DidxIndex;
     fn compute(&mut self) -> Result<Self::Output> {
-        let fingerprint = mdict::Ld2IndexSource(&self.dictionary)
+        let fingerprint = crate::Ld2IndexSource(&self.dictionary)
             .fingerprint()
             .map_err(to_napi_error)?;
         CoreDidxIndex::open_for_source(&self.index_path, fingerprint).map_err(to_napi_error)
@@ -125,7 +123,7 @@ impl Task for OpenLd2IndexTask {
 }
 
 pub struct ReadLd2RecordTask {
-    dictionary: Arc<mdict::Ld2>,
+    dictionary: Arc<crate::Ld2>,
     locator: Vec<u8>,
 }
 impl Task for ReadLd2RecordTask {
@@ -327,8 +325,8 @@ pub struct DidxBuildResult {
     pub normalization_version: u32,
 }
 
-impl From<mdict::IndexMatch> for DidxMatch {
-    fn from(value: mdict::IndexMatch) -> Self {
+impl From<crate::IndexMatch> for DidxMatch {
+    fn from(value: crate::IndexMatch) -> Self {
         Self {
             key_text: value.key_text,
             normalized_key: value.normalized_key,
@@ -1073,11 +1071,11 @@ struct VectorIndexSource {
 }
 
 impl IndexSource for VectorIndexSource {
-    fn fingerprint(&self) -> mdict::Result<u64> {
+    fn fingerprint(&self) -> crate::Result<u64> {
         Ok(self.fingerprint)
     }
 
-    fn entries(&self) -> mdict::Result<Box<dyn Iterator<Item = mdict::Result<IndexEntry>> + '_>> {
+    fn entries(&self) -> crate::Result<Box<dyn Iterator<Item = crate::Result<IndexEntry>> + '_>> {
         Ok(Box::new(self.entries.iter().cloned().map(Ok)))
     }
 }
@@ -1143,7 +1141,7 @@ pub struct QueryDidxTask {
 }
 
 impl Task for QueryDidxTask {
-    type Output = Vec<mdict::IndexMatch>;
+    type Output = Vec<crate::IndexMatch>;
     type JsValue = Vec<DidxMatch>;
 
     fn compute(&mut self) -> Result<Self::Output> {
@@ -1622,7 +1620,7 @@ impl Task for PrefixMdxTask {
             .prefix(&self.prefix)
             .map_err(to_napi_error)?
             .take(self.limit.unwrap_or(usize::MAX))
-            .collect::<mdict::Result<Vec<_>>>()
+            .collect::<crate::Result<Vec<_>>>()
             .map_err(to_napi_error)
     }
 
@@ -1720,7 +1718,7 @@ impl Task for PrefixMddTask {
         self.dictionary
             .prefix(&self.prefix)
             .map_err(to_napi_error)?
-            .collect::<mdict::Result<Vec<_>>>()
+            .collect::<crate::Result<Vec<_>>>()
             .map_err(to_napi_error)
     }
 
@@ -1781,7 +1779,7 @@ impl Task for PrefixMddListTask {
         self.dictionary
             .prefix(&self.prefix)
             .map_err(to_napi_error)?
-            .collect::<mdict::Result<Vec<_>>>()
+            .collect::<crate::Result<Vec<_>>>()
             .map_err(to_napi_error)
     }
 
@@ -1868,7 +1866,7 @@ fn metadata_from_mdict(dictionary: &Mdict) -> DictionaryMetadata {
 
 fn metadata_view(
     path: String,
-    metadata: &mdict::Metadata,
+    metadata: &crate::Metadata,
     encryption_flags: u8,
     record_size: u64,
 ) -> DictionaryMetadata {
@@ -2016,6 +2014,6 @@ fn bigint_to_u64(value: BigInt, label: &str) -> Result<u64> {
     }
 }
 
-fn to_napi_error(error: mdict::Error) -> Error {
+fn to_napi_error(error: crate::Error) -> Error {
     Error::from_reason(error.to_string())
 }

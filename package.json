@@ -30,7 +30,7 @@
     "native:sign:win-x64": "node scripts/sign-windows-native.mjs",
     "windows:sign-artifacts": "node scripts/sign-windows-artifacts.mjs",
     "win:signing:check": "node scripts/check-windows-signing.mjs",
-    "native:test": "npm --prefix native/mdict-node test",
+    "native:test": "npm --prefix native/mdict test",
     "db:generate": "drizzle-kit generate",
     "dictionary-note-fts:rebuild": "node scripts/rebuild-dictionary-note-fts.mjs",
     "ecdict:build": "node scripts/build-ecdict.mjs",
@@ -46,7 +46,8 @@
   },
   "dependencies": {
     "@dictol/accessibility-native": "file:native/accessibility",
-    "@dictol/mdict-native": "file:native/mdict-node",
+    "@dictol/macos-native": "file:native/macos",
+    "@dictol/mdict-native": "file:native/mdict",
     "@dictol/ocr-native": "file:native/ocr",
     "@electron-toolkit/utils": "^4.0.0",
     "@radix-ui/react-popover": "^1.1.23",

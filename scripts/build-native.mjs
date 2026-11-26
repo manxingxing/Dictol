@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
@@ -24,7 +25,7 @@ const verifyWindowsX64Binding = (directory) => {
     'dictol-mdict-node.win32-x64-msvc.node'
   )
   const binary = readFileSync(binaryPath)
-  const requiredExports = ['Mdx', 'Mdd', 'MddList', 'hashFile']
+  const requiredExports = ['Mdx', 'Mdd', 'MddList', 'DidxIndex', 'Ld2', 'hashFile']
   const missingExports = requiredExports.filter((name) => !binary.includes(Buffer.from(name)))
 
   if (missingExports.length > 0) {
@@ -33,11 +34,17 @@ const verifyWindowsX64Binding = (directory) => {
     )
   }
 
-  const ocrExports = ['recognizeMacText', 'recognizeWindowsText', 'chineseWordRange']
+  const ocrExports = [
+    'recognizeMacText',
+    'recognizeWindowsText',
+    'chineseWordRange',
+    'createSelectionPanel',
+    'configureElectronPanel'
+  ]
   const unexpectedExports = ocrExports.filter((name) => binary.includes(Buffer.from(name)))
   if (unexpectedExports.length > 0) {
     throw new Error(
-      `Windows MDict binding still contains OCR exports: ${unexpectedExports.join(', ')}`
+      `Windows MDict binding still contains platform exports: ${unexpectedExports.join(', ')}`
     )
   }
   const screenCaptureExports = [
@@ -57,15 +64,6 @@ const verifyWindowsX64Binding = (directory) => {
   if (unexpectedCaptureExports.length > 0) {
     throw new Error(
       `Windows mdict binding contains screen capture exports: ${unexpectedCaptureExports.join(', ')}`
-    )
-  }
-  const generatedJs = readFileSync(join(directory, 'index.js'), 'utf8')
-  const unexpectedJsExports = ocrExports.filter((name) =>
-    generatedJs.includes(`module.exports.${name} =`)
-  )
-  if (unexpectedJsExports.length > 0) {
-    throw new Error(
-      `Windows MDict JS binding still contains OCR exports: ${unexpectedJsExports.join(', ')}`
     )
   }
 
@@ -100,7 +98,7 @@ const prepareWindowsCrossCompileEnvironment = () => {
   }
 }
 
-const run = (directory, { includeAllPlatformTypes = false } = {}) => {
+const run = (directory) => {
   const target = getTarget()
   const args = ['--prefix', directory, 'run', 'build']
   const shouldCrossCompileWindows =
@@ -108,15 +106,6 @@ const run = (directory, { includeAllPlatformTypes = false } = {}) => {
   if (target) {
     args.push('--', '--target', target)
     if (shouldCrossCompileWindows) args.push('--cross-compile')
-  }
-  // Keep the shared declaration file complete for typechecking both platform
-  // implementations when building Windows from a macOS checkout.
-  if (
-    includeAllPlatformTypes &&
-    !(target?.includes('apple-darwin') ?? process.platform === 'darwin')
-  ) {
-    if (!target) args.push('--')
-    args.push('--dts', 'target/non-macos-index.d.ts')
   }
 
   const crossCompileEnvironment = shouldCrossCompileWindows
@@ -139,12 +128,12 @@ const run = (directory, { includeAllPlatformTypes = false } = {}) => {
     crossCompileEnvironment?.cleanup()
   }
 
-  if (directory.endsWith('mdict-node') && target === WINDOWS_X64_TARGET) {
+  if (directory.endsWith('mdict') && target === WINDOWS_X64_TARGET) {
     verifyWindowsX64Binding(directory)
   }
 }
 
-run('native/mdict-node', { includeAllPlatformTypes: true })
+run('native/mdict')
 const target = getTarget()
 if (target?.endsWith('-apple-darwin') || target?.endsWith('-pc-windows-msvc')) {
   const shouldCrossCompileWindows =
@@ -172,6 +161,16 @@ if (shouldBuildScreenCapture) {
   execFileSync(
     process.execPath,
     ['native/ocr/build.mjs', ...(target ? ['--target', target] : [])],
+    {
+      stdio: 'inherit'
+    }
+  )
+}
+
+if (target ? target.endsWith('-apple-darwin') : process.platform === 'darwin') {
+  execFileSync(
+    process.execPath,
+    ['native/macos/build.mjs', ...(target ? ['--target', target] : [])],
     {
       stdio: 'inherit'
     }

@@ -7,14 +7,13 @@
   "files": [
     "wrapper.js",
     "wrapper.d.ts",
-    "index.js",
     "index.d.ts",
     "prebuilds/**/*.node"
   ],
   "scripts": {
     "build": "node build.mjs",
     "build:debug": "node build.mjs --debug",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test ../../tests/native/mdict/*.test.mjs"
   },
   "napi": {
     "binaryName": "dictol-mdict-node",
