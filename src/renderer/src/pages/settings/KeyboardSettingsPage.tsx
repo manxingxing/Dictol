@@ -217,7 +217,7 @@ export function KeyboardSettingsPage(): React.JSX.Element {
               />
             </SettingsRow>
             <SettingsRow
-              label="AI 语境查词"
+              label="语境查词"
               description={
                 !captureStatus.ocrAiShortcut
                   ? '未设置快捷键'

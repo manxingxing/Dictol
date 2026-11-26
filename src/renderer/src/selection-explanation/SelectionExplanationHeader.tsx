@@ -6,6 +6,7 @@ import { SELECTION_EXPLANATION_HEADER_HEIGHT } from '../../../shared/selection-e
 
 type Props = {
   title: string
+  icon?: ReactNode
   subtitle?: string
   onSearch?: (word: string) => void
   pinned?: boolean
@@ -14,6 +15,7 @@ type Props = {
 
 export function SelectionExplanationHeader({
   title,
+  icon,
   subtitle,
   onSearch,
   pinned = false,
@@ -31,6 +33,7 @@ export function SelectionExplanationHeader({
       style={{ height: SELECTION_EXPLANATION_HEADER_HEIGHT }}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
+        {icon}
         {onSearch ? (
           <form
             key={title}

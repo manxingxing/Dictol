@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, LoaderCircle, Quote } from 'lucide-react'
+import { Check, LoaderCircle, Quote, ScanSearch } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import type { SelectionExplanationPayload } from '../../../shared/selection-explanation'
@@ -32,7 +32,11 @@ export function OcrAiExplanation({
 
   return (
     <>
-      <SelectionExplanationHeader title="AI 语境查词" pinned={payload.pinned}>
+      <SelectionExplanationHeader
+        title="语境查词"
+        icon={<ScanSearch aria-hidden="true" className="size-4 shrink-0" />}
+        pinned={payload.pinned}
+      >
         <PronunciationButton word={payload.word} />
         <Button
           aria-label={saveState === 'saved' ? '已保存到摘抄与笔记' : '保存到摘抄与笔记'}
