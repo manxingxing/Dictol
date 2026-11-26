@@ -9,9 +9,24 @@ import { useWindowWidthThreshold } from '@/hooks/use-window-width-threshold'
 import { useAppChrome } from '@/hooks/use-app-chrome'
 import { useMainWindowChrome } from '@/hooks/use-main-window-chrome'
 import { useAppStore } from '@/stores/app-store'
+import type { AppMenuAction } from '../../../shared/app-menu'
+
+const menuRoutes: Partial<Record<AppMenuAction, string>> = {
+  search: '/search',
+  translation: '/translation',
+  history: '/history',
+  wordbooks: '/wordbooks',
+  excerpts: '/excerpts',
+  'local-dictionaries': '/dictionaries/local',
+  'online-dictionaries': '/dictionaries/online',
+  'dictionary-groups': '/dictionaries/groups',
+  settings: '/settings',
+  about: '/settings/about'
+}
 
 export function AppLayout(): React.JSX.Element {
   const navigate = useNavigate()
+  const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const setSearchQuery = useAppStore((state) => state.setSearchQuery)
   const setDictionaryLayout = useAppStore((state) => state.setDictionaryLayout)
   const setDictionaryDisplay = useAppStore((state) => state.setDictionaryDisplay)
@@ -19,6 +34,19 @@ export function AppLayout(): React.JSX.Element {
   useWindowWidthThreshold()
   useAppChrome()
   useMainWindowChrome()
+
+  useEffect(
+    () =>
+      window.dictol.app.onMenuAction((action) => {
+        const route = menuRoutes[action]
+        if (route) void navigate(route)
+        else if (action === 'back') void navigate(-1)
+        else if (action === 'forward') void navigate(1)
+        else if (action === 'toggle-sidebar') useAppStore.getState().toggleSidebar()
+        else if (action === 'toggle-compact-mode') useAppStore.getState().toggleCompactMode()
+      }),
+    [navigate]
+  )
 
   useEffect(() => {
     let active = true
@@ -73,9 +101,9 @@ export function AppLayout(): React.JSX.Element {
         <WindowTitleBar />
 
         <div className="app-chrome-surface flex min-h-0 flex-1 flex-row overflow-hidden">
-          <Sidebar />
+          {sidebarOpen && <Sidebar />}
 
-          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto rounded-tl-lg border-t border-l bg-background">
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto rounded-t-lg border-t border-l bg-background">
             <Outlet />
           </main>
         </div>

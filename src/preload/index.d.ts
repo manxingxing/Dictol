@@ -14,6 +14,7 @@ import type {
   TtsVoice
 } from '../shared/tts'
 import type { MainWindowSearchRequest } from '../shared/search-request'
+import type { AppMenuAction } from '../shared/app-menu'
 import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
 import type { EmbedBrowserHistoryNavigationRequest } from '../shared/embed-browser'
@@ -436,6 +437,7 @@ declare global {
         clearViewCache: () => Promise<void>
         setTouchBarPage: (page: TouchBarPage) => void
         updateTouchBarState: (state: TouchBarState) => void
+        onMenuAction: (callback: (action: AppMenuAction) => void) => () => void
         onSearchRequest: (callback: (request: MainWindowSearchRequest) => void) => () => void
         onFocusSearch: (callback: () => void) => () => void
         onMainWindowFocusChanged: (callback: (isFocused: boolean) => void) => () => void

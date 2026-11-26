@@ -100,7 +100,6 @@ export class SearchPopoverController extends BaseController {
 
   private initializeView(): WebContentsViewManager {
     const popover = this.runtime.windowManager.createSearchPopoverView()
-    this.runtime.mainWindowShortcutRouter?.register(popover.webContents, 'search-popover')
     if (this.initialized && this.popoverWebContentsId === popover.webContents.id) return popover
 
     this.initialized = true

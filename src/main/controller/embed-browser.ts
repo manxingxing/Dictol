@@ -111,9 +111,6 @@ export class EmbedBrowserController extends BaseController {
     if (this.configuredViews.has(view.webContents)) return view
 
     this.configuredViews.add(view.webContents)
-    this.runtime.mainWindowShortcutRouter?.register(view.webContents, 'embed-browser', [
-      'focus-search'
-    ])
     this.runtime.adBlockService.attach(view.webContents.session)
     view.webContents.setWindowOpenHandler(({ url }) => {
       if (isHttpUrl(url)) {

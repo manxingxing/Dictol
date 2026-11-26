@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { AppMenuAction } from '../shared/app-menu'
 import type { OcrConfig } from '../shared/ocr-settings'
 import { createTtsPlayback, getSystemTtsVoices, onSystemTtsVoicesChanged } from './tts'
 import { getMainWindowChromeMaterial } from '../shared/window-chrome'
@@ -233,6 +234,13 @@ let pendingWordCaptureEvent: WordCaptureEvent | undefined
 
 const searchRequestSubscribers = new Set<(request: MainWindowSearchRequest) => void>()
 let pendingSearchRequest: MainWindowSearchRequest | undefined
+const menuActionSubscribers = new Set<(action: AppMenuAction) => void>()
+const pendingMenuActions: AppMenuAction[] = []
+
+ipcRenderer.on('app:menu-action', (_event, action: AppMenuAction) => {
+  if (menuActionSubscribers.size === 0) pendingMenuActions.push(action)
+  else menuActionSubscribers.forEach((subscriber) => subscriber(action))
+})
 
 ipcRenderer.on('word-capture:event', (_event, captureEvent: WordCaptureEvent) => {
   if (wordCaptureSubscribers.size === 0) {
@@ -462,6 +470,11 @@ const api = Object.freeze({
     setTouchBarPage: (page: TouchBarPage): void => ipcRenderer.send('app:touchbar-page', page),
     updateTouchBarState: (state: TouchBarState): void =>
       ipcRenderer.send('app:touchbar-state', state),
+    onMenuAction: (callback: (action: AppMenuAction) => void): (() => void) => {
+      menuActionSubscribers.add(callback)
+      pendingMenuActions.splice(0).forEach(callback)
+      return () => menuActionSubscribers.delete(callback)
+    },
     onSearchRequest: (callback: (request: MainWindowSearchRequest) => void): (() => void) => {
       searchRequestSubscribers.add(callback)
       if (pendingSearchRequest) {

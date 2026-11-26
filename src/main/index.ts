@@ -14,7 +14,7 @@ import {
   registerResourceProtocolHandlers,
   registerResourceSchemes
 } from './resource-protocol-handlers'
-import { MainWindowShortcutRouter } from './main-window-shortcut-router'
+import { installAppMenu } from './app-menu'
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 
@@ -88,8 +88,9 @@ function startPrimaryInstance(initialDeepLink: DeepLinkIntent | null): void {
         registerResourceProtocolHandlers(runtime)
         await runtime.initialize()
         registerIPCHandlers(runtime)
-        runtime.setMainWindowInitializer((mainWindow) => configureMainWindow(runtime, mainWindow))
-        configureMainWindow(runtime, requireMainWindow(runtime))
+        installAppMenu(runtime)
+        runtime.setMainWindowInitializer(configureMainWindow)
+        configureMainWindow(requireMainWindow(runtime))
         if (pendingWindowActivation) showAndFocusMainWindow()
         flushDeepLinks()
       } catch (error: unknown) {
@@ -138,21 +139,7 @@ function registerDeepLinkProtocol(): void {
   app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME)
 }
 
-function configureMainWindow(
-  runtime: ReturnType<typeof getAppRunTime>,
-  mainWindow: BrowserWindow
-): void {
-  const dictionaryView = runtime.activeDictionaryView
-  if (!dictionaryView) throw new Error('当前布局对应的 DictionaryView 尚未初始化')
-
-  runtime.mainWindowShortcutRouter?.dispose()
-  const shortcutRouter = new MainWindowShortcutRouter(runtime.windowManager, mainWindow)
-  runtime.mainWindowShortcutRouter = shortcutRouter
-  shortcutRouter.register(mainWindow.webContents, 'main')
-  shortcutRouter.register(
-    dictionaryView.webContents,
-    runtime.dictionaryLayout === 'single' ? 'dictionary' : 'aggregate-dictionary'
-  )
+function configureMainWindow(mainWindow: BrowserWindow): void {
   const showMainWindow = (): void => {
     if (!mainWindow.isDestroyed() && !mainWindow.isVisible()) mainWindow.show()
   }

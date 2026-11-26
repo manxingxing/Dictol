@@ -22,7 +22,6 @@ import { SelectionHookService } from './selection-hook-service'
 import { ShortcutRegister } from './shortcut-register'
 import { TrayManager } from './tray-manager'
 import { WindowManager } from './window-manager'
-import { MainWindowShortcutRouter } from './main-window-shortcut-router'
 import { AdBlockService } from './ad-block-service'
 import { DictionaryIndexManager } from './dictionary-index-manager'
 import { DictionarySearchScope } from './dictionary-search-scope'
@@ -65,7 +64,6 @@ export class AppRuntime {
     clipboardTranslation: new ClipboardTranslationAction(this)
   }
   trayManager: TrayManager = new TrayManager(this)
-  mainWindowShortcutRouter: MainWindowShortcutRouter | undefined
   adBlockService: AdBlockService = new AdBlockService()
   dictionaryLayout: DictionaryLayout = 'single'
   dictionarySearchScope: DictionarySearchScope = new DictionarySearchScope()
@@ -349,8 +347,6 @@ export class AppRuntime {
     if (this.disposed) return
     this.disposed = true
     this.shortcutRegister.unregisterAll()
-    this.mainWindowShortcutRouter?.dispose()
-    this.mainWindowShortcutRouter = undefined
     this.selectionHookService.dispose()
     this.ocrShortcutHandler = undefined
     this.actions.screenshotTranslation.dispose()

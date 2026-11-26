@@ -51,6 +51,8 @@ interface AppState {
   compactModeEnabled: boolean
   toggleCompactMode: () => void
   setCompactMode: (compactMode: boolean) => void
+  sidebarOpen: boolean
+  toggleSidebar: () => void
   rightSidebarOpen: boolean
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
@@ -102,6 +104,8 @@ export const useAppStore = create<AppState>()(
       compactModeEnabled: false,
       toggleCompactMode: () => set((state) => ({ compactModeEnabled: !state.compactModeEnabled })),
       setCompactMode: (compactModeEnabled) => set({ compactModeEnabled }),
+      sidebarOpen: true,
+      toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       rightSidebarOpen: false,
       toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),
       setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
@@ -340,7 +344,8 @@ export const useAppStore = create<AppState>()(
       name: APP_PREFERENCES_STORAGE_KEY,
       partialize: (state) => ({
         chromeTone: state.chromeTone,
-        compactModeEnabled: state.compactModeEnabled
+        compactModeEnabled: state.compactModeEnabled,
+        sidebarOpen: state.sidebarOpen
       }),
       merge: (persistedState, currentState) => ({
         ...currentState,

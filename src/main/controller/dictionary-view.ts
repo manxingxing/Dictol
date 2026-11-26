@@ -622,7 +622,6 @@ export class DictionaryViewController extends BaseController {
     }
 
     const findBar = this.runtime.windowManager.createFindBarView()
-    this.runtime.mainWindowShortcutRouter?.register(findBar.webContents, 'find-bar')
     const { x, y, width } = this.lastDictBounds
     findBar.setBounds({
       x: Math.max(0, x + width - 300),
