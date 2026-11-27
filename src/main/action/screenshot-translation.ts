@@ -130,39 +130,22 @@ export class ScreenshotTranslationAction {
 
   private async translateRegion(display: Display, region: Rectangle): Promise<void> {
     try {
-      console.info('[ScreenshotTranslation] Capture started', {
-        time: new Date().toISOString()
-      })
       // Let the window compositor remove the selection overlay before capturing.
       await new Promise((resolve) => setTimeout(resolve, 80))
-      const lexicon = this.runtime.builtInLexicon
-      const lookupRank = lexicon ? (word: string) => lexicon.lookup(word)?.frq ?? null : undefined
-      const recognized = await this.recognizePngRegion(display, region, lookupRank)
+      const recognized = await this.recognizePngRegion(display, region)
       const text = recognized.slice(0, TRANSLATION_MAX_TEXT_LENGTH)
-      console.info('[ScreenshotTranslation] OCR finished', {
-        time: new Date().toISOString(),
-        length: text.length
-      })
       if (!text) throw new Error('没有识别到文字')
       this.closeStatusWindow()
       this.runtime.actions.translation.showSelection(text, {
         x: region.x,
         y: region.y + region.height + 8
       })
-      console.info('[ScreenshotTranslation] Translation dispatched', {
-        time: new Date().toISOString()
-      })
     } catch (error) {
       this.notifyError(error, region)
     }
   }
 
-  private async recognizePngRegion(
-    display: Display,
-    region: Rectangle,
-    lookupRank?: (word: string) => number | null
-  ): Promise<string> {
-    const startedAt = performance.now()
+  private async recognizePngRegion(display: Display, region: Rectangle): Promise<string> {
     const windowsOcrConfig =
       process.platform === 'win32' ? this.runtime.appConfig.load().ocr : undefined
     const language = windowsOcrConfig ? windowsOcrLanguage(windowsOcrConfig) : undefined
@@ -171,15 +154,8 @@ export class ScreenshotTranslationAction {
       region,
       windowsCaptureEngine: windowsOcrConfig?.captureEngine
     })
-    console.info('[ScreenshotTranslation] Screenshot captured', {
-      source: 'screenshot-translation',
-      elapsedMs: Math.round(performance.now() - startedAt),
-      backend: image.backend,
-      size: image.pixelSize
-    })
     await this.showRecognitionProgress(region)
-    console.info('[ScreenshotTranslation] OCR started', { time: new Date().toISOString() })
-    return recognizeScreenshotText(image.data, lookupRank, language)
+    return recognizeScreenshotText(image.data, language)
   }
 
   private async showRecognitionProgress(region: Rectangle): Promise<void> {
@@ -187,8 +163,8 @@ export class ScreenshotTranslationAction {
       this.closeStatusWindow()
       this.statusWindow = this.createStatusWindow(region)
       await this.statusWindowReady
-    } catch (error) {
-      console.warn('[ScreenshotTranslation] Failed to show OCR progress', error)
+    } catch {
+      // Continue recognition if the progress window fails to open.
     }
   }
 
@@ -212,8 +188,7 @@ export class ScreenshotTranslationAction {
         setTimeout(() => {
           if (this.statusWindow === feedbackWindow) this.closeStatusWindow()
         }, 1000)
-      } catch (error) {
-        console.warn('[ScreenshotTranslation] Failed to update status window', error)
+      } catch {
         if (this.statusWindow === feedbackWindow) this.closeStatusWindow()
       }
     })
@@ -279,17 +254,12 @@ export class ScreenshotTranslationAction {
           window.showInactive()
         return true
       })
-      .catch((error) => {
-        if (!window.isDestroyed())
-          console.warn('[ScreenshotTranslation] Status window failed', error)
-        return false
-      })
+      .catch(() => false)
     return window
   }
 
   private notifyError(error: unknown, region?: Rectangle): void {
     const message = error instanceof Error ? error.message : '截图翻译失败。'
-    console.error('[ScreenshotTranslation]', message, error)
     if (region) {
       this.showStatusMessage(region, message)
       return

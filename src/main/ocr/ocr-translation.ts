@@ -88,43 +88,6 @@ function textSeparator(left: string, right: string): string {
     : ' '
 }
 
-/** Repair obvious missing spaces in long English OCR runs using the bundled lexicon. */
-export function repairMergedEnglishWords(
-  text: string,
-  lookupRank: (word: string) => number | null
-): string {
-  const cache = new Map<string, number | null>()
-  const rank = (word: string): number | null => {
-    if (!cache.has(word)) cache.set(word, lookupRank(word))
-    return cache.get(word) ?? null
-  }
-  return text.replace(/\b[a-z]{13,40}\b/gu, (word) => {
-    if (rank(word) !== null) return word
-    let best: { parts: string[]; score: number } | undefined
-    const consider = (parts: string[]): void => {
-      const limit = parts.length === 2 ? 1_000 : 5_000
-      const ranks: number[] = []
-      for (const part of parts) {
-        const value = rank(part)
-        if (value === null || value < 1 || value > limit) return
-        ranks.push(value)
-      }
-      const score =
-        ranks.reduce((sum, value) => sum + Math.log(value + 1), 0) + (parts.length - 1) * 2
-      if (!best || score < best.score) best = { parts, score }
-    }
-    for (let first = 3; first <= word.length - 3; first++) {
-      const head = word.slice(0, first)
-      if (rank(head) === null) continue
-      consider([head, word.slice(first)])
-      for (let second = first + 3; second <= word.length - 3; second++) {
-        consider([head, word.slice(first, second), word.slice(second)])
-      }
-    }
-    return best?.parts.join(' ') ?? word
-  })
-}
-
 function joinLines(
   lines: Array<{
     text: string
