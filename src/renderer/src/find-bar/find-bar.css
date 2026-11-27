@@ -21,7 +21,6 @@ body {
   background: rgb(255 255 255 / 96%);
   border: 1px solid rgb(20 24 21 / 12%);
   border-top: 0;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
 }
@@ -97,7 +96,6 @@ body {
   .find-bar-shell {
     background: rgb(38 41 38 / 96%);
     border-color: rgb(255 255 255 / 10%);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
   }
 
   .find-bar-shell input {
