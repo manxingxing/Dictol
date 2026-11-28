@@ -23,6 +23,7 @@ struct Work {
     uint32_t identifier = 0;
     CGRect region = CGRectZero;
     std::string languages;
+    OcrRecognitionMode recognition_mode = OcrRecognitionAccurate;
     NSData *png;
     NSArray *items;
     CGImageRef image = nullptr;
@@ -94,6 +95,16 @@ static bool read_languages(napi_env env, Work *work, napi_value languages) {
         if (i) work->languages += ',';
         work->languages += language;
     }
+    return true;
+}
+
+static bool read_recognition_mode(napi_env env, Work *work, napi_value value) {
+    napi_valuetype type;
+    if (!value || (napi_typeof(env, value, &type) == napi_ok && type == napi_undefined)) return true;
+    std::string mode;
+    if (!read_string(env, value, mode) || (mode != "fast" && mode != "accurate"))
+        return invalid(env, "OCR recognition mode must be fast or accurate");
+    work->recognition_mode = mode == "fast" ? OcrRecognitionFast : OcrRecognitionAccurate;
     return true;
 }
 
@@ -173,7 +184,7 @@ static void finish_ocr(Work *work, int success, uint8_t *bytes, size_t length) {
 static void execute_png_ocr(Work *work) {
     uint8_t *bytes = nullptr; size_t length = 0;
     int success = recognize_png((const uint8_t *)work->png.bytes, work->png.length,
-        work->languages.c_str(), &bytes, &length);
+        work->languages.c_str(), work->recognition_mode, &bytes, &length);
     finish_ocr(work, success, bytes, length);
 }
 
@@ -209,7 +220,7 @@ static void execute_image_ocr(Work *work) {
     CGImageRef input = work->has_crop ? CGImageCreateWithImageInRect(work->image, work->region) : CGImageRetain(work->image);
     if (!input) { work->error = "Could not crop OCR image"; return; }
     uint8_t *bytes = nullptr; size_t length = 0;
-    int success = recognize_image(input, work->languages.c_str(), &bytes, &length);
+    int success = recognize_image(input, work->languages.c_str(), work->recognition_mode, &bytes, &length);
     CGImageRelease(input);
     finish_ocr(work, success, bytes, length);
 }
@@ -226,7 +237,7 @@ static void execute_region_ocr(Work *work) {
     work->width = CGImageGetWidth(work->image);
     work->height = CGImageGetHeight(work->image);
     uint8_t *bytes = nullptr; size_t length = 0;
-    int success = recognize_image(work->image, work->languages.c_str(), &bytes, &length);
+    int success = recognize_image(work->image, work->languages.c_str(), work->recognition_mode, &bytes, &length);
     finish_ocr(work, success, bytes, length);
 }
 
@@ -333,7 +344,7 @@ static napi_value queue_work(napi_env env, Work *work) {
 
 static napi_value recognize_handle(napi_env env, napi_callback_info info) {
     @autoreleasepool {
-    napi_value args[2] = {}, self; size_t argc = 2;
+    napi_value args[3] = {}, self; size_t argc = 3;
     napi_get_cb_info(env, info, &argc, args, &self, nullptr);
     auto *owner = image_owner(env, self);
     if (!owner) return nullptr;
@@ -363,7 +374,8 @@ static napi_value recognize_handle(napi_env env, napi_callback_info info) {
         }
         work->has_crop = true;
     }
-    if (!read_languages(env, work.get(), args[1])) return nullptr;
+    if (!read_languages(env, work.get(), args[1]) ||
+        !read_recognition_mode(env, work.get(), args[2])) return nullptr;
     return queue_work(env, work.release());
     }
 }
@@ -371,7 +383,7 @@ static napi_value recognize_handle(napi_env env, napi_callback_info info) {
 // 共用的 Node 入口：由注册时的回调数据选择操作，校验成功后才创建异步任务。
 static napi_value invoke(napi_env env, napi_callback_info info) {
     @autoreleasepool {
-    napi_value args[6] = {}; size_t argc = 6; void *operation;
+    napi_value args[7] = {}; size_t argc = 7; void *operation;
     napi_get_cb_info(env, info, &argc, args, nullptr, &operation);
     const auto *binding = static_cast<const OperationBinding *>(operation);
     auto *work = new Work{};
@@ -385,7 +397,8 @@ static napi_value invoke(napi_env env, napi_callback_info info) {
         else work->identifier = (uint32_t)identifier;
         if (valid && (work->operation == Region || work->operation == RegionOcr || work->operation == RegionImage) && !read_rect(env, args + 1, work->region))
             valid = invalid(env, "Invalid screen region");
-        if (valid && work->operation == RegionOcr) valid = read_languages(env, work, args[5]);
+        if (valid && work->operation == RegionOcr)
+            valid = read_languages(env, work, args[5]) && read_recognition_mode(env, work, args[6]);
     } else if (work->operation == PngOcr) {
         // 校验后复制输入，避免异步识别期间 JS 修改 Buffer 导致数据变化。
         bool buffer = false; void *bytes; size_t length;
@@ -393,7 +406,7 @@ static napi_value invoke(napi_env env, napi_callback_info info) {
             napi_get_buffer_info(env, args[0], &bytes, &length) != napi_ok || !length)
             valid = invalid(env, "OCR screenshot must be a nonempty Buffer");
         else work->png = [NSData dataWithBytes:bytes length:length];
-        if (valid) valid = read_languages(env, work, args[1]);
+        if (valid) valid = read_languages(env, work, args[1]) && read_recognition_mode(env, work, args[2]);
     }
     if (!valid) { delete work; return nullptr; }
     return queue_work(env, work);

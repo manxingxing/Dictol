@@ -121,26 +121,43 @@ for (const platform of ['win32', 'darwin']) {
     writeFileSync(configPath, JSON.stringify({ themeMode: 'dark' }))
     try {
       const store = new AppConfigStore(configPath)
-      assert.deepEqual(store.load().ocr, {
-        engine: 'system',
-        language: 'system',
-        captureEngine: 'gdi'
-      })
       new OcrController({ appConfig: store, mainWindow: { webContents: { id: 1 } } }).mount()
+      const sender = { sender: { id: 1 } }
+      const get = handlers.get('ocr:get-config')
+      const save = handlers.get('ocr:save-config')
       if (platform === 'darwin') {
-        assert.equal(handlers.size, 0)
+        const defaults = { engine: 'system', recognitionMode: 'accurate' }
+        assert.deepEqual(get(sender), defaults)
         writeFileSync(
           configPath,
           JSON.stringify({ themeMode: 'dark', ocr: { language: 'invalid', captureEngine: 'wgc' } })
         )
-        assert.deepEqual(store.load().ocr, {
-          engine: 'system',
-          language: 'system',
-          captureEngine: 'gdi'
-        })
-        assert.equal(store.load().themeMode, 'dark')
+        assert.deepEqual(get(sender), defaults)
+        for (const recognitionMode of ['fast', 'accurate']) {
+          const config = { engine: 'system', recognitionMode }
+          assert.deepEqual(save(sender, config), config)
+          assert.deepEqual(new AppConfigStore(configPath).load().ocr, config)
+          assert.deepEqual(get(sender), config)
+          assert.equal(store.load().themeMode, 'dark')
+        }
+        const before = readFileSync(configPath, 'utf8')
+        for (const invalid of [
+          null,
+          { engine: 'system', recognitionMode: 'auto' },
+          { engine: 'system', language: 'en-US', captureEngine: 'gdi' },
+          { engine: 'unknown', recognitionMode: 'fast' }
+        ]) {
+          assert.throws(() => save(sender, invalid), /OCR/)
+        }
+        assert.equal(save({ sender: { id: 2 } }, defaults), null)
+        assert.equal(readFileSync(configPath, 'utf8'), before)
         return
       }
+      assert.deepEqual(get(sender), {
+        engine: 'system',
+        language: 'system',
+        captureEngine: 'gdi'
+      })
       writeFileSync(configPath, JSON.stringify({ themeMode: 'dark', ocr: { language: 'en-US' } }))
       assert.deepEqual(store.load().ocr, {
         engine: 'system',
@@ -153,8 +170,6 @@ for (const platform of ['win32', 'darwin']) {
         language: 'en-US',
         captureEngine: 'gdi'
       })
-      const sender = { sender: { id: 1 } }
-      const save = handlers.get('ocr:save-config')
       for (const language of ['system', 'zh-CN', 'en-US', 'ja-JP', 'ko-KR', 'fr-FR', 'de-DE']) {
         assert.deepEqual(save(sender, { engine: 'system', language, captureEngine: 'gdi' }), {
           engine: 'system',

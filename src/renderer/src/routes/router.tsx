@@ -70,15 +70,7 @@ export const router = createHashRouter([
           { index: true, element: <Navigate to="appearance" replace /> },
           { path: 'appearance', element: <AppearanceSettingsPage /> },
           { path: 'capture', element: <WordCaptureSettingsPage /> },
-          {
-            path: 'ocr',
-            element:
-              window.dictol.platform === 'win32' ? (
-                <OcrSettingsPage />
-              ) : (
-                <Navigate to="/settings/appearance" replace />
-              )
-          },
+          { path: 'ocr', element: <OcrSettingsPage /> },
           { path: 'translation', element: <TranslationSettingsPage /> },
           { path: 'ai', element: <AiLookupSettingsPage /> },
           { path: 'tts', element: <TtsSettingsPage /> },

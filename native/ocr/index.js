@@ -62,24 +62,34 @@ if (!['darwin', 'win32'].includes(process.platform)) {
   const wrapMacImage = (image) => ({
     width: image.width,
     height: image.height,
-    recognize: async (region, languages) => parseMacOcr(await image.recognize(region, languages)),
+    recognize: async (region, languages, recognitionMode) =>
+      parseMacOcr(await image.recognize(region, languages, recognitionMode)),
     dispose: () => image.dispose()
   })
   const macOcr =
     process.platform === 'darwin'
       ? {
-          recognizeMacText: async (png, languages) =>
-            parseMacOcr(await addon.recognizeMacPng(png, languages)),
+          recognizeMacText: async (png, languages, recognitionMode) =>
+            parseMacOcr(await addon.recognizeMacPng(png, languages, recognitionMode)),
           captureMacOcrImage: async (...args) =>
             wrapMacImage(await addon.captureMacOcrImage(...args)),
-          captureAndRecognizeMacText: async (displayId, x, y, width, height, languages) => {
+          captureAndRecognizeMacText: async (
+            displayId,
+            x,
+            y,
+            width,
+            height,
+            languages,
+            recognitionMode
+          ) => {
             const output = await addon.captureAndRecognizeMacText(
               displayId,
               x,
               y,
               width,
               height,
-              languages
+              languages,
+              recognitionMode
             )
             return { ...parseMacOcr(output.json), width: output.width, height: output.height }
           }

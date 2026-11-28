@@ -44,28 +44,27 @@ async function loadScreenshotOcr(platform, calls) {
 }
 
 for (const platform of ['win32', 'darwin']) {
-  test(platform + ' screenshot OCR applies language only on Windows', async () => {
+  test(platform + ' screenshot OCR forwards the platform-specific settings', async () => {
     const calls = []
     const recognize = await loadScreenshotOcr(platform, calls)
     const png = Buffer.from('test image')
     try {
-      for (const language of [undefined, 'zh-CN', 'en-US', 'ja-JP', 'ko-KR', 'fr-FR', 'de-DE']) {
-        await recognize(png, language)
-        const [received, selected] = calls.at(-1)
-        assert.strictEqual(received, png)
-        if (platform === 'win32') assert.equal(selected, language)
-        else
-          assert.deepEqual(selected, [
-            'en-US',
-            'zh-Hans',
-            'zh-Hant',
-            'ja-JP',
-            'fr-FR',
-            'ko-KR',
-            'de-DE'
-          ])
+      if (platform === 'win32') {
+        for (const language of ['system', 'zh-CN', 'en-US', 'ja-JP', 'ko-KR', 'fr-FR', 'de-DE']) {
+          await recognize(png, { engine: 'system', language, captureEngine: 'gdi' })
+          assert.deepEqual(calls.at(-1), [png, language === 'system' ? undefined : language])
+        }
+      } else {
+        const accurate = [
+          png,
+          ['en-US', 'zh-Hans', 'zh-Hant', 'ja-JP', 'fr-FR', 'ko-KR', 'de-DE'],
+          'accurate'
+        ]
+        await recognize(png)
+        await recognize(png, { engine: 'system', recognitionMode: 'fast' })
+        await recognize(png, { engine: 'system', recognitionMode: 'accurate' })
+        assert.deepEqual(calls, [accurate, [png, ['en-US', 'fr-FR', 'de-DE'], 'fast'], accurate])
       }
-      assert.equal(calls.length, 7)
     } finally {
       delete globalThis.__screenshotOcrLanguageCalls
     }

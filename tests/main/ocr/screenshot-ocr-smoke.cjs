@@ -68,6 +68,19 @@ app
       if (!expected.test(text)) throw new Error(`系统 OCR 未识别预期文字 ${expected}：${text}`)
     }
     console.log(`System OCR: ${text}`)
+    if (process.platform === 'darwin') {
+      const fastText = await compiled.exports.recognizeScreenshotText(png, {
+        engine: 'system',
+        recognitionMode: 'fast'
+      })
+      if (
+        !/Hello\s+world/i.test(fastText) ||
+        /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(fastText)
+      ) {
+        throw new Error(`快速 OCR 语言结果不符预期：${fastText}`)
+      }
+      console.log(`Fast OCR: ${fastText}`)
+    }
     clearTimeout(timeout)
     rmSync(userData, { recursive: true, force: true })
     app.exit(0)

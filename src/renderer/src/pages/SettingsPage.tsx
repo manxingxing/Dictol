@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
 const settingsNavigation = [
   { label: '外观', path: 'appearance', icon: SunMoon },
   { label: '取词', path: 'capture', icon: MousePointer2 },
-  ...(window.dictol.platform === 'win32' ? [{ label: 'OCR', path: 'ocr', icon: ScanText }] : []),
+  { label: 'OCR', path: 'ocr', icon: ScanText },
   { label: '翻译', path: 'translation', icon: Languages },
   { label: 'AI 增强', path: 'ai', icon: Sparkles },
   { label: '朗读', path: 'tts', icon: Volume2 },

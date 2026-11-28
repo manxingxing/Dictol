@@ -12,7 +12,6 @@ const ocrConfigQueryKey = ['ocr', 'config'] as const
 export function useOcrConfig(): UseQueryResult<OcrConfig, Error> {
   return useQuery({
     queryKey: ocrConfigQueryKey,
-    enabled: window.dictol.platform === 'win32',
     queryFn: async () => {
       const config = await window.dictol.ocr.getConfig()
       if (!config) throw new Error('无法读取 OCR 设置。')

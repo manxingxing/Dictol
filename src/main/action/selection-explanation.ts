@@ -1,7 +1,6 @@
 import { BrowserWindow, clipboard, Menu, shell, type Point } from 'electron'
 import type { AppRuntime, OcrLookupMode } from '../app-runtime'
 import type { DBService, DictionaryMatch } from '../db-service'
-import { windowsOcrLanguage } from '../../shared/ocr-settings'
 import { captureTextUnderCursor } from '../ocr/ocr'
 import type { OcrCapture } from '../ocr/ocr-capture-types'
 import {
@@ -104,14 +103,10 @@ export class SelectionExplanationAction {
       this.runtime.windowManager.hideOcrHighlight()
       this.onCursorLookup?.()
       if (mode === 'ai') this.prewarmExplanationWindow()
-      const windowsOcrConfig =
-        process.platform === 'win32' ? this.runtime.appConfig.load().ocr : undefined
-      const language = windowsOcrConfig ? windowsOcrLanguage(windowsOcrConfig) : undefined
       const capture = await captureTextUnderCursor(
         mode,
         onCaptureReady,
-        language,
-        windowsOcrConfig?.captureEngine
+        this.runtime.appConfig.load().ocr
       )
       if (!isCurrent()) return
       this.setAnchor(capture ? createWordAnchor(capture.wordBounds) : anchor)

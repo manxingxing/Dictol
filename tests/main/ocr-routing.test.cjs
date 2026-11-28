@@ -56,7 +56,8 @@ function makeMocks(events, accessible = null) {
       }
     },
     './mac-ocr': {
-      captureTextUnderCursor: async (mode, ready) => {
+      captureTextUnderCursor: async (mode, ready, recognitionMode) => {
+        if (recognitionMode) events.push(`recognition:${recognitionMode}`)
         events.push(`vision:${mode}`)
         ready?.()
         return result('vision')
@@ -106,8 +107,13 @@ for (const [platform, expected] of [
         }
         const recognize = await loadOcr(platform, makeMocks(events, accessible))
         let ready = 0
-        assert.equal((await recognize(mode, () => ready++)).selection.word, expected)
-        assert.deepEqual(events, [`${expected}:${mode}`])
+        const config =
+          platform === 'darwin' ? { engine: 'system', recognitionMode: 'fast' } : undefined
+        assert.equal((await recognize(mode, () => ready++, config)).selection.word, expected)
+        assert.deepEqual(
+          events,
+          platform === 'darwin' ? ['recognition:fast', `vision:${mode}`] : [`${expected}:${mode}`]
+        )
         assert.equal(ready, 1)
       }))
   }

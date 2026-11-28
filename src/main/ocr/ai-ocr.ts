@@ -2,19 +2,21 @@ import type { Display, Point } from 'electron'
 import { contextTouchesCropEdge } from './ocr-crop'
 import { captureOcrRegion, type OcrFrame, type OcrSnapshot } from './ocr-screen-capture'
 import type { OcrTextHit } from './ocr-text'
-import type { CaptureEngine } from '../../shared/ocr-settings'
+import type { CaptureEngine, OcrRecognitionMode } from '../../shared/ocr-settings'
 
 /** Both platforms retain the same native image for both OCR passes. */
 export async function captureAiOcrRegion(
   display: Display,
   pointer: Point,
-  windowsCaptureEngine?: CaptureEngine
+  windowsCaptureEngine?: CaptureEngine,
+  macRecognitionMode?: OcrRecognitionMode
 ): Promise<OcrSnapshot> {
   return captureOcrRegion(
     display,
     pointer,
     { width: display.bounds.width, height: 600 },
-    windowsCaptureEngine
+    windowsCaptureEngine,
+    macRecognitionMode
   )
 }
 

@@ -14,6 +14,10 @@ for (const mode of ['dictionary', 'ai']) {
     )
     const output = await esbuild.transform(source, { loader: 'ts', format: 'cjs' })
     const wordBounds = { x: 100, y: 200, width: 80, height: 20 }
+    const ocrConfig =
+      process.platform === 'darwin'
+        ? { engine: 'system', recognitionMode: 'fast' }
+        : { engine: 'system', language: 'ja-JP', captureEngine: 'wgc' }
     const calls = []
     const explanation = {
       prepareForOcrCapture: () => 1,
@@ -33,13 +37,10 @@ for (const mode of ['dictionary', 'ai']) {
           createCursorAnchor: () => ({ cursor: true }),
           createWordAnchor: (bounds) => ({ wordBounds: bounds })
         }
-      if (id === '../../shared/ocr-settings')
-        return { windowsOcrLanguage: (config) => config.language }
       if (id === '../ocr/ocr')
         return {
-          captureTextUnderCursor: async (_mode, ready, language, engine) => {
-            assert.equal(engine, process.platform === 'win32' ? 'wgc' : undefined)
-            assert.equal(language, process.platform === 'win32' ? 'ja-JP' : undefined)
+          captureTextUnderCursor: async (_mode, ready, config) => {
+            assert.deepEqual(config, ocrConfig)
             ready?.()
             return { wordBounds, selection: { word: 'example' } }
           }
@@ -48,7 +49,7 @@ for (const mode of ['dictionary', 'ai']) {
     }
     compiled._compile(output.code, __filename)
     const action = new compiled.exports.SelectionExplanationAction({
-      appConfig: { load: () => ({ ocr: { language: 'ja-JP', captureEngine: 'wgc' } }) },
+      appConfig: { load: () => ({ ocr: ocrConfig }) },
       windowManager: { hideOcrHighlight() {}, showOcrHighlight() {} }
     })
     Object.assign(action, explanation)

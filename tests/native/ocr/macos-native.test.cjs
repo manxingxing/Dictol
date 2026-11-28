@@ -71,6 +71,10 @@ test(
         .toBuffer()
       const textResult = JSON.parse(await api.recognizeMacPng(textPng, ['en-US']))
       assert.match(textResult.observations.map((item) => item.text).join(' '), /Hello Dictol/i)
+      const fastResult = JSON.parse(await api.recognizeMacPng(textPng, ['en-US'], 'fast'))
+      assert.match(fastResult.observations.map((item) => item.text).join(' '), /Hello Dictol/i)
+      assert.ok(fastResult.observations[0].characters.length > 0)
+      assert.throws(() => api.recognizeMacPng(textPng, ['en-US'], 'auto'), /recognition mode/)
       for (const line of textResult.observations) {
         assert.ok(line.characters.length > 0)
         assert.equal(line.quad.length, 4)
@@ -94,7 +98,19 @@ test(
       })
       assert.deepEqual(api.chineseWordRange('hello world', 7), { start: 6, length: 5 })
       assert.equal(api.chineseWordRange('hello', 20), null)
-      const recognized = await api.captureAndRecognizeMacText(1, 10, 20, 200, 100, ['en-US'])
+      assert.throws(
+        () => api.captureAndRecognizeMacText(1, 10, 20, 200, 100, ['en-US'], 'auto'),
+        /recognition mode/
+      )
+      const recognized = await api.captureAndRecognizeMacText(
+        1,
+        10,
+        20,
+        200,
+        100,
+        ['en-US'],
+        'fast'
+      )
       assert.deepEqual([recognized.width, recognized.height], [200, 100])
       assert.deepEqual(JSON.parse(recognized.json), { observations: [] })
       assert.equal(recognized.png, undefined)
@@ -107,7 +123,12 @@ test(
           () => retained.recognize({ x: 190, y: 0, width: 20, height: 10 }, ['en-US']),
           /bounds/
         )
-        const crop = await retained.recognize({ x: 10, y: 20, width: 100, height: 50 }, ['en-US'])
+        assert.throws(() => retained.recognize(null, ['en-US'], null), /recognition mode/)
+        const crop = await retained.recognize(
+          { x: 10, y: 20, width: 100, height: 50 },
+          ['en-US'],
+          'fast'
+        )
         assert.deepEqual(JSON.parse(crop), { observations: [] })
         const pending = retained.recognize(null, ['en-US'])
         retained.dispose()

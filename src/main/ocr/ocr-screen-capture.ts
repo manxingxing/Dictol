@@ -10,9 +10,9 @@ import {
 } from '@dictol/ocr-native'
 import { screen, type Display, type Point, type Rectangle } from 'electron'
 import { cropAroundPointer, mapOcrBoundsToRegion } from './ocr-crop'
-import { ocrLanguages } from './mac-ocr-languages'
+import { macOcrLanguages } from './mac-ocr-languages'
 import { mapWindowsCaptureRegion } from './windows-capture-geometry'
-import type { CaptureEngine } from '../../shared/ocr-settings'
+import type { CaptureEngine, OcrRecognitionMode } from '../../shared/ocr-settings'
 
 export type CaptureSize = { width: number; height: number }
 
@@ -35,7 +35,8 @@ export async function captureOcrRegion(
   display: Display,
   pointer: Point,
   requestedSize: CaptureSize,
-  windowsCaptureEngine?: CaptureEngine
+  windowsCaptureEngine?: CaptureEngine,
+  macRecognitionMode: OcrRecognitionMode = 'accurate'
 ): Promise<OcrSnapshot> {
   const region = ocrCaptureBounds(display, pointer, requestedSize)
   if (process.platform === 'win32') {
@@ -68,7 +69,8 @@ export async function captureOcrRegion(
       image: {
         width: image.width,
         height: image.height,
-        recognize: (rect) => image.recognize(rect, ocrLanguages),
+        recognize: (rect) =>
+          image.recognize(rect, macOcrLanguages(macRecognitionMode), macRecognitionMode),
         dispose: () => image.dispose()
       },
       bounds: region
@@ -118,7 +120,7 @@ export async function captureMacOcrRegion(
   display: Display,
   pointer: Point,
   requestedSize: CaptureSize,
-  languages: string[]
+  recognitionMode: OcrRecognitionMode
 ): Promise<{ frame: OcrFrame; result: MacOcrResult }> {
   const bounds = ocrCaptureBounds(display, pointer, requestedSize)
   const result = await captureAndRecognizeMacText(
@@ -127,7 +129,8 @@ export async function captureMacOcrRegion(
     bounds.y,
     bounds.width,
     bounds.height,
-    languages
+    macOcrLanguages(recognitionMode),
+    recognitionMode
   )
   return {
     frame: toOcrFrame(bounds, { width: result.width, height: result.height }, pointer),

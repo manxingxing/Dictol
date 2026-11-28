@@ -6,7 +6,12 @@ import type { DictionaryLayout } from '../shared/dictionary-layout'
 import type { DictionaryDisplay } from '../shared/dictionary-display'
 import type { ThemeMode } from '../shared/theme-mode'
 import type { TtsConfig } from '../shared/tts'
-import type { OcrConfig } from '../shared/ocr-settings'
+import {
+  isOcrRecognitionMode,
+  type MacOcrConfig,
+  type OcrConfig,
+  type WindowsOcrConfig
+} from '../shared/ocr-settings'
 import type { AiLookupConfig } from '../shared/ai-ipc'
 import { isAiProviderId } from '../shared/ai-settings'
 import {
@@ -44,8 +49,15 @@ export type AppConfig = {
   translation: TranslationConfig
 }
 
+const DEFAULT_MAC_OCR_CONFIG: MacOcrConfig = { engine: 'system', recognitionMode: 'accurate' }
+const DEFAULT_WINDOWS_OCR_CONFIG: WindowsOcrConfig = {
+  engine: 'system',
+  language: 'system',
+  captureEngine: 'gdi'
+}
+
 const DEFAULT_CONFIG: AppConfig = {
-  ocr: { engine: 'system', language: 'system', captureEngine: 'gdi' },
+  ocr: process.platform === 'darwin' ? DEFAULT_MAC_OCR_CONFIG : DEFAULT_WINDOWS_OCR_CONFIG,
   themeMode: 'auto',
   aggregateLayout: 'vertical',
   dictionaryLayout: 'single',
@@ -202,14 +214,22 @@ function parseConfig(value: unknown): AppConfig {
       fish?: { model?: unknown; voiceId?: unknown }
     }
     translation?: { targetLanguage?: unknown; providers?: unknown }
-    ocr?: Partial<OcrConfig>
+    ocr?: Partial<MacOcrConfig & WindowsOcrConfig>
   }
 
+  const { recognitionMode, ...windowsOcr } = candidate.ocr ?? {}
   return {
     ocr:
-      process.platform === 'win32'
-        ? { ...DEFAULT_CONFIG.ocr, ...candidate.ocr }
-        : { ...DEFAULT_CONFIG.ocr },
+      process.platform === 'darwin'
+        ? {
+            ...DEFAULT_MAC_OCR_CONFIG,
+            recognitionMode: isOcrRecognitionMode(recognitionMode)
+              ? recognitionMode
+              : DEFAULT_MAC_OCR_CONFIG.recognitionMode
+          }
+        : process.platform === 'win32'
+          ? { ...DEFAULT_WINDOWS_OCR_CONFIG, ...windowsOcr }
+          : { ...DEFAULT_WINDOWS_OCR_CONFIG },
     themeMode:
       candidate.themeMode === 'light' || candidate.themeMode === 'dark'
         ? candidate.themeMode

@@ -162,9 +162,19 @@ for (const platform of ['darwin', 'win32']) {
     makeMocks(events)
     try {
       const flow = await loadFlow(platform)
-      const fn =
-        platform === 'darwin' ? flow.captureTextUnderCursor : flow.captureWindowsTextUnderCursor
-      const result = await fn('ai', () => events.push('ready'))
+      const ready = () => events.push('ready')
+      if (platform === 'darwin') {
+        const capture = globalThis.__hoverFlowMocks['./ocr-screen-capture']
+        const originalCapture = capture.captureOcrRegion
+        capture.captureOcrRegion = (...args) => {
+          assert.equal(args[4], 'fast')
+          return originalCapture(...args)
+        }
+      }
+      const result =
+        platform === 'darwin'
+          ? await flow.captureTextUnderCursor('ai', ready, 'fast')
+          : await flow.captureWindowsTextUnderCursor('ai', ready)
       assert.equal(result.selection.word, 'example')
       assert.equal(events.filter((e) => e.startsWith('capture:')).length, 1)
       assert.deepEqual(events.slice(0, 4), [
@@ -323,8 +333,14 @@ test('macOS dictionary uses one region OCR call without PNG recognition', async 
   const events = []
   makeMocks(events)
   try {
+    const capture = globalThis.__hoverFlowMocks['./ocr-screen-capture']
+    const originalCapture = capture.captureMacOcrRegion
+    capture.captureMacOcrRegion = (...args) => {
+      assert.equal(args[3], 'fast')
+      return originalCapture(...args)
+    }
     const flow = await loadFlow('darwin')
-    const result = await flow.captureTextUnderCursor('dictionary')
+    const result = await flow.captureTextUnderCursor('dictionary', undefined, 'fast')
     assert.equal(result.selection.word, 'example')
     assert.deepEqual(result.wordBounds, { x: 10, y: 20, width: 30, height: 40 })
     assert.deepEqual(events, ['capture:region-ocr'])

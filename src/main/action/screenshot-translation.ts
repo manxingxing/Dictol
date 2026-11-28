@@ -3,7 +3,6 @@ import { TRANSLATION_MAX_TEXT_LENGTH } from '../../shared/translation'
 import type { AppRuntime } from '../app-runtime'
 import { captureScreen } from '../ocr/screen-capture'
 import { recognizeScreenshotText } from '../ocr/screenshot-ocr'
-import { windowsOcrLanguage } from '../../shared/ocr-settings'
 import { resolvePreloadPath, resolveRendererUrl } from '../output-path'
 
 /** Owns the screenshot selector, OCR work, and translation handoff. */
@@ -147,16 +146,14 @@ export class ScreenshotTranslationAction {
   }
 
   private async recognizePngRegion(display: Display, region: Rectangle): Promise<string> {
-    const windowsOcrConfig =
-      process.platform === 'win32' ? this.runtime.appConfig.load().ocr : undefined
-    const language = windowsOcrConfig ? windowsOcrLanguage(windowsOcrConfig) : undefined
+    const config = this.runtime.appConfig.load().ocr
     const image = await captureScreen({
       displayId: display.id,
       region,
-      windowsCaptureEngine: windowsOcrConfig?.captureEngine
+      windowsCaptureEngine: 'captureEngine' in config ? config.captureEngine : undefined
     })
     await this.showRecognitionProgress(region)
-    return recognizeScreenshotText(image.data, language)
+    return recognizeScreenshotText(image.data, config)
   }
 
   private async showRecognitionProgress(region: Rectangle): Promise<void> {

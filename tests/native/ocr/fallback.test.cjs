@@ -233,7 +233,7 @@ test('macOS region OCR transfers only results and propagates capture and OCR err
     },
     native: {
       captureAndRecognizeMacText: async (...args) => {
-        assert.deepEqual(args, [42, -1440, 0, 700, 300, ['en-US']])
+        assert.deepEqual(args, [42, -1440, 0, 700, 300, ['en-US', 'fr-FR', 'de-DE'], 'fast'])
         if (failure) throw failure
         return { observations: [{ text: 'hello' }], width: 1400, height: 600 }
       },
@@ -245,8 +245,7 @@ test('macOS region OCR transfers only results and propagates capture and OCR err
   }
   try {
     const { captureMacOcrRegion } = await loadCapture('darwin', 'ocr-screen-capture.ts')
-    const invoke = () =>
-      captureMacOcrRegion(display, pointer, { width: 700, height: 300 }, ['en-US'])
+    const invoke = () => captureMacOcrRegion(display, pointer, { width: 700, height: 300 }, 'fast')
     const output = await invoke()
     assert.equal(output.result.observations[0].text, 'hello')
     assert.deepEqual(output.frame.size, { width: 1400, height: 600 })
@@ -283,8 +282,8 @@ for (const platform of ['darwin', 'win32']) {
       const nativeImage = {
         width: 2880,
         height: 1200,
-        recognize: async (region, language) => {
-          recognized.push([region, language])
+        recognize: async (...args) => {
+          recognized.push(args)
           return { observations: [] }
         },
         dispose: () => disposals++
@@ -325,7 +324,13 @@ for (const platform of ['darwin', 'win32']) {
           platform,
           'ocr-screen-capture.ts'
         )
-        const snapshot = await captureOcrRegion(display, pointer, { width: 1440, height: 600 })
+        const snapshot = await captureOcrRegion(
+          display,
+          pointer,
+          { width: 1440, height: 600 },
+          undefined,
+          'fast'
+        )
         const first = await recognizeOcrSnapshot(
           snapshot,
           pointer,
@@ -344,10 +349,14 @@ for (const platform of ['darwin', 'win32']) {
           recognized.map(([region]) => region),
           [{ x: 0, y: 0, width: 1920, height: 900 }, null]
         )
-        assert.ok(
-          recognized.every(([, language]) =>
-            platform === 'darwin' ? Array.isArray(language) : language === 'en-US'
-          )
+        assert.deepEqual(
+          recognized.map(([, ...options]) => options),
+          platform === 'darwin'
+            ? [
+                [['en-US', 'fr-FR', 'de-DE'], 'fast'],
+                [['en-US', 'fr-FR', 'de-DE'], 'fast']
+              ]
+            : [['en-US'], ['en-US']]
         )
         snapshot.image.dispose()
         assert.equal(disposals, 1)

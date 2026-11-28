@@ -32,7 +32,7 @@ static NSDictionary *top_left_point_json(CGPoint point) {
 }
 
 // 对截图或 PNG 解码后的图像执行 Vision 识别；这里只借用调用方的图像。
-int recognize_image(CGImageRef image, const char *language_list,
+int recognize_image(CGImageRef image, const char *language_list, OcrRecognitionMode mode,
                     uint8_t **output, size_t *output_length) {
     if (!image || !language_list || !output || !output_length) return 0;
     *output = NULL;
@@ -46,7 +46,8 @@ int recognize_image(CGImageRef image, const char *language_list,
     }
 
     VNRecognizeTextRequest *request = [[VNRecognizeTextRequest alloc] init];
-    request.recognitionLevel = VNRequestTextRecognitionLevelAccurate;
+    request.recognitionLevel = mode == OcrRecognitionFast
+        ? VNRequestTextRecognitionLevelFast : VNRequestTextRecognitionLevelAccurate;
     request.recognitionLanguages = languages;
     request.automaticallyDetectsLanguage = YES;
     request.usesLanguageCorrection = YES;
@@ -100,7 +101,8 @@ int recognize_image(CGImageRef image, const char *language_list,
 
 // PNG 输入只在这里解码；data 借用原始字节，解码得到的 image 则由本函数释放。
 int recognize_png(const uint8_t *png, size_t png_length,
-                  const char *language_list, uint8_t **output, size_t *output_length) {
+                  const char *language_list, OcrRecognitionMode mode,
+                  uint8_t **output, size_t *output_length) {
     if (!png || !png_length || !language_list || !output || !output_length) return 0;
     *output = NULL;
     *output_length = 0;
@@ -112,7 +114,7 @@ int recognize_png(const uint8_t *png, size_t png_length,
     CFRelease(source);
     if (!image) return copy_json(@{@"error": @"无法解码 OCR 截图"}, output, output_length);
     
-    int result = recognize_image(image, language_list, output, output_length);
+    int result = recognize_image(image, language_list, mode, output, output_length);
     CGImageRelease(image);
     return result;
 }

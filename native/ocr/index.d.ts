@@ -133,13 +133,23 @@ export interface NativeOcrImage<Result, Language> {
   dispose(): void
 }
 
+export type MacOcrRecognitionMode = 'fast' | 'accurate'
+
+export interface MacOcrImage extends NativeOcrImage<MacOcrResult, string[]> {
+  recognize(
+    region: CaptureBounds | null,
+    languages: string[],
+    recognitionMode?: MacOcrRecognitionMode
+  ): Promise<MacOcrResult>
+}
+
 export declare function captureMacOcrImage(
   displayId: number,
   x: number,
   y: number,
   width: number,
   height: number
-): Promise<NativeOcrImage<MacOcrResult, string[]>>
+): Promise<MacOcrImage>
 
 export declare function captureWindowsOcrImage(
   displayId: string,
@@ -156,7 +166,11 @@ export interface WordRange {
 }
 
 /** Recognize PNG text with Apple Vision and automatic language detection. Available on macOS. */
-export declare function recognizeMacText(png: Buffer, languages: string[]): Promise<MacOcrResult>
+export declare function recognizeMacText(
+  png: Buffer,
+  languages: string[],
+  recognitionMode?: MacOcrRecognitionMode
+): Promise<MacOcrResult>
 
 export interface MacRegionOcrResult extends MacOcrResult {
   /** Captured image dimensions in pixels. */
@@ -174,7 +188,8 @@ export declare function captureAndRecognizeMacText(
   y: number,
   width: number,
   height: number,
-  languages: string[]
+  languages: string[],
+  recognitionMode?: MacOcrRecognitionMode
 ): Promise<MacRegionOcrResult>
 
 /** Recognize PNG text with Windows.Media.Ocr. Available on Windows. */

@@ -34,7 +34,7 @@ int main(int argc, const char *argv[]) {
                 CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970, getpid(), pass, languages);
             uint8_t *json = NULL;
             size_t length = 0;
-            int success = recognize_image(image, languages, &json, &length);
+            int success = recognize_image(image, languages, OcrRecognitionAccurate, &json, &length);
             NSError *error = nil;
             NSDictionary *result = success && json ? [NSJSONSerialization JSONObjectWithData:
                 [NSData dataWithBytes:json length:length] options:0 error:&error] : nil;

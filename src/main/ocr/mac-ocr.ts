@@ -1,7 +1,7 @@
 import { chineseWordRange } from '@dictol/ocr-native'
 import { screen, type Display, type Point } from 'electron'
+import type { OcrRecognitionMode } from '../../shared/ocr-settings'
 import type { OcrLookupMode } from '../app-runtime'
-import { ocrLanguages } from './mac-ocr-languages'
 import { mapOcrQuadToRegion } from './ocr-crop'
 import { captureMacOcrRegion, recognizeOcrSnapshot } from './ocr-screen-capture'
 import { captureAiOcrRegion, shouldExpandAiOcr, preferExpandedAiHit } from './ai-ocr'
@@ -12,13 +12,14 @@ const dictionaryCaptureSize = { width: 1000, height: 300 }
 
 export async function captureTextUnderCursor(
   mode: OcrLookupMode,
-  onCaptureReady?: () => void
+  onCaptureReady?: () => void,
+  recognitionMode: OcrRecognitionMode = 'accurate'
 ): Promise<OcrCapture | null> {
   if (process.platform !== 'darwin') return null
   const pointer = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(pointer)
-  if (mode === 'dictionary') return captureDictionaryText(display, pointer)
-  const snapshot = await captureAiOcrRegion(display, pointer)
+  if (mode === 'dictionary') return captureDictionaryText(display, pointer, recognitionMode)
+  const snapshot = await captureAiOcrRegion(display, pointer, undefined, recognitionMode)
   try {
     onCaptureReady?.()
     let captured = await recognizeOcrSnapshot(snapshot, pointer, {
@@ -56,8 +57,17 @@ export async function captureTextUnderCursor(
   }
 }
 
-async function captureDictionaryText(display: Display, pointer: Point): Promise<OcrCapture | null> {
-  const initial = await captureMacOcrRegion(display, pointer, dictionaryCaptureSize, ocrLanguages)
+async function captureDictionaryText(
+  display: Display,
+  pointer: Point,
+  recognitionMode: OcrRecognitionMode
+): Promise<OcrCapture | null> {
+  const initial = await captureMacOcrRegion(
+    display,
+    pointer,
+    dictionaryCaptureSize,
+    recognitionMode
+  )
   const frame = initial.frame
   const hit = selectOcrTextHit(
     initial.result.observations,
