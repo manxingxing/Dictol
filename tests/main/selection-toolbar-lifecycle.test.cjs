@@ -44,6 +44,8 @@ async function setup(platform) {
     return () => subscriptions.delete(subscription)
   }
   const windows = []
+  const ipcMain = new EventEmitter()
+  ipcMain.handle = () => {}
   class TestNativeSelectionPanel extends EventEmitter {}
   const runtime = {
     mainWindow: { isDestroyed: () => false, webContents: { id: 1 } },
@@ -58,6 +60,7 @@ async function setup(platform) {
     selectionHookService: {
       getStatus: () => ({ running: true }),
       getCapabilities: () => ({ supported: true, limitation: null }),
+      onSelection: () => {},
       onKeyDown: subscribe,
       onMouseWheel: subscribe,
       onMouseDown: subscribe
@@ -116,7 +119,10 @@ async function setup(platform) {
     '../../shared/ocr': { OCR_SUPPORTED: true }
   })
   const { SelectionToolbarController } = await loadController('selection-toolbar.ts', platform, {
-    electron: { BrowserWindow: { getFocusedWindow: () => undefined } },
+    electron: {
+      BrowserWindow: { getFocusedWindow: () => undefined },
+      ipcMain
+    },
     '../native-selection-panel': { NativeSelectionPanel: TestNativeSelectionPanel },
     '../output-path': { resolveRendererUrl: (name) => name },
     '../../shared/selection-toolbar': {
@@ -133,8 +139,22 @@ async function setup(platform) {
       fitNearSelection: () => ({ x: 10, y: 20, width: 300, height: 44 })
     }
   })
-  const explanation = { isVisible: false, setAnchor: () => {}, prewarmExplanationWindow: () => {} }
-  const toolbar = new SelectionToolbarController(runtime, explanation, { isVisible: false })
+  const { SelectionExplanationAction } = await loadController(
+    '../action/selection-explanation.ts',
+    platform,
+    {
+      '../lib/selection-position': {
+        createCursorAnchor: () => ({ centerX: 400, top: 250, bottom: 250, gap: 16, posLevel: 0 })
+      }
+    }
+  )
+  const explanation = new SelectionExplanationAction(runtime)
+  explanation.prewarmExplanationWindow = () => {}
+  runtime.actions = { explanation }
+  const toolbar = new SelectionToolbarController(runtime, {
+    isVisible: false,
+    setOnVisibilityChange: () => {}
+  })
   const settings = new WordCaptureController(runtime)
   const toggle = (enabled) => settings.setSelectionEnabled({ sender: { id: 1 } }, enabled)
   const select = () =>
@@ -147,7 +167,18 @@ async function setup(platform) {
     if (platform === 'win32')
       toolbar.handleToolbarRendered({ sender: window.webContents }, window.payload.requestId)
   }
-  return { runtime, settings, toolbar, windows, subscriptions, toggle, select, show }
+  return {
+    runtime,
+    settings,
+    explanation,
+    toolbar,
+    windows,
+    subscriptions,
+    ipcMain,
+    toggle,
+    select,
+    show
+  }
 }
 
 for (const platform of ['win32', 'darwin']) {
@@ -198,6 +229,39 @@ test('toggling before first use never creates a toolbar window', async () => {
   assert.equal(toggle(false).ok, true)
   assert.equal(toggle(true).ok, true)
   assert.equal(windows.length, 0)
+})
+
+test('main window lookup anchors the explanation to the cursor and dismisses the toolbar', async () => {
+  const { runtime, explanation, toolbar, ipcMain, windows, select, show, toggle } =
+    await setup('darwin')
+  const { SelectionExplanationController } = await loadController(
+    'selection-explanation.ts',
+    'darwin',
+    {
+      electron: { ipcMain },
+      '../../shared/selection-explanation': { SELECTION_EXPLANATION_MAX_WORD_LENGTH: 200 }
+    }
+  )
+  const calls = []
+  explanation.setAnchor = (anchor) => calls.push(anchor)
+  explanation.showExplanation = async (word) => calls.push(word)
+  toolbar.mount()
+  new SelectionExplanationController(runtime).mount()
+  try {
+    select()
+    show(windows[0])
+    ipcMain.emit('selection-explanation:show-from-main', { sender: { id: 99 } }, 'foreign')
+    assert.equal(windows[0].isVisible(), true)
+    ipcMain.emit('selection-explanation:show-from-main', { sender: { id: 1 } }, ' lookup ')
+    assert.deepEqual(calls, [
+      { x: 10, y: 20 },
+      { centerX: 400, top: 250, bottom: 250, gap: 16, posLevel: 0 },
+      'lookup'
+    ])
+    assert.equal(windows[0].isVisible(), false)
+  } finally {
+    toggle(false)
+  }
 })
 
 for (const selected of [true, false]) {

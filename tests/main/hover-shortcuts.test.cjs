@@ -89,7 +89,7 @@ async function setup(platform, configPath) {
     getCapabilities: () => ({ supported: true, limitation: null })
   }
   const invocations = []
-  runtime.ocrShortcutHandler = async (mode) => invocations.push(mode)
+  runtime.actions = { explanation: { lookupUnderCursor: async (mode) => invocations.push(mode) } }
   new exports.WordCaptureController(runtime).mount()
   return { runtime, handlers, bindings, invocations }
 }

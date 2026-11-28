@@ -32,6 +32,7 @@ app
     const position = await loadTs('src/main/lib/selection-position.ts')
     const { WebContentsViewManager } = await loadTs('src/main/web-contents-view-manager.ts')
     const { WindowManager } = await loadTs('src/main/window-manager.ts', {
+      '@dictol/macos-native': require('@dictol/macos-native'),
       '../shared/selection-explanation': await loadTs('src/shared/selection-explanation.ts'),
       '../shared/selection-toolbar': await loadTs('src/shared/selection-toolbar.ts'),
       '../shared/translation': await loadTs('src/shared/translation.ts'),
@@ -43,10 +44,9 @@ app
         applySelectionWindowBehavior: (window) => window.setAlwaysOnTop(true)
       }
     })
-    const { SelectionExplanationController } = await loadTs(
-      'src/main/controller/selection-explanation.ts',
+    const { SelectionExplanationAction } = await loadTs(
+      'src/main/action/selection-explanation.ts',
       {
-        './base-controller': await loadTs('src/main/controller/base-controller.ts'),
         '../lib/selection-position': position,
         '../output-path': {
           resolveRendererUrl: () =>
@@ -55,22 +55,22 @@ app
       }
     )
     const manager = new WindowManager()
-    const controller = new SelectionExplanationController({ windowManager: manager })
+    const action = new SelectionExplanationAction({ windowManager: manager })
     let settingBounds = false
-    const remember = controller.rememberExplanationSize.bind(controller)
-    controller.rememberExplanationSize = (window) => {
+    const remember = action.rememberExplanationSize.bind(action)
+    action.rememberExplanationSize = (window) => {
       const trace = {
         settingBounds,
         measured: window.getSize(),
-        applied: controller.appliedExplanationSize,
-        before: controller.preferredExplanationSize
+        applied: action.appliedExplanationSize,
+        before: action.preferredExplanationSize
       }
       remember(window)
-      trace.after = controller.preferredExplanationSize
+      trace.after = action.preferredExplanationSize
       if (resizeTrace.length < 12) resizeTrace.push(trace)
     }
-    controller.configureExplanationView = () => {}
-    const window = controller.initializeExplanationWindow()
+    action.configureExplanationView = () => {}
+    const window = action.initializeExplanationWindow()
     const setBounds = window.setBounds.bind(window)
     window.setBounds = (...args) => {
       settingBounds = true
@@ -97,7 +97,7 @@ app
       ['ocr-ai', { width: 520, height: 320 }]
     ])
     const rememberedSize = (mode) =>
-      mode === 'ocr-ai' ? controller.preferredOcrAiSize : controller.preferredExplanationSize
+      mode === 'ocr-ai' ? action.preferredOcrAiSize : action.preferredExplanationSize
     for (const [mode, size, resize] of [
       ['dictionary', { width: 520, height: 600 }, false],
       ['ocr-ai', { width: 520, height: 320 }, false],
@@ -105,7 +105,7 @@ app
       ['ocr-ai', { width: 811, height: 509 }, true],
       ['dictionary', { width: 713, height: 427 }, false]
     ]) {
-      controller.explanationPayload = { mode }
+      action.explanationPayload = { mode }
       if (resize) {
         // Exercise the real resize listener with an explicit user-selected size.
         window.setSize(size.width, size.height)
@@ -121,10 +121,10 @@ app
       }
       window.on('resize', sample)
       for (let i = 0; i < 12; i++) {
-        controller.setAnchor(
+        action.setAnchor(
           position.createWordAnchor({ x: 500 + (i % 2) * 80, y: 100, width: 60, height: 30 })
         )
-        controller.positionExplanation(window)
+        action.positionExplanation(window)
         await wait(280)
         sample()
         assert.deepEqual(rememberedSize(mode), expectedSizes.get(mode))
@@ -152,12 +152,12 @@ app
     window.hide()
     assert.equal(manager.createSelectionExplanationWindow(), window)
     window.destroy()
-    const recreated = controller.initializeExplanationWindow()
+    const recreated = action.initializeExplanationWindow()
     await new Promise((resolve) => recreated.webContents.once('did-finish-load', resolve))
-    assert.deepEqual(controller.preferredExplanationSize, expectedSizes.get('dictionary'))
-    assert.deepEqual(controller.preferredOcrAiSize, expectedSizes.get('ocr-ai'))
-    controller.setAnchor(position.createWordAnchor({ x: 500, y: 100, width: 60, height: 30 }))
-    controller.positionExplanation(recreated)
+    assert.deepEqual(action.preferredExplanationSize, expectedSizes.get('dictionary'))
+    assert.deepEqual(action.preferredOcrAiSize, expectedSizes.get('ocr-ai'))
+    action.setAnchor(position.createWordAnchor({ x: 500, y: 100, width: 60, height: 30 }))
+    action.positionExplanation(recreated)
     const { width, height } = recreated.getBounds()
     assert.deepEqual({ width, height }, recreatedSize)
     recreated.destroy()

@@ -9,7 +9,7 @@ const esbuild = require('esbuild')
 for (const mode of ['dictionary', 'ai']) {
   test(`${mode} uses the recognized word bounds for the explanation`, async () => {
     const source = fs.readFileSync(
-      path.join(__dirname, '../../src/main/controller/selection-toolbar.ts'),
+      path.join(__dirname, '../../src/main/action/selection-explanation.ts'),
       'utf8'
     )
     const output = await esbuild.transform(source, { loader: 'ts', format: 'cjs' })
@@ -28,14 +28,6 @@ for (const mode of ['dictionary', 'ai']) {
     }
     const compiled = new Module(__filename, module)
     compiled.require = (id) => {
-      if (id === './base-controller')
-        return {
-          BaseController: class {
-            constructor(runtime) {
-              this.runtime = runtime
-            }
-          }
-        }
       if (id === '../lib/selection-position')
         return {
           createCursorAnchor: () => ({ cursor: true }),
@@ -55,17 +47,12 @@ for (const mode of ['dictionary', 'ai']) {
       return {}
     }
     compiled._compile(output.code, __filename)
-    const controller = new compiled.exports.SelectionToolbarController(
-      {
-        appConfig: { load: () => ({ ocr: { language: 'ja-JP', captureEngine: 'wgc' } }) },
-        windowManager: { hideOcrHighlight() {} }
-      },
-      explanation,
-      {}
-    )
-    controller.hideToolbar = () => {}
-    controller.showOcrHighlight = () => {}
-    await controller.handleOcrShortcut(mode)
+    const action = new compiled.exports.SelectionExplanationAction({
+      appConfig: { load: () => ({ ocr: { language: 'ja-JP', captureEngine: 'wgc' } }) },
+      windowManager: { hideOcrHighlight() {}, showOcrHighlight() {} }
+    })
+    Object.assign(action, explanation)
+    await action.lookupUnderCursor(mode)
     const anchorIndex = calls.findIndex(
       ([type, anchor]) => type === 'anchor' && anchor.wordBounds === wordBounds
     )

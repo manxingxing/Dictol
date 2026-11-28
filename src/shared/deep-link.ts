@@ -1,38 +1,35 @@
+import { SELECTION_EXPLANATION_MAX_WORD_LENGTH } from './selection-explanation'
+import { TRANSLATION_MAX_TEXT_LENGTH } from './translation'
+
 export const DEEP_LINK_SCHEME = 'dictol'
-export const DEEP_LINK_PROTOCOL = `${DEEP_LINK_SCHEME}:`
-export const DEEP_LINK_HOST = 'search'
+const DEEP_LINK_PROTOCOL = `${DEEP_LINK_SCHEME}:`
 
 export type DeepLinkIntent = {
-  type: 'search'
-  term: string
+  type: 'dict' | 'lookup' | 'translate'
+  text: string
 }
 
 export function parseDeepLink(value: unknown): DeepLinkIntent | null {
-  if (typeof value !== 'string') return null
-
-  let url: URL
-  try {
-    url = new URL(value)
-  } catch {
+  if (typeof value !== 'string' || !value.toLowerCase().startsWith(DEEP_LINK_PROTOCOL)) {
     return null
   }
 
+  const match = /^\/\/([^/]+)\/([^/?#]+)$/.exec(value.slice(DEEP_LINK_PROTOCOL.length))
+  const type = match?.[1].toLowerCase()
+  if (!match || (type !== 'dict' && type !== 'lookup' && type !== 'translate')) {
+    throw new Error('Deep Link 必须包含受支持的路由和一段经过 URL 编码的文本。')
+  }
+
+  const text = decodeURIComponent(match[2]).trim()
+  if (!text) throw new Error('Deep Link 文本不能为空。')
   if (
-    url.protocol !== DEEP_LINK_PROTOCOL ||
-    url.hostname !== DEEP_LINK_HOST ||
-    (url.pathname !== '' && url.pathname !== '/') ||
-    url.username ||
-    url.password ||
-    url.port
+    (type === 'lookup' && text.length > SELECTION_EXPLANATION_MAX_WORD_LENGTH) ||
+    (type === 'translate' && text.length > TRANSLATION_MAX_TEXT_LENGTH)
   ) {
-    return null
+    throw new Error('Deep Link 文本超出长度限制。')
   }
 
-  const terms = url.searchParams.getAll('term')
-  const term = terms[0]?.trim()
-  if (terms.length !== 1 || !term) return null
-
-  return { type: 'search', term }
+  return { type, text }
 }
 
 export function findDeepLink(values: readonly unknown[]): DeepLinkIntent | null {

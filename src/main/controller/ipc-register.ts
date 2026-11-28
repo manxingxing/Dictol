@@ -26,7 +26,6 @@ import { BrowseWordsController } from './browse-words'
 import { TouchBarController } from './touch-bar'
 
 export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
-  const selectionExplanationController = new SelectionExplanationController(appRuntime)
   const translationController = new TranslationController(appRuntime)
 
   const controllers = [
@@ -45,14 +44,10 @@ export const registerIPCHandlers = (appRuntime: AppRuntime): void => {
     new QueryHistoryController(appRuntime),
     new KeyboardController(appRuntime),
     new SearchPopoverController(appRuntime),
-    selectionExplanationController,
+    new SelectionExplanationController(appRuntime),
     translationController,
     new ScreenshotTranslationController(appRuntime),
-    new SelectionToolbarController(
-      appRuntime,
-      selectionExplanationController,
-      translationController
-    ),
+    new SelectionToolbarController(appRuntime, translationController),
     new WordCaptureController(appRuntime),
     new WordLookupController(appRuntime),
     new WordbookController(appRuntime),

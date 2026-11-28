@@ -130,7 +130,7 @@ for (const [platform, recognitionFails] of [
         }
       },
       '../ocr/screenshot-ocr': {
-        recognizeScreenshotText: async (png, _rank, language) => {
+        recognizeScreenshotText: async (png, language) => {
           assert.equal(language, platform === 'win32' ? 'ja-JP' : undefined)
           assert.ok(events.includes('progress'), 'Progress must be shown during OCR')
           events.push(`ocr:png:${png.toString()}`)
@@ -143,6 +143,9 @@ for (const [platform, recognitionFails] of [
     }
     const Action = await loadAction(mocks, platform)
     const action = new Action({
+      get builtInLexicon() {
+        throw new Error('Screenshot OCR must not access the built-in lexicon')
+      },
       appConfig: {
         load: () => {
           assert.equal(platform, 'win32')

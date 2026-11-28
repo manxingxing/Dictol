@@ -10,16 +10,14 @@ import {
   type Point,
   type WebContents
 } from 'electron'
-import type { AppRuntime, OcrLookupMode } from '../app-runtime'
-import type { OcrCapture } from '../ocr/ocr-capture-types'
-import { captureTextUnderCursor } from '../ocr/ocr'
-import { windowsOcrLanguage } from '../../shared/ocr-settings'
+import type { AppRuntime } from '../app-runtime'
 import {
   getSelectionToolbarWindowSize,
   SELECTION_TOOLBAR_WINDOWS_SHADOW_MARGIN,
   type ExternalExcerptCapture,
   type SelectionToolbarPayload
 } from '../../shared/selection-toolbar'
+import { SELECTION_EXPLANATION_MAX_WORD_LENGTH } from '../../shared/selection-explanation'
 import type {
   CapturedSelection,
   KeyDownListener,
@@ -32,14 +30,13 @@ import { hideSelectionWindow, showSelectionWindowInactive } from '../selection-w
 import { NativeSelectionPanel } from '../native-selection-panel'
 import type { SelectionSurfaceWindow } from '../window-manager'
 import { BaseController } from './base-controller'
-import type { SelectionExplanationController } from './selection-explanation'
+import type { SelectionExplanationAction } from '../action/selection-explanation'
 import type { TranslationController } from './translation'
 import { TRANSLATION_MAX_TEXT_LENGTH } from '../../shared/translation'
 import {
   clamp,
   containsPoint,
   createCursorAnchor,
-  createWordAnchor,
   fitNearSelection,
   fitTranslationNearSelection,
   insetRectangle,
@@ -48,21 +45,14 @@ import {
   type SelectionAnchor
 } from '../lib/selection-position'
 
-const MAX_SELECTION_LENGTH = 200
 const NATIVE_MENU_GAP = 6
 const TOOLBAR_INACTIVITY_TIMEOUT = 5_000
 export class SelectionToolbarController extends BaseController {
   constructor(
     runtime: AppRuntime,
-    private readonly explanation: SelectionExplanationController,
     private readonly translation: TranslationController
   ) {
     super(runtime)
-  }
-
-  private dismissForMainExplanation(): void {
-    this.currentCapture = undefined
-    this.hideToolbar()
   }
 
   private currentCapture: CapturedSelection | undefined
@@ -81,8 +71,16 @@ export class SelectionToolbarController extends BaseController {
   private toolbarDismissSubscriptions: Array<() => void> = []
   private globalMouseDownUnsubscribe: (() => void) | undefined
 
+  private get explanation(): SelectionExplanationAction {
+    return this.runtime.actions.explanation
+  }
+
   override mount(): void {
     this.explanation.setOnVisibilityChange(this.refreshDismissSubscription)
+    this.explanation.setOnCursorLookup(() => {
+      this.currentCapture = undefined
+      this.hideToolbar()
+    })
     this.translation.setOnVisibilityChange(this.refreshDismissSubscription)
     this.runtime.selectionHookService.onSelection(this.handleSelection)
     ipcMain.on('selection-toolbar:lookup-in-main', this.lookupInMain)
@@ -92,121 +90,8 @@ export class SelectionToolbarController extends BaseController {
     ipcMain.on('selection-toolbar:open-menu', this.openNativeMenu)
     ipcMain.on('selection-toolbar:activity', this.handleToolbarActivity)
     ipcMain.on('selection-toolbar:rendered', this.handleToolbarRendered)
-    ipcMain.on('selection-explanation:show-from-main', this.showExplanationFromMain)
-    ipcMain.on('selection-explanation:close', this.closeExplanation)
-    ipcMain.on('selection-explanation:toggle-pin', this.toggleExplanationPin)
-    ipcMain.on('selection-explanation:open-in-main', this.openExplanationInMain)
-    ipcMain.on('selection-explanation:loading-ready', this.explanationLoadingReady)
     ipcMain.on('selection-translation:close', this.closeTranslation)
     ipcMain.handle('selection-toolbar:capture-excerpt', this.captureExcerpt)
-    if (process.platform === 'darwin' || process.platform === 'win32') {
-      this.runtime.ocrShortcutHandler = this.handleOcrShortcut
-    }
-  }
-
-  private readonly handleOcrShortcut = async (mode: OcrLookupMode): Promise<void> => {
-    const anchor = createCursorAnchor()
-    let ocrAiVersion: number | undefined
-    let explanationVersion: number | undefined
-    const isCurrent = (): boolean =>
-      explanationVersion !== undefined && this.explanation.isLookupCurrent(explanationVersion)
-    const onCaptureReady =
-      mode === 'ai'
-        ? (): void => {
-            if (!isCurrent()) return
-            this.explanation.setAnchor(anchor)
-            ocrAiVersion = this.explanation.beginOcrAiRecognition()
-            explanationVersion = ocrAiVersion
-          }
-        : undefined
-    try {
-      explanationVersion = this.explanation.prepareForOcrCapture()
-      this.runtime.windowManager.hideOcrHighlight()
-      this.dismissForMainExplanation()
-      if (mode === 'ai') this.explanation.prewarmExplanationWindow()
-      const windowsOcrConfig =
-        process.platform === 'win32' ? this.runtime.appConfig.load().ocr : undefined
-      const language = windowsOcrConfig ? windowsOcrLanguage(windowsOcrConfig) : undefined
-      const capture = await captureTextUnderCursor(
-        mode,
-        onCaptureReady,
-        language,
-        windowsOcrConfig?.captureEngine
-      )
-      if (!isCurrent()) return
-      this.explanation.setAnchor(capture ? createWordAnchor(capture.wordBounds) : anchor)
-      if (!capture) {
-        if (mode === 'ai' && ocrAiVersion !== undefined) {
-          this.explanation.showOcrAiRecognitionError(ocrAiVersion, '鼠标下没有识别到可解释的文字。')
-        } else {
-          this.explanation.showOcrError(mode, '鼠标下没有识别到词语。')
-        }
-      } else if (mode === 'dictionary') {
-        const lookup = this.explanation.showExplanation(capture.selection.word)
-        this.showOcrHighlight(capture)
-        await lookup
-      } else if (
-        ocrAiVersion !== undefined &&
-        this.explanation.isOcrAiRecognitionCurrent(ocrAiVersion)
-      ) {
-        this.explanation.reposition()
-        const explanation = this.explanation.showOcrAiExplanation(capture.selection, ocrAiVersion)
-        this.showOcrHighlight(capture)
-        await explanation
-      }
-    } catch (error) {
-      if (explanationVersion !== undefined && !isCurrent()) return
-      this.explanation.setAnchor(anchor)
-      const message = error instanceof Error ? error.message : '悬停取词失败。'
-      if (mode === 'ai' && ocrAiVersion !== undefined) {
-        this.explanation.showOcrAiRecognitionError(ocrAiVersion, message)
-      } else {
-        this.explanation.showOcrError(mode, message)
-      }
-    }
-  }
-
-  private showOcrHighlight(capture: OcrCapture): void {
-    try {
-      this.runtime.windowManager.showOcrHighlight(capture.wordBounds, capture.wordQuad)
-    } catch (error) {
-      this.runtime.windowManager.hideOcrHighlight()
-      console.error('Failed to show OCR word highlight', error)
-    }
-  }
-
-  private readonly showExplanationFromMain = (event: IpcMainEvent, word: unknown): void => {
-    const mainWindow = this.runtime.mainWindow
-    if (!mainWindow || mainWindow.webContents.id !== event.sender.id || typeof word !== 'string') {
-      return
-    }
-    const normalizedWord = word.trim()
-    if (!normalizedWord || normalizedWord.length > MAX_SELECTION_LENGTH) return
-
-    this.explanation.setAnchor(createCursorAnchor())
-    this.dismissForMainExplanation()
-    void this.explanation.showExplanation(normalizedWord)
-  }
-
-  private readonly closeExplanation = (event: IpcMainEvent): void => {
-    if (this.acceptsExplanationSender(event)) this.explanation.hideExplanation()
-  }
-
-  private readonly toggleExplanationPin = (event: IpcMainEvent): void => {
-    if (!this.acceptsExplanationSender(event)) return
-    this.explanation.setPinned(this.runtime.windowManager.toggleSelectionExplanationPinned())
-  }
-
-  private readonly openExplanationInMain = (event: IpcMainEvent): void => {
-    if (!this.acceptsExplanationSender(event)) return
-    const lookup = this.explanation.currentLookup
-    if (!lookup) return
-    this.explanation.hideExplanation()
-    this.openWordInMain(lookup.word, lookup.dictionaryId)
-  }
-
-  private readonly explanationLoadingReady = (event: IpcMainEvent, requestId: number): void => {
-    if (this.acceptsExplanationSender(event)) this.explanation.markLoadingReady(requestId)
   }
 
   private readonly closeTranslation = (event: IpcMainEvent): void => {
@@ -282,10 +167,10 @@ export class SelectionToolbarController extends BaseController {
   private readonly lookupInMain = (event: IpcMainEvent): void => {
     if (!this.acceptsToolbarSender(event)) return
     const word = this.currentCapture?.selection.text.trim()
-    if (!word || word.length > MAX_SELECTION_LENGTH) return
+    if (!word || word.length > SELECTION_EXPLANATION_MAX_WORD_LENGTH) return
 
     this.hideToolbar({ activateMainWindow: true })
-    this.openWordInMain(word)
+    this.runtime.lookupSelectionInMainWindow(word)
   }
 
   private readonly copy = async (event: IpcMainInvokeEvent): Promise<void> => {
@@ -599,36 +484,6 @@ export class SelectionToolbarController extends BaseController {
 
     this.explanation.hideIfOutside(point)
     this.translation.hideIfOutside(point)
-  }
-
-  private openWordInMain(word: string, dictionaryId?: string): void {
-    const selectionDictionaryGroupId = this.runtime.selectionDictionaryGroupId
-    if (this.runtime.dictionarySearchScope.get() !== selectionDictionaryGroupId) {
-      this.runtime.dictionarySearchScope.set(selectionDictionaryGroupId, 'search-panel')
-    }
-
-    this.runtime.activateMainWindow()
-    const mainWindow = this.runtime.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
-
-    const sendLookup = (): void => {
-      if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
-        mainWindow.webContents.send('app:search-request', {
-          term: word,
-          source: 'selection',
-          ...(dictionaryId ? { dictionaryId } : {})
-        })
-      }
-    }
-    if (mainWindow.webContents.isLoading()) {
-      mainWindow.webContents.once('did-finish-load', sendLookup)
-    } else {
-      sendLookup()
-    }
-  }
-
-  private acceptsExplanationSender(event: IpcMainEvent): boolean {
-    return Boolean(this.explanation.currentWindow?.webContents.id === event.sender.id)
   }
 
   private acceptsTranslationSender(event: IpcMainEvent): boolean {

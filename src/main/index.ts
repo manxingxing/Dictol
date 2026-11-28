@@ -3,12 +3,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { resolveRendererUrl } from './output-path'
 
 import { getAppRunTime } from './app-runtime'
-import {
-  DEEP_LINK_SCHEME,
-  findDeepLink,
-  parseDeepLink,
-  type DeepLinkIntent
-} from '../shared/deep-link'
+import { registerDeepLinks } from './deep-link'
 import { registerIPCHandlers } from './controller/ipc-register'
 import {
   registerResourceProtocolHandlers,
@@ -24,58 +19,18 @@ if (!hasSingleInstanceLock) {
   app.quit()
 } else {
   registerResourceSchemes()
-  registerDeepLinkProtocol()
-  startPrimaryInstance(findDeepLink(process.argv))
+  startPrimaryInstance()
 }
 
-function startPrimaryInstance(initialDeepLink: DeepLinkIntent | null): void {
+function startPrimaryInstance(): void {
   const runtime = getAppRunTime()
   let runtimeDisposed = false
-  let pendingWindowActivation = initialDeepLink !== null
-  const pendingDeepLinks: DeepLinkIntent[] = initialDeepLink ? [initialDeepLink] : []
 
   process.on('unhandledRejection', (reason: unknown) => {
     console.error('Unhandled promise rejection in Electron main process', reason)
   })
 
-  const flushDeepLinks = (): void => {
-    const mainWindow = runtime.mainWindow
-    if (!runtime.isInitialized || !mainWindow || mainWindow.isDestroyed()) return
-
-    while (pendingDeepLinks.length > 0) {
-      const intent = pendingDeepLinks.shift()
-      if(!intent) continue
-      mainWindow.webContents.send('app:search-request', {
-        term: intent.term,
-        source: 'deep-link'
-      })
-    }
-  }
-
-  const showAndFocusMainWindow = (): void => {
-    if (!runtime.isInitialized) {
-      pendingWindowActivation = true
-      return
-    }
-
-    pendingWindowActivation = false
-    runtime.activateMainWindow()
-    flushDeepLinks()
-  }
-
-  const handleDeepLink = (deepLink: DeepLinkIntent | null): void => {
-    if (deepLink) pendingDeepLinks.push(deepLink)
-    showAndFocusMainWindow()
-  }
-
-  app.on('second-instance', (_event, commandLine) => {
-    handleDeepLink(findDeepLink(commandLine))
-  })
-  app.on('open-url', (event, url) => {
-    event.preventDefault()
-    handleDeepLink(parseDeepLink(url))
-  })
-
+  const finishDeepLinkStartup = registerDeepLinks(runtime)
   void app
     .whenReady()
     .then(async () => {
@@ -91,8 +46,7 @@ function startPrimaryInstance(initialDeepLink: DeepLinkIntent | null): void {
         installAppMenu(runtime)
         runtime.setMainWindowInitializer(configureMainWindow)
         configureMainWindow(requireMainWindow(runtime))
-        if (pendingWindowActivation) showAndFocusMainWindow()
-        flushDeepLinks()
+        finishDeepLinkStartup()
       } catch (error: unknown) {
         console.error('Failed to initialize application', error)
         disposeRuntime()
@@ -106,7 +60,7 @@ function startPrimaryInstance(initialDeepLink: DeepLinkIntent | null): void {
         // visible-window count. Activating one of those panels must not treat
         // the application as freshly reopened and raise the obscured main window.
         if (!hasVisibleWindows && !runtime.windowManager.hasVisibleSelectionSurface()) {
-          showAndFocusMainWindow()
+          runtime.activateMainWindow()
         }
       })
 
@@ -134,16 +88,7 @@ function startPrimaryInstance(initialDeepLink: DeepLinkIntent | null): void {
   }
 }
 
-function registerDeepLinkProtocol(): void {
-  if (process.platform !== 'darwin' && process.platform !== 'win32') return
-  app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME)
-}
-
 function configureMainWindow(mainWindow: BrowserWindow): void {
-  const showMainWindow = (): void => {
-    if (!mainWindow.isDestroyed() && !mainWindow.isVisible()) mainWindow.show()
-  }
-  mainWindow.once('ready-to-show', showMainWindow)
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://') || url.startsWith('http://')) {
       void shell.openExternal(url).catch((error: unknown) => {
@@ -153,9 +98,7 @@ function configureMainWindow(mainWindow: BrowserWindow): void {
     return { action: 'deny' }
   })
 
-  const loadPromise = mainWindow.loadURL(`${resolveRendererUrl('index.html')}#/search`)
-  showMainWindow()
-  void loadPromise.then(showMainWindow).catch((error: unknown) => {
+  void mainWindow.loadURL(`${resolveRendererUrl('index.html')}#/search`).catch((error: unknown) => {
     console.error('Failed to load renderer', error)
   })
 }

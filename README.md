@@ -24,6 +24,16 @@
 - **摘抄与笔记**：保存词典例句和笔记，支持全文搜索
 
 
+## DeepLink
+
+| 链接 | 行为 |
+| --- | --- |
+| `dictol://dict/<word>` | 在主窗口查词 |
+| `dictol://lookup/<word>` | 在光标附近打开释义弹窗查词 |
+| `dictol://translate/<sentence>` | 在光标附近打开翻译弹窗并翻译 |
+
+生成链接时，用 `encodeURIComponent` 编码单词或句子。例如 `dictol://dict/hello`、`dictol://lookup/take%20off` 和 `dictol://translate/How%20are%20you%3F`。已置顶的弹窗保留当前位置。
+
 ## 应用截图
 
 <table>

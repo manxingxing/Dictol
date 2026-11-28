@@ -88,7 +88,7 @@ async function setup(platform = 'win32', scale = 1, workAreaX = 0) {
     },
     platform
   )
-  const toolbar = new SelectionToolbarController({}, {}, actions)
+  const toolbar = new SelectionToolbarController({}, actions)
   toolbar.acceptsToolbarSender = () => true
   toolbar.hideToolbar = () => {
     toolbar.currentCapture = undefined

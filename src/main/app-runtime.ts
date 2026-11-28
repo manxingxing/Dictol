@@ -5,6 +5,7 @@ import { AppConfigStore, type AppConfig } from './app-config'
 import { TranslationActions } from './action/translation'
 import { ScreenshotTranslationAction } from './action/screenshot-translation'
 import { ClipboardTranslationAction } from './action/clipboard-translation'
+import { SelectionExplanationAction } from './action/selection-explanation'
 import { AiLookupService } from './ai-service'
 import { TranslationService } from './translation/service'
 import { BuiltInLexiconService } from './built-in-lexicon-service'
@@ -59,6 +60,7 @@ export class AppRuntime {
   selectionHookService: SelectionHookService = new SelectionHookService()
   shortcutRegister: ShortcutRegister = new ShortcutRegister()
   readonly actions = {
+    explanation: new SelectionExplanationAction(this),
     translation: new TranslationActions(this),
     screenshotTranslation: new ScreenshotTranslationAction(this),
     clipboardTranslation: new ClipboardTranslationAction(this)
@@ -68,7 +70,6 @@ export class AppRuntime {
   dictionaryLayout: DictionaryLayout = 'single'
   dictionarySearchScope: DictionarySearchScope = new DictionarySearchScope()
   selectionDictionaryGroupId: number | undefined
-  ocrShortcutHandler: ((mode: OcrLookupMode) => Promise<void>) | undefined
 
   get isInitialized(): boolean {
     return this.initialized
@@ -154,6 +155,26 @@ export class AppRuntime {
     this.windowManager.focusMainWindowRenderer()
   }
 
+  lookupSelectionInMainWindow(word: string, dictionaryId?: string): void {
+    this.dictionarySearchScope.set(this.selectionDictionaryGroupId, 'search-panel')
+    this.activateMainWindow()
+    const mainWindow = this.mainWindow
+    if (!mainWindow || mainWindow.webContents.isDestroyed()) return
+
+    const contents = mainWindow.webContents
+    const sendLookup = (): void => {
+      if (!contents.isDestroyed()) {
+        contents.send('app:search-request', {
+          term: word,
+          source: 'selection',
+          ...(dictionaryId ? { dictionaryId } : {})
+        })
+      }
+    }
+    if (contents.isLoading()) contents.once('did-finish-load', sendLookup)
+    else sendLookup()
+  }
+
   setMainWindowInitializer(initializer: MainWindowInitializer): void {
     this.mainWindowInitializer = initializer
   }
@@ -222,7 +243,8 @@ export class AppRuntime {
     this.registerLookupWordShortCut(config.shortcuts)
     this.registerSelectionTranslationShortcut(config)
     this.registerClipboardTranslationShortcut(config)
-    if (OCR_SUPPORTED) this.registerOcrShortcuts(config)
+    // On first launch IPC registers the popup handlers before enabling OCR shortcuts.
+    if (OCR_SUPPORTED && this.initialized) this.registerOcrShortcuts(config)
     if (OCR_SUPPORTED) this.registerScreenshotTranslationShortcut(config)
   }
 
@@ -234,11 +256,9 @@ export class AppRuntime {
   private registerOcrShortcut(config: AppConfig, mode: OcrLookupMode): void {
     const command = mode === 'dictionary' ? OCR_DICTIONARY_SHORTCUT : OCR_AI_SHORTCUT
     this.shortcutRegister.unregister(command)
-    if (!OCR_SUPPORTED || !config.shortcuts[command] || !this.ocrShortcutHandler) {
-      return
-    }
+    if (!OCR_SUPPORTED || !config.shortcuts[command]) return
     this.shortcutRegister.register(command, config.shortcuts[command], {
-      handleShortcut: () => this.ocrShortcutHandler?.(mode)
+      handleShortcut: () => this.actions.explanation.lookupUnderCursor(mode)
     })
   }
 
@@ -348,7 +368,7 @@ export class AppRuntime {
     this.disposed = true
     this.shortcutRegister.unregisterAll()
     this.selectionHookService.dispose()
-    this.ocrShortcutHandler = undefined
+    this.actions.explanation.dispose()
     this.actions.screenshotTranslation.dispose()
     this.trayManager.dispose()
     this.adBlockService.dispose()

@@ -50,7 +50,7 @@ for (const platform of ['win32', 'darwin']) {
     const png = Buffer.from('test image')
     try {
       for (const language of [undefined, 'zh-CN', 'en-US', 'ja-JP', 'ko-KR', 'fr-FR', 'de-DE']) {
-        await recognize(png, undefined, language)
+        await recognize(png, language)
         const [received, selected] = calls.at(-1)
         assert.strictEqual(received, png)
         if (platform === 'win32') assert.equal(selected, language)
