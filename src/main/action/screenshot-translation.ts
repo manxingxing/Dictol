@@ -130,6 +130,7 @@ export class ScreenshotTranslationAction {
 
   private async translateRegion(display: Display, region: Rectangle): Promise<void> {
     try {
+      // TODO: Consider using a more robust method to ensure the overlay is removed before capturing, such as waiting for the next animation frame or using a more reliable event.
       // Let the window compositor remove the selection overlay before capturing.
       await new Promise((resolve) => setTimeout(resolve, 80))
       const recognized = await this.recognizePngRegion(display, region)
